@@ -1,0 +1,4 @@
+domain: bridge
+version: 0.1.0
+entities: [pier, abutment, bearing, deck, cable, foundation]
+case_types: [inspection, quality, structural-monitoring, maintenance]

@@ -1,0 +1,7 @@
+pack: core
+version: 1.0.0
+capabilities:
+  - locale-normalization
+  - terminology-lock
+  - jurisdiction-routing
+  - data-residency-policy

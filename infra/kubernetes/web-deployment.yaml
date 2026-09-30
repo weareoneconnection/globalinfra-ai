@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: globalinfra-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: globalinfra-web }
+  template:
+    metadata:
+      labels: { app: globalinfra-web }
+    spec:
+      containers:
+        - name: web
+          image: globalinfra/web:1.0.0
+          ports: [{ containerPort: 3000 }]
+          env:
+            - name: API_INTERNAL_URL
+              value: http://globalinfra-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: globalinfra-web
+spec:
+  selector: { app: globalinfra-web }
+  ports:
+    - port: 80
+      targetPort: 3000

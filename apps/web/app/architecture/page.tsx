@@ -1,0 +1,15 @@
+import { api } from '@/lib/api';
+import { Domain } from '@/components/DomainCard';
+
+type Thread = { event:string; nodes:{type:string;label:string;domain:string}[] };
+type Professional = { id:string;name:string;scope:string;intelligence_domain:string };
+
+export default async function Architecture() {
+  const [domains,thread,professional]=await Promise.all([api<Domain[]>('/domains'),api<Thread>('/digital-thread'),api<Professional[]>('/domains/professional')]);
+  return <><div className="header-row"><div><div className="eyebrow">GlobalInfra project intelligence model</div><h2 className="page-title">One digital thread across the entire asset lifecycle.</h2><p className="page-subtitle">传统软件按部门切割信息；GlobalInfra AI 以工程事件为中心，连接技术、交付、商务、风险、资源、知识与资产。</p></div><span className="badge info">V1.1 ARCHITECTURE</span></div>
+  <section className="card architecture-core"><div className="architecture-title"><span>GLOBALINFRA CORE</span><b>Infrastructure Digital Thread</b><small>Country Pack + Domain Pack + Agent + Skill + Evidence + Workflow</small></div><div className="architecture-domains">{domains.map(d=><div className={`arch-domain accent-${d.accent}`} key={d.id}><span>{d.number}</span><b>{d.name.replace(' Intelligence','')}</b><small>{professional.filter(p=>p.intelligence_domain===d.id).length} disciplines</small></div>)}</div></section>
+  <section className="section card"><div className="section-title"><div><span className="section-kicker">LIVE DIGITAL THREAD</span><h3>{thread.event}</h3></div><span>{thread.nodes.length} connected records · 6 domains</span></div><div className="thread-flow">{thread.nodes.map((n,i)=><div className={`thread-node accent-${domains.find(d=>d.id===n.domain)?.accent||'cyan'}`} key={`${n.type}-${i}`}><span>{n.type}</span><b>{n.label}</b>{i<thread.nodes.length-1&&<i>›</i>}</div>)}</div></section>
+  <div className="grid-2 section"><div className="card card-pad"><span className="section-kicker">TWO-AXIS MODEL</span><h3>Lifecycle × Intelligence domain</h3><p className="page-subtitle">Every record is anchored to a lifecycle stage and a professional domain, while relationships preserve cross-domain impacts.</p><div className="matrix-mini"><div /><b>Tender</b><b>Plan</b><b>Design</b><b>Build</b><b>Test</b><b>Operate</b>{['Project','Engineering','Delivery','Commercial','Assurance','Resources','Knowledge','Assets'].map((x,i)=><div className="matrix-row" key={x}><strong>{x}</strong>{[0,1,2,3,4,5].map(y=><span className={(y+i)%3===0?'hot':''} key={`${x}-${y}`} />)}</div>)}</div></div>
+  <div className="card card-pad"><span className="section-kicker">TRUSTED ACTION PROTOCOL</span><h3>One governed loop, any project event</h3><div className="protocol-stack">{[['01','EVENT','Field signal, document or system change'],['02','CASE','Structured cross-domain unit of work'],['03','EVIDENCE','Versioned, cited and jurisdiction-aware'],['04','DECISION','Specialist team recommendation'],['05','ACTION','Human-approved execution'],['06','VERIFICATION','Independent proof of outcome']].map(x=><div key={x[1]}><span>{x[0]}</span><b>{x[1]}</b><small>{x[2]}</small></div>)}</div></div></div>
+  </>;
+}

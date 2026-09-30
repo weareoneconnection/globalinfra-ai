@@ -1,0 +1,4 @@
+domain: airport
+version: 0.1.0
+entities: [runway, taxiway, terminal, apron, baggage, airside]
+case_types: [operations, safety, maintenance, compliance]

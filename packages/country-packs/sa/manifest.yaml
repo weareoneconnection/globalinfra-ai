@@ -1,0 +1,13 @@
+country: SA
+name: Saudi Arabia
+version: 0.1.0
+region: MEA
+languages: [en, ar]
+locales:
+  default: en-SA
+  rtl: [ar]
+timezone: Asia/Riyadh
+units: metric
+data_policy:
+  preferred_region: mea
+supported_domains: [rail, highway, airport]

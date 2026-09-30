@@ -1,0 +1,20 @@
+country: MY
+name: Malaysia
+version: 1.0.0
+region: APAC
+languages:
+  - en
+  - ms
+  - zh
+locales:
+  default: en-MY
+timezone: Asia/Kuala_Lumpur
+units: metric
+data_policy:
+  preferred_region: apac
+  external_model_default: review-required
+supported_domains:
+  - rail
+  - highway
+  - bridge
+  - port

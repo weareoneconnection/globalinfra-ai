@@ -1,0 +1,10 @@
+country: ID
+name: Indonesia
+version: 0.1.0
+region: APAC
+languages: [en, id]
+timezone: Asia/Jakarta
+units: metric
+data_policy:
+  preferred_region: apac
+supported_domains: [highway, rail, port]

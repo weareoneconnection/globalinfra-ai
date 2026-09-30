@@ -1,0 +1,4 @@
+domain: highway
+version: 0.1.0
+entities: [road, bridge, culvert, drainage, pavement, interchange]
+case_types: [quality, hse, technical-query, owner-notice]

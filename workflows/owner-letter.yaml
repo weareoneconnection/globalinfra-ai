@@ -1,0 +1,35 @@
+id: overseas-owner-letter-resolution
+version: 1.0.0
+trigger: owner_letter_received
+risk: high
+steps:
+  - id: intake
+    agent: intake
+    output: structured_case
+  - id: contract_review
+    agent: contract
+    requires: [intake]
+    evidence_required: true
+  - id: engineering_review
+    agent: engineering
+    requires: [intake]
+    evidence_required: true
+  - id: standards_review
+    agent: standards
+    requires: [intake]
+  - id: action_plan
+    agent: planning
+    requires: [contract_review, engineering_review, standards_review]
+  - id: draft_response
+    agent: localization
+    requires: [action_plan]
+  - id: human_approval
+    type: approval
+    role: project_manager
+    requires: [draft_response]
+  - id: verification
+    agent: verification
+    requires: [human_approval]
+  - id: complete
+    type: evidence_record
+    requires: [verification]

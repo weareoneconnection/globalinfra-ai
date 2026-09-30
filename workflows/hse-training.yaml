@@ -1,0 +1,15 @@
+id: localized-hse-training
+version: 1.0.0
+steps:
+  - id: resolve_country_pack
+    type: system
+  - id: retrieve_approved_hse_knowledge
+    type: knowledge
+  - id: generate_localized_training
+    agent: training
+    evidence_required: true
+  - id: semantic_verification
+    agent: verification
+  - id: publish_training
+    type: approval
+    role: hse_manager

@@ -1,0 +1,8 @@
+policies:
+  external_correspondence:
+    approval: project_manager
+  contractual_position:
+    approval: project_manager
+    evidence_required: true
+  critical_hse_action:
+    approval: human_mandatory

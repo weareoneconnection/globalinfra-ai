@@ -1,0 +1,23 @@
+domain: rail
+version: 1.0.0
+entities:
+  - station
+  - alignment
+  - viaduct
+  - bridge
+  - tunnel
+  - trackwork
+  - depot
+  - systems-interface
+case_types:
+  - technical-query
+  - quality
+  - hse
+  - contract-interface
+  - owner-notice
+agents:
+  - engineering
+  - contract
+  - standards
+  - hse
+  - localization

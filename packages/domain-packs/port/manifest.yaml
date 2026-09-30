@@ -1,0 +1,4 @@
+domain: port
+version: 0.1.0
+entities: [berth, quay, yard, crane, channel, terminal]
+case_types: [operations, maintenance, hse, asset-monitoring]

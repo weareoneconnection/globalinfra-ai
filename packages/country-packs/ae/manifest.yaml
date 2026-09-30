@@ -1,0 +1,12 @@
+country: AE
+name: United Arab Emirates
+version: 0.1.0
+region: MEA
+languages: [en, ar]
+locales:
+  rtl: [ar]
+timezone: Asia/Dubai
+units: metric
+data_policy:
+  preferred_region: mea
+supported_domains: [rail, airport, port, highway]

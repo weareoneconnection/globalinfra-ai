@@ -1,0 +1,4 @@
+domain: tunnel
+version: 0.1.0
+entities: [portal, lining, invert, ventilation, drainage, fire-life-safety]
+case_types: [geotechnical, hse, quality, monitoring]
