@@ -1,0 +1,31 @@
+# Example only: written against an nginx-ingress-controller + cert-manager
+# setup. Adjust ingressClassName/annotations for your actual ingress
+# controller, and point `hosts`/`secretName` at your real domains and TLS
+# certificate (e.g. issued by cert-manager) before applying.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: globalinfra
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["app.example.com", "api.example.com"]
+      secretName: globalinfra-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: globalinfra-web, port: { number: 80 } }
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: globalinfra-api, port: { number: 80 } }

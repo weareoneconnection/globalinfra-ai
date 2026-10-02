@@ -1,4 +1,4 @@
-.PHONY: up down logs api web eval
+.PHONY: up down logs api web eval test
 
 up:
 	docker compose up --build
@@ -17,3 +17,8 @@ web:
 
 eval:
 	cd evals && python3 run_eval.py
+
+# Requires services/api/requirements-dev.txt installed (pytest + the runtime
+# deps in requirements.txt). Uses its own SQLite DB; see services/api/tests/conftest.py.
+test:
+	cd services/api && python3 -m pytest tests -q

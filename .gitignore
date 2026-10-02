@@ -8,3 +8,7 @@ __pycache__/
 *.db
 coverage/
 dist/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfplan

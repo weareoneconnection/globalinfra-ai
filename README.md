@@ -42,8 +42,10 @@ docker compose up --build
 Open:
 
 - Web: http://localhost:3000
-- API docs: http://localhost:8000/docs
-- API health: http://localhost:8000/health
+- API docs: http://localhost:8001/docs
+- API health: http://localhost:8001/health
+
+(`docker-compose.yml` maps the API container's internal port 8000 to host port 8001, since 8000 is commonly already in use. The web container talks to the API over the internal Docker network on port 8000, so `API_INTERNAL_URL` is unaffected.)
 
 Demo login is intentionally skipped in V1.0 competition mode. Add enterprise SSO before production deployment.
 
@@ -51,9 +53,11 @@ Demo login is intentionally skipped in V1.0 competition mode. Add enterprise SSO
 
 ### API
 
+Requires Python 3.12 (matches the `python:3.12-slim` image used in Docker). Some pinned dependencies (e.g. `pydantic-core`, `psycopg[binary]`) do not ship prebuilt wheels for every newer Python release yet, so `python3 -m venv` with a 3.13/3.14 interpreter can fail to install. If `python3 --version` on your machine is newer than 3.12, use `python3.12` explicitly (e.g. `brew install python@3.12`).
+
 ```bash
 cd services/api
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL=sqlite:///./globalinfra.db

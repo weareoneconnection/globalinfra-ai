@@ -12,6 +12,8 @@ from .workflow import analyze_case
 from .domain import LIFECYCLE_STAGES, INTELLIGENCE_DOMAINS, TRUSTED_ACTION_STAGES, PROJECT_INTELLIGENCE, DOMAIN_HEALTH, professional_domains
 from .i18n import bi, get_lang, localize
 from .llm import translate
+from .classify import classify_text
+from .security import api_key_gate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +25,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GlobalInfra AI API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+# Off by default (see app.security / app.config.settings.require_api_key);
+# turning it on in a pilot deployment needs only an env var, no code change.
+app.middleware("http")(api_key_gate)
 
 @app.get('/health')
 def health(): return {"status":"ok","service":"globalinfra-api","version":"1.1.0","architecture":"project-intelligence"}
@@ -39,6 +44,17 @@ async def translate_endpoint(payload: TranslateRequest):
     deterministic offline phrase table used throughout the demo dataset."""
     translation = await translate(payload.text, payload.target_lang, payload.source_lang)
     return {"source_lang": payload.source_lang, "target_lang": payload.target_lang, "text": payload.text, "translation": translation}
+
+class ClassifyRequest(BaseModel):
+    text: str
+
+@app.post('/cases/classify')
+def classify_endpoint(payload: ClassifyRequest):
+    """Deterministic, rule-based case classification for arbitrary free-text
+    field observations / owner notices (see app.classify.classify_text).
+    This is what the evaluation harness in evals/run_eval.py exercises, and
+    is independent of the seeded demo case dataset."""
+    return {"text": payload.text, **classify_text(payload.text)}
 
 @app.get('/dashboard/summary')
 def dashboard(db: Session = Depends(get_db)):

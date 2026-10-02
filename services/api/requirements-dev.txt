@@ -1,0 +1,3 @@
+# Additional dependencies for running services/api/tests (not needed at runtime).
+-r requirements.txt
+pytest==9.1.1

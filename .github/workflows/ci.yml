@@ -9,8 +9,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install -r services/api/requirements.txt
+      - run: pip install -r services/api/requirements-dev.txt
       - run: python -m compileall services/api/app
+      - run: python -m pytest services/api/tests -q
       - run: python evals/run_eval.py
   web:
     runs-on: ubuntu-latest
@@ -25,3 +26,27 @@ jobs:
       - run: npm run build
         env:
           API_INTERNAL_URL: http://localhost:8000
+  docker-compose-smoke-test:
+    # Boots the full stack the way a real deployment (and README "Quick
+    # start: Docker") does, instead of only unit-testing the API and
+    # building the web app in isolation. Catches breakage in docker-compose.yml,
+    # the Dockerfiles and inter-service wiring that the two jobs above cannot see.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose up --build -d --wait --wait-timeout 180
+      - name: Smoke-test API and web
+        run: |
+          set -e
+          curl -sf http://localhost:8001/health
+          curl -sf http://localhost:8001/projects | grep -q 'MY-RAIL-A'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8001/cases/classify \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Worker observed near unprotected edge at elevated workface."}')
+          test "$code" = "200"
+          curl -sf http://localhost:3000/ > /dev/null
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down -v

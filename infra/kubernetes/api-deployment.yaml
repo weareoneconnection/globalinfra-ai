@@ -15,7 +15,24 @@ spec:
           image: globalinfra/api:1.0.0
           ports: [{ containerPort: 8000 }]
           envFrom:
+            # See api-secret.example.yaml for the keys this must provide
+            # (DATABASE_URL, REDIS_URL, and the pilot-stage REQUIRE_API_KEY /
+            # API_KEY gate from docs/SECURITY.md). Populate the real Secret
+            # via your secret manager, not by committing values to git.
             - secretRef: { name: globalinfra-api-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -26,3 +43,20 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: globalinfra-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: globalinfra-api
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

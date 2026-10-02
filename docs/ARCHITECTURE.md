@@ -123,3 +123,10 @@ Domain Packs isolate transport vertical semantics: rail, highway, bridge, tunnel
 - Pilot: managed PostgreSQL, Redis, object storage, private networking, SSO.
 - Enterprise: Kubernetes, regional data planes, centralized control plane, policy-as-code, KMS/HSM, SIEM.
 - Edge: offline-first PWA, encrypted local cache, store-and-forward synchronization.
+
+This release adds the first concrete, reviewable artifacts for the Pilot/Enterprise rows above, without claiming either stage is complete:
+
+- `infra/terraform/` is now a worked (AWS) starter for the Pilot stage's managed PostgreSQL/Redis/object storage/private networking — not a certified production baseline (see its README for exactly what is and is not covered).
+- `infra/kubernetes/` manifests gained liveness/readiness probes, resource requests/limits, a `HorizontalPodAutoscaler`, an example `Secret` and an example `Ingress`, closing part of the gap toward the Enterprise stage's Kubernetes row. The regional data-plane split, centralized control plane and KMS/HSM/SIEM items are still open.
+- `services/api/app/security.py` adds an opt-in, off-by-default shared-secret API key gate as an interim network-boundary control. It is explicitly not SSO/OIDC — that remains the Pilot stage's identity item.
+- `evals/run_eval.py` now runs a real (if intentionally simple, rule-based) classifier against the dataset and fails the build on a regression, and `services/api/tests/` adds a pytest suite (i18n, translation fallback, the classifier, the auth gate, and an end-to-end check that `analyze_case` is idempotent) exercised by CI alongside a `docker compose up --wait` smoke test — see RELEASE_NOTES.md for the full list.

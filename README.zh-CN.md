@@ -42,8 +42,10 @@ docker compose up --build
 打开：
 
 - Web：http://localhost:3000
-- API 文档：http://localhost:8000/docs
-- API 健康检查：http://localhost:8000/health
+- API 文档：http://localhost:8001/docs
+- API 健康检查：http://localhost:8001/health
+
+（`docker-compose.yml` 把 API 容器内部的 8000 端口映射到了宿主机的 8001 端口，因为 8000 在很多机器上已被占用；Web 容器通过 Docker 内部网络用 8000 端口访问 API，`API_INTERNAL_URL` 不受影响。）
 
 V1.0 竞赛模式中有意跳过了演示登录环节。生产部署前请接入企业级 SSO。
 
@@ -51,9 +53,11 @@ V1.0 竞赛模式中有意跳过了演示登录环节。生产部署前请接入
 
 ### API
 
+需要 Python 3.12（与 Docker 使用的 `python:3.12-slim` 镜像一致）。部分锁定的依赖（如 `pydantic-core`、`psycopg[binary]`）尚未为更新的 Python 版本发布预编译二进制包，如果本机 `python3 --version` 高于 3.12（例如 3.13/3.14），直接 `python3 -m venv` 可能安装失败。请显式使用 `python3.12`（例如先 `brew install python@3.12`）。
+
 ```bash
 cd services/api
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL=sqlite:///./globalinfra.db
