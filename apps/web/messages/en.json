@@ -1,0 +1,259 @@
+{
+  "Sidebar": {
+    "brandName": "GlobalInfra AI",
+    "brandTag": "PROJECT INTELLIGENCE",
+    "footerVersion": "V1.1 · Domain Architecture",
+    "footerSub": "8 intelligence domains · 24 disciplines",
+    "groups": [
+      {
+        "label": "Global",
+        "items": [
+          { "href": "/", "label": "Command Center", "icon": "⌂" },
+          { "href": "/projects", "label": "Portfolio", "icon": "◫" }
+        ]
+      },
+      {
+        "label": "Project Operations",
+        "items": [
+          { "href": "/cases", "label": "Cases", "icon": "◎" },
+          { "href": "/approvals", "label": "Approvals", "icon": "✓" },
+          { "href": "/knowledge", "label": "Knowledge", "icon": "◇" }
+        ]
+      },
+      {
+        "label": "Intelligence",
+        "items": [
+          { "href": "/intelligence/project", "label": "Project", "icon": "01" },
+          { "href": "/intelligence/engineering", "label": "Engineering", "icon": "02" },
+          { "href": "/intelligence/delivery", "label": "Delivery", "icon": "03" },
+          { "href": "/intelligence/commercial", "label": "Commercial", "icon": "04" },
+          { "href": "/intelligence/assurance", "label": "Risk & Assurance", "icon": "05" },
+          { "href": "/intelligence/resources", "label": "Resources", "icon": "06" },
+          { "href": "/intelligence/knowledge", "label": "Knowledge", "icon": "07" },
+          { "href": "/intelligence/assets", "label": "Assets & Operations", "icon": "08" }
+        ]
+      },
+      {
+        "label": "Platform",
+        "items": [
+          { "href": "/agents", "label": "Agent Organization", "icon": "AI" },
+          { "href": "/architecture", "label": "Architecture", "icon": "⌘" }
+        ]
+      }
+    ]
+  },
+  "Topbar": {
+    "crumb": "GLOBAL",
+    "title": "Portfolio Control Plane",
+    "dataSynced": "Data synchronized",
+    "timestamp": "30 Sep 2026 · 16:40 CST",
+    "switchToLabel": "中文"
+  },
+  "Home": {
+    "eyebrow": "Global command center · Portfolio live",
+    "title": "From every project event to a trusted action.",
+    "subtitle": "GlobalInfra AI understands engineering events across the full lifecycle, every discipline and every organization - connecting schedule, technical, commercial, risk and asset data into executable project intelligence.",
+    "viewThread": "View digital thread",
+    "openCase": "Open priority case",
+    "metricPortfolio": "Active Portfolio",
+    "metricPortfolioDelta": "{countries} countries · 3 data planes",
+    "metricCases": "Open Cross-domain Cases",
+    "metricCasesDelta": "{critical} high / critical",
+    "metricApprovals": "Pending Decisions",
+    "metricApprovalsDelta": "Human approval gates active",
+    "metricVerified": "Verified Decisions",
+    "metricVerifiedDelta": "96.2% evidence traceability",
+    "lifecycleKicker": "FULL LIFECYCLE",
+    "lifecycleTitle": "Portfolio delivery horizon",
+    "lifecycleSpan": "3 projects distributed across active phases",
+    "domainsKicker": "8 INTELLIGENCE DOMAINS",
+    "domainsTitle": "Connected project health",
+    "domainsLink": "Explore all 24 disciplines",
+    "signalsKicker": "CROSS-DOMAIN SIGNALS",
+    "signalsTitle": "Events requiring coordination",
+    "signalsLink": "All cases",
+    "trustedKicker": "TRUSTED EXECUTION",
+    "trustedTitle": "One operating model across every domain",
+    "trustedSpan": "Governed AI",
+    "trustedFlow": ["Project Event", "Case", "Evidence", "Decision", "Action", "Verification"],
+    "teamLabel": "CASE ROUTER · TEAM ASSEMBLY",
+    "teamTitle": "Quality + Engineering + Contract + Planning",
+    "teamDesc": "Dynamic specialist team assembled for NCR-2026-084",
+    "teamBadge": "ACTIVE"
+  },
+  "Agents": {
+    "eyebrow": "Multi-agent engineering organization",
+    "title": "Specialist agent registry",
+    "subtitle": "Agents do not operate as isolated chatbots. The Case Router assembles a temporary, policy-constrained team around each engineering event.",
+    "available": "{count} specialists available",
+    "incomingLabel": "INCOMING CASE",
+    "incomingValue": "NCR · Concrete crack · Schedule exposure",
+    "routerLabel": "CASE ROUTER",
+    "routerValue": "Classify · Assemble · Govern",
+    "teamLabel": "DYNAMIC TEAM",
+    "teamValue": "Quality + Engineering + Contract + Planning",
+    "practiceKicker": "SPECIALIST PRACTICE",
+    "agentsCount": "{count} agents"
+  },
+  "Approvals": {
+    "eyebrow": "Human governance",
+    "title": "Approval Center",
+    "subtitle": "High-risk external actions cannot execute without accountable human approval.",
+    "colCase": "Case",
+    "colApproval": "Approval",
+    "colRisk": "Risk",
+    "colApprover": "Approver",
+    "colStatus": "Status",
+    "colAction": "Action",
+    "recorded": "Recorded"
+  },
+  "Architecture": {
+    "eyebrow": "GlobalInfra project intelligence model",
+    "title": "One digital thread across the entire asset lifecycle.",
+    "subtitle": "Traditional software fragments information by department. GlobalInfra AI is organized around the engineering event itself, connecting technical, delivery, commercial, risk, resource, knowledge and asset data.",
+    "badge": "V1.1 ARCHITECTURE",
+    "coreLabel": "GLOBALINFRA CORE",
+    "coreTitle": "Infrastructure Digital Thread",
+    "coreSub": "Country Pack + Domain Pack + Agent + Skill + Evidence + Workflow",
+    "disciplines": "{count} disciplines",
+    "threadKicker": "LIVE DIGITAL THREAD",
+    "threadSpan": "{count} connected records · 6 domains",
+    "matrixKicker": "TWO-AXIS MODEL",
+    "matrixTitle": "Lifecycle × Intelligence domain",
+    "matrixDesc": "Every record is anchored to a lifecycle stage and a professional domain, while relationships preserve cross-domain impacts.",
+    "matrixCols": ["Tender", "Plan", "Design", "Build", "Test", "Operate"],
+    "matrixRows": ["Project", "Engineering", "Delivery", "Commercial", "Assurance", "Resources", "Knowledge", "Assets"],
+    "protocolKicker": "TRUSTED ACTION PROTOCOL",
+    "protocolTitle": "One governed loop, any project event",
+    "protocolStack": [
+      { "step": "01", "label": "EVENT", "desc": "Field signal, document or system change" },
+      { "step": "02", "label": "CASE", "desc": "Structured cross-domain unit of work" },
+      { "step": "03", "label": "EVIDENCE", "desc": "Versioned, cited and jurisdiction-aware" },
+      { "step": "04", "label": "DECISION", "desc": "Specialist team recommendation" },
+      { "step": "05", "label": "ACTION", "desc": "Human-approved execution" },
+      { "step": "06", "label": "VERIFICATION", "desc": "Independent proof of outcome" }
+    ]
+  },
+  "Cases": {
+    "eyebrow": "Case intelligence",
+    "title": "Cases",
+    "subtitle": "Every important field issue becomes a governed, evidence-backed unit of work.",
+    "newCase": "New Case",
+    "colCase": "Case",
+    "colProject": "Project",
+    "colRisk": "Risk",
+    "colIssues": "Issues",
+    "colDeadline": "Deadline",
+    "colStatus": "Status"
+  },
+  "CaseDetail": {
+    "intelligenceTitle": "Case intelligence",
+    "labelStatus": "Status",
+    "labelType": "Type",
+    "labelDeadline": "Response deadline",
+    "labelSourceLanguage": "Source language",
+    "labelDescription": "Description",
+    "labelIssues": "Detected issues",
+    "verificationTitle": "Verification gate",
+    "labelCitationScore": "Citation score",
+    "labelEvidenceScore": "Evidence score",
+    "labelConsistencyScore": "Semantic consistency",
+    "labelFindings": "Findings",
+    "noVerification": "No verification record yet. Run analysis to generate an evidence-backed candidate action.",
+    "runsTitle": "Specialist agent runs",
+    "runsCount": "{count} runs",
+    "noRuns": "Run analysis to activate Intake, Contract, Engineering, Standards, Planning and Verification agents.",
+    "evidenceTitle": "Evidence chain",
+    "evidenceCount": "{count} items",
+    "noEvidence": "No evidence links yet."
+  },
+  "Knowledge": {
+    "eyebrow": "Knowledge fabric",
+    "title": "Evidence & Knowledge",
+    "subtitle": "Project documents, contracts, standards, regulations and lessons learned become queryable, version-aware evidence.",
+    "searchPlaceholder": "Search contracts, standards, site records…",
+    "graphEyebrow": "Evidence graph",
+    "graphTitle": "Claim → Source → Version → Jurisdiction",
+    "graphBody": "Decision\n ├─ Contract Clause C-14.2\n ├─ Responsibility Matrix RM-03\n ├─ Site Instruction SI-028\n ├─ Meeting Minutes MM-182\n └─ Photo IMG-229\n\nEach edge carries confidence, version, jurisdiction and content hash."
+  },
+  "Projects": {
+    "eyebrow": "Global portfolio · 3 active programs",
+    "title": "Project portfolio",
+    "subtitle": "From tender to operations, each workspace connects scope, schedule, cost, risk and asset outcomes.",
+    "scenario": "Portfolio scenario",
+    "progress": "Overall progress",
+    "forecast": "Forecast",
+    "schedule": "Schedule",
+    "nextGate": "Next gate",
+    "openWorkspace": "Open workspace"
+  },
+  "ProjectDetail": {
+    "progress": "Overall progress",
+    "budget": "Approved budget",
+    "budgetDelta": "{committed}M committed",
+    "forecastTitle": "Forecast at completion",
+    "forecastDeltaOver": "+{exposure}M exposure",
+    "forecastDeltaOk": "Within baseline",
+    "variance": "Schedule variance",
+    "varianceDelta": "Recovery scenario active",
+    "lifecycleKicker": "PROJECT LIFECYCLE",
+    "lifecycleTitle": "Stage-gate readiness",
+    "lifecycleSpan": "Next: {gate} · {date}",
+    "osKicker": "PROJECT OPERATING SYSTEM",
+    "osTitle": "Connected domain performance",
+    "osSpan": "Health combines risk, latency, evidence and decision status",
+    "casesKicker": "PRIORITY CASES",
+    "casesTitle": "Cross-domain work queue",
+    "casesLink": "View all",
+    "noCases": "No active cases in this workspace.",
+    "readinessKicker": "NEXT 30 DAYS",
+    "readinessTitle": "Integrated readiness",
+    "readinessSpan": "6 gates",
+    "readinessList": [
+      { "title": "Systems integration readiness", "meta": "Engineering · Interfaces", "value": "82%" },
+      { "title": "Long-lead switchgear delivery", "meta": "Procurement · Logistics", "value": "68%" },
+      { "title": "Viaduct inspection release", "meta": "Quality · Construction", "value": "91%" },
+      { "title": "Monthly payment application", "meta": "Commercial · Cost", "value": "76%" }
+    ]
+  },
+  "Training": {
+    "eyebrow": "Localization & HSE",
+    "title": "Local Workforce Training",
+    "subtitle": "Country-aware, terminology-locked multilingual safety training for project teams and partners.",
+    "generate": "Generate module",
+    "languagesLabel": "Languages",
+    "minutesSuffix": "min",
+    "moduleNote": "Localized content + terminology lock + acknowledgment",
+    "ready": "READY"
+  },
+  "Intelligence": {
+    "eyebrow": "INTELLIGENCE DOMAIN",
+    "healthLabel": "DOMAIN HEALTH",
+    "openSignals": "Open signals",
+    "evidenceCoverage": "Evidence coverage",
+    "evidenceCoverageValue": "96.2%",
+    "evidenceCoverageDelta": "+2.8% this period",
+    "decisionsVerified": "Decisions verified",
+    "decisionsVerifiedValue": "148",
+    "decisionsVerifiedDelta": "4 awaiting approval",
+    "liveKicker": "LIVE INTELLIGENCE",
+    "liveTitle": "Signals and decisions",
+    "liveSpan": "{count} priority",
+    "modelKicker": "DOMAIN MODEL",
+    "modelTitle": "Professional disciplines",
+    "modelSpan": "{count} connected",
+    "capabilityKicker": "CAPABILITY MAP",
+    "capabilityTitle": "Connected intelligence services",
+    "capabilityLink": "View specialist agents"
+  },
+  "Components": {
+    "saving": "Saving…",
+    "approve": "Approve",
+    "reject": "Reject",
+    "running": "Running specialist agents…",
+    "runAnalysis": "Run AI Analysis",
+    "analysisFailed": "Analysis failed",
+    "openCount": "{count} open",
+    "scoreSuffix": "/100"
+  }
+}

@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](SECURITY.zh-CN.md)
+
 # Security baseline
 
 ## Principles

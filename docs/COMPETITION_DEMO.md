@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](COMPETITION_DEMO.zh-CN.md)
+
 # Five-minute competition demo route
 
 ## 0:00-0:30 - Problem
@@ -20,3 +22,6 @@ Open Training and show English / Bahasa Melayu / Chinese HSE localization.
 
 ## 4:35-5:00 - Global scale
 Show Architecture page: Country Packs, Domain Packs, regional data planes and project edge.
+
+## Optional add-on - full-chain English/Chinese switching
+Change the preferred language in the browser settings (or use the language switch button in the top bar) and refresh any page to show the UI copy, case data, agent names and domain model switching together, with no change to the URL path.

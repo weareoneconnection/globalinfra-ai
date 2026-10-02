@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](README.zh-CN.md)
+
 # GlobalInfra AI V1.1
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
@@ -24,6 +26,7 @@ GlobalInfra AI V1.1 is an independent, competition-ready platform for overseas t
 - Synthetic demo dataset
 - Docker Compose for web + API + PostgreSQL + Redis
 - Evaluation harness and CI skeleton
+- **Full-chain English/Chinese switching**: the web app auto-detects the browser language (with manual override), the API returns bilingual data per request, and a translation-model integration point powers dynamically generated content
 
 The default AI mode is **deterministic demo mode**, so the system works without buying model tokens. An OpenAI-compatible model gateway is included and can be enabled later with environment variables.
 
@@ -69,6 +72,8 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 Open http://localhost:3000.
 
+The web app follows the browser's `Accept-Language` automatically (English or Chinese, remembered in a cookie, no URL path change required), or you can override it manually with the language switch button in the top bar.
+
 ## Competition demo path
 
 1. Open **Cases**.
@@ -112,7 +117,7 @@ docs                      Architecture, security, governance and demo docs
 - Regional data-residency ready
 - Offline/edge-ready by design
 
-See `docs/ARCHITECTURE.md` for the complete design.
+See `docs/ARCHITECTURE.md` (Chinese: `docs/ARCHITECTURE.zh-CN.md`) for the complete design.
 
 ## Production hardening still required
 

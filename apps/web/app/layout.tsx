@@ -1,4 +1,6 @@
 import './globals.css';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 
@@ -8,17 +10,21 @@ export const metadata = {
   icons: { icon: '/favicon.svg' }
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body>
-        <div className="shell">
-          <Sidebar />
-          <main className="main">
-            <Topbar />
-            <div className="content">{children}</div>
-          </main>
-        </div>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <div className="shell">
+            <Sidebar />
+            <main className="main">
+              <Topbar />
+              <div className="content">{children}</div>
+            </main>
+          </div>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

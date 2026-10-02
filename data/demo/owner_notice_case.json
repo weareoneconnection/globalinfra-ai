@@ -1,12 +1,18 @@
 {
   "case_id": "CASE-2026-0182",
   "project": "Global Rail Project A",
+  "project_zh": "全球轨道项目 A",
   "country": "MY",
   "source_language": "en",
   "issues": [
     "temporary access road damage",
     "earthwork encroachment",
     "structural crack"
+  ],
+  "issues_zh": [
+    "施工便道损坏",
+    "土方侵占",
+    "结构裂缝"
   ],
   "response_deadline_hours": 48,
   "classification": "synthetic"

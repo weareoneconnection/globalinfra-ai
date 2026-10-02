@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](ARCHITECTURE.zh-CN.md)
+
 # GlobalInfra AI V1.1 Domain Architecture
 
 ## 1. Product model
@@ -105,13 +107,15 @@ Country Packs isolate:
 
 A Country Pack is configuration + curated knowledge, not permission for the AI to invent legal conclusions.
 
+This release ships a full-chain language switch (browser-language auto-detection + cookie memory + bilingual API data + a translation-model integration point) as the concrete implementation of the "language/locales" capability above; the term-pair structure in `packages/country-packs/*/glossary.json` can be reused directly for terminology-locking the translation model.
+
 ## 8. Domain Packs
 
 Domain Packs isolate transport vertical semantics: rail, highway, bridge, tunnel, port and airport.
 
 ## 9. Model Gateway
 
-`LLM_MODE=mock` is default. Production must route by sensitivity, latency, cost, capability, jurisdiction and data policy, and must support a local/regional model route when cross-border processing is not permitted.
+`LLM_MODE=mock` is default. Production must route by sensitivity, latency, cost, capability, jurisdiction and data policy, and must support a local/regional model route when cross-border processing is not permitted. The translation-model integration point (`translate()` in `services/api/app/llm.py`) shares the same gateway abstraction: it calls the real model when one is configured, otherwise it falls back to a deterministic offline phrase table so the demo environment produces bilingual content without network access.
 
 ## 10. Deployment evolution
 

@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](RELEASE_NOTES.zh-CN.md)
+
 # GlobalInfra AI V1.0 Release Notes
 
 This release establishes a standalone competition-ready and globally extensible foundation.
@@ -17,6 +19,7 @@ This release establishes a standalone competition-ready and globally extensible 
 - Kubernetes starter manifests
 - Synthetic competition data and evaluation smoke harness
 - Independent IP-boundary documentation
+- Full-chain English/Chinese switching: browser-language auto-detection on the web, bilingual API responses, and a translation-model integration point
 
 ## Intentionally deferred
 

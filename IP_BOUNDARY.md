@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](IP_BOUNDARY.zh-CN.md)
+
 # GlobalInfra AI - IP Boundary
 
 GlobalInfra AI is structured as an independent codebase with its own branding, domain model, workflow definitions, schemas, UI, deployment assets, and demo data.

@@ -1,3 +1,3 @@
-{"id":"EVAL-001","text":"Owner notice alleges access road damage and asks for rectification within 48 hours.","expected_type":"Contract / Technical Interface","expected_risk":"HIGH"}
-{"id":"EVAL-002","text":"Worker observed near unprotected edge at elevated workface.","expected_type":"HSE","expected_risk":"CRITICAL"}
-{"id":"EVAL-003","text":"Concrete surface honeycombing observed at drainage wall after formwork removal.","expected_type":"Quality","expected_risk":"MEDIUM"}
+{"id":"EVAL-001","text":"Owner notice alleges access road damage and asks for rectification within 48 hours.","text_zh":"业主通知函指出施工便道损坏，并要求在 48 小时内整改。","expected_type":"Contract / Technical Interface","expected_type_zh":"合同 / 技术接口","expected_risk":"HIGH"}
+{"id":"EVAL-002","text":"Worker observed near unprotected edge at elevated workface.","text_zh":"在高处作业面发现工人靠近无防护边缘。","expected_type":"HSE","expected_type_zh":"健康安全环保（HSE）","expected_risk":"CRITICAL"}
+{"id":"EVAL-003","text":"Concrete surface honeycombing observed at drainage wall after formwork removal.","text_zh":"排水墙拆模后发现混凝土表面蜂窝状缺陷。","expected_type":"Quality","expected_type_zh":"质量","expected_risk":"MEDIUM"}

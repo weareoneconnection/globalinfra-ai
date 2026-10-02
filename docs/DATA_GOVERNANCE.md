@@ -1,3 +1,5 @@
+> **Language / 语言**: English · [简体中文](DATA_GOVERNANCE.zh-CN.md)
+
 # Data Governance
 
 V1.0 uses synthetic data only.

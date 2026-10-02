@@ -1,0 +1,259 @@
+{
+  "Sidebar": {
+    "brandName": "GlobalInfra AI",
+    "brandTag": "项目智能",
+    "footerVersion": "V1.1 · 领域架构",
+    "footerSub": "8 大智能领域 · 24 个专业",
+    "groups": [
+      {
+        "label": "全局",
+        "items": [
+          { "href": "/", "label": "指挥中心", "icon": "⌂" },
+          { "href": "/projects", "label": "项目组合", "icon": "◫" }
+        ]
+      },
+      {
+        "label": "项目运营",
+        "items": [
+          { "href": "/cases", "label": "工单", "icon": "◎" },
+          { "href": "/approvals", "label": "审批", "icon": "✓" },
+          { "href": "/knowledge", "label": "知识库", "icon": "◇" }
+        ]
+      },
+      {
+        "label": "智能领域",
+        "items": [
+          { "href": "/intelligence/project", "label": "项目", "icon": "01" },
+          { "href": "/intelligence/engineering", "label": "工程", "icon": "02" },
+          { "href": "/intelligence/delivery", "label": "交付", "icon": "03" },
+          { "href": "/intelligence/commercial", "label": "商务", "icon": "04" },
+          { "href": "/intelligence/assurance", "label": "风险与保证", "icon": "05" },
+          { "href": "/intelligence/resources", "label": "资源", "icon": "06" },
+          { "href": "/intelligence/knowledge", "label": "知识", "icon": "07" },
+          { "href": "/intelligence/assets", "label": "资产与运维", "icon": "08" }
+        ]
+      },
+      {
+        "label": "平台",
+        "items": [
+          { "href": "/agents", "label": "智能体组织", "icon": "AI" },
+          { "href": "/architecture", "label": "架构", "icon": "⌘" }
+        ]
+      }
+    ]
+  },
+  "Topbar": {
+    "crumb": "全局",
+    "title": "项目组合控制面板",
+    "dataSynced": "数据已同步",
+    "timestamp": "2026年9月30日 · 16:40 CST",
+    "switchToLabel": "EN"
+  },
+  "Home": {
+    "eyebrow": "全局指挥中心 · 项目组合实时",
+    "title": "从每一个项目事件，到一次可信的行动。",
+    "subtitle": "跨生命周期、跨专业、跨组织理解工程事件，把进度、技术、商务、风险与资产数据连接成可执行的项目智能。",
+    "viewThread": "查看数字主线",
+    "openCase": "打开优先工单",
+    "metricPortfolio": "在建项目组合",
+    "metricPortfolioDelta": "{countries} 个国家 · 3 个数据平面",
+    "metricCases": "跨领域未结工单",
+    "metricCasesDelta": "{critical} 项高 / 紧急风险",
+    "metricApprovals": "待决策事项",
+    "metricApprovalsDelta": "人工审批关卡已启用",
+    "metricVerified": "已核验决策",
+    "metricVerifiedDelta": "96.2% 证据可追溯率",
+    "lifecycleKicker": "全生命周期",
+    "lifecycleTitle": "项目组合交付全景",
+    "lifecycleSpan": "3 个项目分布在不同活跃阶段",
+    "domainsKicker": "8 大智能领域",
+    "domainsTitle": "关联的项目健康状况",
+    "domainsLink": "查看全部 24 个专业",
+    "signalsKicker": "跨领域信号",
+    "signalsTitle": "需要协同处理的事件",
+    "signalsLink": "查看全部工单",
+    "trustedKicker": "可信执行",
+    "trustedTitle": "跨所有领域的统一运行模型",
+    "trustedSpan": "受管控的 AI",
+    "trustedFlow": ["项目事件", "工单", "证据", "决策", "行动", "核验"],
+    "teamLabel": "工单路由器 · 团队组建",
+    "teamTitle": "质量 + 工程 + 合同 + 计划",
+    "teamDesc": "已为 NCR-2026-084 组建动态专家团队",
+    "teamBadge": "进行中"
+  },
+  "Agents": {
+    "eyebrow": "多智能体工程组织",
+    "title": "专家智能体注册表",
+    "subtitle": "智能体并非孤立运行的聊天机器人。工单路由器会围绕每一个工程事件，组建一个受策略约束的临时团队。",
+    "available": "{count} 个专家智能体可用",
+    "incomingLabel": "新进工单",
+    "incomingValue": "不符合项 · 混凝土裂缝 · 进度风险敞口",
+    "routerLabel": "工单路由器",
+    "routerValue": "分类 · 组建 · 管控",
+    "teamLabel": "动态团队",
+    "teamValue": "质量 + 工程 + 合同 + 计划",
+    "practiceKicker": "专家实践领域",
+    "agentsCount": "{count} 个智能体"
+  },
+  "Approvals": {
+    "eyebrow": "人工治理",
+    "title": "审批中心",
+    "subtitle": "高风险的对外行动，必须经过可追责的人工审批后方可执行。",
+    "colCase": "工单",
+    "colApproval": "审批事项",
+    "colRisk": "风险",
+    "colApprover": "审批人",
+    "colStatus": "状态",
+    "colAction": "操作",
+    "recorded": "已记录"
+  },
+  "Architecture": {
+    "eyebrow": "GlobalInfra 项目智能模型",
+    "title": "贯穿整个资产生命周期的统一数字主线。",
+    "subtitle": "传统软件按部门切割信息；GlobalInfra AI 以工程事件为中心，连接技术、交付、商务、风险、资源、知识与资产数据。",
+    "badge": "V1.1 架构",
+    "coreLabel": "GLOBALINFRA 核心",
+    "coreTitle": "基础设施数字主线",
+    "coreSub": "国家包 + 领域包 + 智能体 + 技能 + 证据 + 工作流",
+    "disciplines": "{count} 个专业",
+    "threadKicker": "实时数字主线",
+    "threadSpan": "{count} 条关联记录 · 6 个领域",
+    "matrixKicker": "双轴模型",
+    "matrixTitle": "生命周期 × 智能领域",
+    "matrixDesc": "每条记录都锚定在一个生命周期阶段与一个专业领域上，同时通过关系保留跨领域影响。",
+    "matrixCols": ["投标", "规划", "设计", "施工", "测试", "运营"],
+    "matrixRows": ["项目", "工程", "交付", "商务", "保证", "资源", "知识", "资产"],
+    "protocolKicker": "可信行动协议",
+    "protocolTitle": "一个受管控的闭环，适用于任何项目事件",
+    "protocolStack": [
+      { "step": "01", "label": "事件", "desc": "现场信号、文件或系统变更" },
+      { "step": "02", "label": "工单", "desc": "结构化的跨领域工作单元" },
+      { "step": "03", "label": "证据", "desc": "具备版本、引用与司法辖区信息" },
+      { "step": "04", "label": "决策", "desc": "专家团队给出的建议" },
+      { "step": "05", "label": "行动", "desc": "经人工批准后执行" },
+      { "step": "06", "label": "核验", "desc": "对结果的独立验证" }
+    ]
+  },
+  "Cases": {
+    "eyebrow": "工单智能",
+    "title": "工单",
+    "subtitle": "每一个重要的现场问题，都会成为受管控、有证据支撑的工作单元。",
+    "newCase": "新建工单",
+    "colCase": "工单",
+    "colProject": "项目",
+    "colRisk": "风险",
+    "colIssues": "问题",
+    "colDeadline": "截止时间",
+    "colStatus": "状态"
+  },
+  "CaseDetail": {
+    "intelligenceTitle": "工单智能",
+    "labelStatus": "状态",
+    "labelType": "类型",
+    "labelDeadline": "响应截止时间",
+    "labelSourceLanguage": "来源语言",
+    "labelDescription": "描述",
+    "labelIssues": "已识别问题",
+    "verificationTitle": "核验关卡",
+    "labelCitationScore": "引用得分",
+    "labelEvidenceScore": "证据得分",
+    "labelConsistencyScore": "语义一致性",
+    "labelFindings": "核验发现",
+    "noVerification": "尚无核验记录。运行分析以生成有证据支撑的候选行动。",
+    "runsTitle": "专家智能体运行记录",
+    "runsCount": "{count} 次运行",
+    "noRuns": "运行分析以激活接收、合同、工程、标准、计划与核验智能体。",
+    "evidenceTitle": "证据链",
+    "evidenceCount": "{count} 项",
+    "noEvidence": "暂无关联证据。"
+  },
+  "Knowledge": {
+    "eyebrow": "知识网络",
+    "title": "证据与知识",
+    "subtitle": "项目文档、合同、标准、法规与经验教训都将转化为可查询、具备版本意识的证据。",
+    "searchPlaceholder": "搜索合同、标准、现场记录…",
+    "graphEyebrow": "证据关系图",
+    "graphTitle": "主张 → 来源 → 版本 → 司法辖区",
+    "graphBody": "决策\n ├─ 合同条款 C-14.2\n ├─ 责任矩阵 RM-03\n ├─ 现场指令 SI-028\n ├─ 会议纪要 MM-182\n └─ 照片 IMG-229\n\n每条关系边都带有置信度、版本、司法辖区及内容哈希信息。"
+  },
+  "Projects": {
+    "eyebrow": "全球项目组合 · 3 个在建项目",
+    "title": "项目组合",
+    "subtitle": "从投标到运营，每个工作空间都连接范围、进度、成本、风险与资产成果。",
+    "scenario": "组合情景分析",
+    "progress": "整体进度",
+    "forecast": "预测",
+    "schedule": "进度",
+    "nextGate": "下一关口",
+    "openWorkspace": "打开工作空间"
+  },
+  "ProjectDetail": {
+    "progress": "整体进度",
+    "budget": "已批准预算",
+    "budgetDelta": "已承诺 {committed}M",
+    "forecastTitle": "完工预测",
+    "forecastDeltaOver": "超支敞口 {exposure}M",
+    "forecastDeltaOk": "处于基线以内",
+    "variance": "进度偏差",
+    "varianceDelta": "抢赶方案已启动",
+    "lifecycleKicker": "项目生命周期",
+    "lifecycleTitle": "阶段关口就绪度",
+    "lifecycleSpan": "下一关口：{gate} · {date}",
+    "osKicker": "项目操作系统",
+    "osTitle": "关联领域绩效",
+    "osSpan": "健康度综合风险、响应时延、证据与决策状态",
+    "casesKicker": "优先工单",
+    "casesTitle": "跨领域工作队列",
+    "casesLink": "查看全部",
+    "noCases": "此工作空间暂无进行中的工单。",
+    "readinessKicker": "未来 30 天",
+    "readinessTitle": "综合就绪度",
+    "readinessSpan": "6 个关口",
+    "readinessList": [
+      { "title": "系统集成就绪度", "meta": "工程 · 接口", "value": "82%" },
+      { "title": "长周期开关柜交付", "meta": "采购 · 物流", "value": "68%" },
+      { "title": "高架桥检验放行", "meta": "质量 · 施工", "value": "91%" },
+      { "title": "月度付款申请", "meta": "商务 · 成本", "value": "76%" }
+    ]
+  },
+  "Training": {
+    "eyebrow": "本地化与 HSE",
+    "title": "本地员工培训",
+    "subtitle": "面向项目团队与合作方，提供国家适配、术语锁定的多语言安全培训。",
+    "generate": "生成培训模块",
+    "languagesLabel": "语言",
+    "minutesSuffix": "分钟",
+    "moduleNote": "本地化内容 + 术语锁定 + 签收确认",
+    "ready": "就绪"
+  },
+  "Intelligence": {
+    "eyebrow": "智能领域",
+    "healthLabel": "领域健康度",
+    "openSignals": "未结信号",
+    "evidenceCoverage": "证据覆盖率",
+    "evidenceCoverageValue": "96.2%",
+    "evidenceCoverageDelta": "本期 +2.8%",
+    "decisionsVerified": "已核验决策",
+    "decisionsVerifiedValue": "148",
+    "decisionsVerifiedDelta": "4 项待审批",
+    "liveKicker": "实时智能",
+    "liveTitle": "信号与决策",
+    "liveSpan": "{count} 项优先",
+    "modelKicker": "领域模型",
+    "modelTitle": "专业学科",
+    "modelSpan": "{count} 项关联",
+    "capabilityKicker": "能力地图",
+    "capabilityTitle": "关联的智能服务",
+    "capabilityLink": "查看专家智能体"
+  },
+  "Components": {
+    "saving": "保存中…",
+    "approve": "批准",
+    "reject": "驳回",
+    "running": "专家智能体运行中…",
+    "runAnalysis": "运行 AI 分析",
+    "analysisFailed": "分析失败",
+    "openCount": "{count} 项未结",
+    "scoreSuffix": "/100"
+  }
+}
