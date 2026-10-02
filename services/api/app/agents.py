@@ -1,5 +1,14 @@
 from .i18n import bi
 
+# This is the specialist agent directory shown by GET /agents. A subset of
+# these ids (chosen per Case.type -- see workflow.SPECIALISTS_BY_CASE_TYPE)
+# is also what actually runs during POST /cases/{id}/analyze: each engaged
+# agent performs a real retrieval-grounded analysis of the case (see
+# workflow.py / retrieval.py) rather than just appearing in this list for
+# display. The "tools" field below documents the capability each agent
+# represents; the ones currently wired to real execution are the ids
+# listed in workflow.SPECIALISTS_BY_CASE_TYPE plus "localization",
+# "planning" and "verification", which run for every case.
 AGENTS = [
     {"id":"planning","name":bi("Planning Agent","计划智能体"),"group":bi("Project Controls","项目管控"),"role":bi("Analyzes critical path, delay exposure and recovery scenarios.","分析关键路径、延误风险敞口及恢复方案。"),"risk_level":"high","tools":["schedule.analyze","workflow.plan"]},
     {"id":"cost","name":bi("Cost Agent","成本智能体"),"group":bi("Project Controls","项目管控"),"role":bi("Connects commitments, forecast, change and cash-flow impact.","关联已承诺成本、预测、变更与现金流影响。"),"risk_level":"high","tools":["cost.forecast","change.quantify"]},
