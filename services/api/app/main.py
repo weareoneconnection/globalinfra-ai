@@ -11,7 +11,7 @@ from .agents import AGENTS
 from .workflow import analyze_case
 from .domain import LIFECYCLE_STAGES, INTELLIGENCE_DOMAINS, TRUSTED_ACTION_STAGES, PROJECT_INTELLIGENCE, DOMAIN_HEALTH, professional_domains
 from .i18n import bi, get_lang, localize
-from .llm import translate
+from .llm import translate, LLMError
 from .classify import classify_text
 from .security import api_key_gate
 
@@ -42,7 +42,8 @@ async def translate_endpoint(payload: TranslateRequest):
     """Direct access to the translation-model integration (see llm.translate).
     Uses the configured OpenAI-compatible model when available, otherwise the
     deterministic offline phrase table used throughout the demo dataset."""
-    translation = await translate(payload.text, payload.target_lang, payload.source_lang)
+    try: translation = await translate(payload.text, payload.target_lang, payload.source_lang)
+    except LLMError as exc: raise HTTPException(502, str(exc))
     return {"source_lang": payload.source_lang, "target_lang": payload.target_lang, "text": payload.text, "translation": translation}
 
 class ClassifyRequest(BaseModel):
@@ -146,6 +147,7 @@ def case_detail(case_id: str, db: Session = Depends(get_db), lang: str = Depends
 async def analyze(case_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     try: result = await analyze_case(db, case_id)
     except KeyError: raise HTTPException(404, 'Case not found')
+    except LLMError as exc: raise HTTPException(502, str(exc))
     return localize(result, lang)
 
 @app.get('/knowledge')
