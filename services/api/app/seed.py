@@ -2,9 +2,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .models import Project, Case, KnowledgeDocument, TrainingModule
 from .i18n import bi
+from .twin_seed import seed_twin
 
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
+        seed_twin(db)
         return
     projects = [
         Project(id=1, code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
@@ -101,3 +103,4 @@ def seed(db: Session):
                                  bi("Knowledge check", "知识测验")]),
     ])
     db.commit()
+    seed_twin(db)

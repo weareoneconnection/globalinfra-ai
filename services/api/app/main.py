@@ -21,6 +21,7 @@ from .llm_extract import extract_fields_llm
 from .documents import extract_text, UnsupportedDocument
 from .security import api_key_gate
 from .config import settings
+from .twin import router as twin_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,7 +31,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="1.3.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -41,9 +42,10 @@ app.add_middleware(
 # Off by default (see app.security / app.config.settings.require_api_key);
 # turning it on in a pilot deployment needs only an env var, no code change.
 app.middleware("http")(api_key_gate)
+app.include_router(twin_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"1.3.0","architecture":"project-intelligence"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"2.0.0","architecture":"project-intelligence-digital-twin"}
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)

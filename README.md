@@ -118,9 +118,26 @@ Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: 
 
 Two new tables back this (see **Database migrations** below): `intake_submissions` (raw input reference, input hash, parsed text, detected language, created-at, linked `case_id`) and `source_documents` (filename, file type, storage reference, parse status, linked `intake_submission_id`).
 
+## V2.0 Phase 6 Digital Twin
+
+`/twin` is a complete, data-backed reference implementation of the full-lifecycle twin operating model — not a disconnected 3D mock-up. A stable `Twin ID` connects spatial identity, asset hierarchy, state history, engineering events, WBS, schedule, cost, commissioning, telemetry, maintenance and governed AI simulation.
+
+The six delivered phases are:
+
+1. **Twin foundation:** stable IDs, hierarchy, IFC/GIS references, relations and evidence-bearing state history.
+2. **Spatial workspace:** interactive infrastructure scene, component inspection, risk state and linked engineering events.
+3. **4D/5D controls:** WBS/activity mapping, planned-vs-actual progress, schedule variance and forecast cost exposure.
+4. **Commissioning & handover:** system/test-pack readiness, punch items and document completeness.
+5. **Operational twin:** live sensor boundary, health thresholds, anomaly state and predictive maintenance work orders.
+6. **AI scenario lab:** schedule-recovery, predictive-maintenance and energy scenarios using verified twin inputs; every operational result remains `AWAITING_APPROVAL` and changes no asset state directly.
+
+Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/twin/controls`, `/twin/commissioning`, `/twin/operations`, `/twin/scenarios`, `/twin/agents`; `POST /twin/scenarios/{scenario_id}/run`.
+
+The bundled IFC/glTF/3D Tiles references, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
+
 ## Database migrations (Alembic)
 
-V1.3 M1 introduces Alembic. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments, and its schema is verified in CI to match `create_all` exactly.
+V1.3 introduced Alembic and V2.0 extends it for the full-lifecycle twin. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments.
 
 ```bash
 cd services/api
@@ -135,6 +152,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 
 - `0001_baseline_schema` captures the pre-existing V1.2 tables as the migration baseline.
 - `0002_intake_tables` adds `intake_submissions` and `source_documents`.
+- `0003_digital_twin` adds the Twin object graph, state history, engineering events, 4D/5D links, sensors, commissioning, maintenance and governed scenarios.
 
 The database URL is read from app settings (`DATABASE_URL`/`.env`) by `migrations/env.py`, not committed in `alembic.ini`.
 

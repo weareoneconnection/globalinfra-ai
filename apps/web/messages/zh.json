@@ -2,14 +2,15 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "项目智能",
-    "footerVersion": "V1.1 · 领域架构",
-    "footerSub": "8 大智能领域 · 24 个专业",
+    "footerVersion": "V2.0 · 阶段 6 孪生",
+    "footerSub": "全生命周期 · 受控仿真",
     "groups": [
       {
         "label": "全局",
         "items": [
           { "href": "/", "label": "指挥中心", "icon": "⌂" },
-          { "href": "/projects", "label": "项目组合", "icon": "◫" }
+          { "href": "/projects", "label": "项目组合", "icon": "◫" },
+          { "href": "/twin", "label": "数字孪生", "icon": "DT" }
         ]
       },
       {
@@ -111,7 +112,7 @@
     "eyebrow": "GlobalInfra 项目智能模型",
     "title": "贯穿整个资产生命周期的统一数字主线。",
     "subtitle": "传统软件按部门切割信息；GlobalInfra AI 以工程事件为中心，连接技术、交付、商务、风险、资源、知识与资产数据。",
-    "badge": "V1.1 架构",
+    "badge": "V2.0 孪生架构",
     "coreLabel": "GLOBALINFRA 核心",
     "coreTitle": "基础设施数字主线",
     "coreSub": "国家包 + 领域包 + 智能体 + 技能 + 证据 + 工作流",
@@ -245,6 +246,45 @@
     "capabilityKicker": "能力地图",
     "capabilityTitle": "关联的智能服务",
     "capabilityLink": "查看专家智能体"
+  },
+  "Twin": {
+    "eyebrow": "V2.0 · 基础设施全生命周期孪生",
+    "title": "从设计到运营，共用一个持续生长的数字孪生。",
+    "subtitle": "把 BIM、GIS、WBS、进度、成本、质量、调试和资产实时信号锚定到稳定 Twin ID 与受治理的证据链。",
+    "metricObjects": "孪生对象",
+    "metricObjectsDelta": "{mapped} 个完成空间映射",
+    "metricHealth": "资产健康",
+    "metricHealthDelta": "{events} 个活跃工程事件",
+    "metricSchedule": "进度敞口",
+    "metricScheduleDelta": "+{cost}M 预测成本敞口",
+    "metricHandover": "调试准备度",
+    "metricHandoverDelta": "{docs}% 移交文件完整度",
+    "workspace": {
+      "tabs": ["空间孪生", "4D / 5D 项控", "调试移交", "运营维护", "场景实验室", "孪生智能体"],
+      "selectAsset": "选择资产",
+      "health": "健康度",
+      "progress": "进度",
+      "linkedEvents": "关联工程事件",
+      "noEvents": "该对象暂无活跃事件。",
+      "planned": "计划",
+      "actual": "实际",
+      "scheduleVariance": "进度偏差",
+      "costExposure": "成本敞口",
+      "readiness": "阶段 / 准备度",
+      "documents": "文件完整度",
+      "openPunch": "未关闭遗留项",
+      "telemetry": "实时资产遥测",
+      "maintenance": "预测性维护队列",
+      "warning": "预警",
+      "runScenario": "运行受控仿真",
+      "running": "仿真中…",
+      "approvalRequired": "需要审批",
+      "simulationComplete": "仿真完成 · 行动已设审批关卡",
+      "simulationFailed": "仿真失败，请检查 API 连接后重试。",
+      "evidence": "证据输入",
+      "sceneHint": "选择构件查看其数字主线",
+      "live": "实时模型"
+    }
   },
   "Components": {
     "saving": "保存中…",

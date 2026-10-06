@@ -1,6 +1,22 @@
 > **Language / 语言**: English · [简体中文](ARCHITECTURE.zh-CN.md)
 
-# GlobalInfra AI V1.1 Domain Architecture
+# GlobalInfra AI V2.0 Domain + Digital Twin Architecture
+
+## V2.0 full-lifecycle digital twin
+
+The Digital Twin plane is anchored on `TwinObject.id`, a stable source-neutral identity. Geometry references (IFC/glTF/3D Tiles/GeoJSON), object relationships, evidence-bearing state transitions, WBS/activity/cost links, commissioning records, telemetry, maintenance and simulations all reference that identity. This avoids coupling the platform to one BIM authoring tool, IoT vendor or scheduling system.
+
+```text
+BIM / GIS / Project Controls / QMS / CxMS / BMS / SCADA
+                         │ adapters
+                         ▼
+Twin Object Graph → Temporal State → 4D/5D → Handover → Operations
+                         │
+                         ▼
+         Twin Agents → Evidence Verification → Human Approval
+```
+
+The bundled dataset is synthetic. Geometry and telemetry fields are integration contracts, not claims of a connected production source. Scenario execution produces recommendations only and cannot mutate operational asset state.
 
 ## 1. Product model
 

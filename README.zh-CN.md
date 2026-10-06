@@ -118,9 +118,26 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 新增两张表（见下文**数据库迁移**）：`intake_submissions`（原始输入引用、输入哈希、解析文本、检测语言、创建时间、关联 `case_id`）与 `source_documents`（文件名、文件类型、存储引用、解析状态、关联 `intake_submission_id`）。
 
+## V2.0 阶段 6 数字孪生
+
+`/twin` 已成为覆盖全生命周期、由真实数据模型支撑的孪生运行工作台，而不是一个与业务割裂的三维演示。稳定的 `Twin ID` 将空间身份、资产层级、状态历史、工程事件、WBS、进度、成本、调试、遥测、维护与受管控 AI 仿真连接起来。
+
+一次性交付的六个阶段：
+
+1. **孪生底座：** 稳定 ID、资产层级、IFC/GIS 引用、对象关系和带证据的状态历史。
+2. **空间工作台：** 可交互基础设施场景、构件检查、风险状态和关联工程事件。
+3. **4D/5D 项控：** WBS/活动映射、计划与实际对比、进度偏差和预测成本敞口。
+4. **调试与移交：** 系统/试验包准备度、Punch 遗留项和文件完整度。
+5. **运营孪生：** 实时传感器边界、健康阈值、异常状态和预测性维护工单。
+6. **AI 场景实验室：** 以经核验的孪生数据运行工期恢复、预测性维护和能耗方案；所有运营结果保持 `AWAITING_APPROVAL`，不会直接修改资产状态。
+
+主要接口：`GET /twin/summary`、`/twin/scene`、`/twin/objects/{twin_id}`、`/twin/controls`、`/twin/commissioning`、`/twin/operations`、`/twin/scenarios`、`/twin/agents`；`POST /twin/scenarios/{scenario_id}/run`。
+
+仓库内的 IFC/glTF/3D Tiles 引用、BMS/SCADA 读数和场景均为合成集成样例。生产部署可通过模型转换、项目管理系统、对象存储和遥测适配器替换数据源，同时保持 Twin ID 与 API 契约不变。
+
 ## 数据库迁移（Alembic）
 
-V1.3 M1 引入 Alembic。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径，CI 已校验其生成的表结构与 `create_all` 完全一致。
+V1.3 引入 Alembic，V2.0 将其扩展到全生命周期数字孪生。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径。
 
 ```bash
 cd services/api
@@ -134,6 +151,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 
 - `0001_baseline_schema`：将已有 V1.2 表结构纳入迁移基线。
 - `0002_intake_tables`：新增 `intake_submissions` 与 `source_documents`。
+- `0003_digital_twin`：新增孪生对象图谱、状态历史、工程事件、4D/5D 关联、传感器、调试、维护与受管控场景。
 
 数据库 URL 由 `migrations/env.py` 从应用设置（`DATABASE_URL`/`.env`）读取，不写入 `alembic.ini`。
 

@@ -69,7 +69,14 @@ jobs:
           printf 'Worker near unprotected edge at elevated workface, no fall protection.' > /tmp/intake.txt
           curl -sf -X POST http://localhost:8001/intake/document \
             -F 'file=@/tmp/intake.txt;type=text/plain' | grep -q 'HSE'
+          # V2.0 Phase 6 digital twin: spatial identity, 4D/5D and governed
+          # scenario execution must all survive the deployed service boundary.
+          curl -sf 'http://localhost:8001/twin/summary?project_id=1' | grep -q 'PHASE_6'
+          curl -sf 'http://localhost:8001/twin/scene?project_id=1' | grep -q 'TWIN-MYRAIL-V12-P47'
+          curl -sf -X POST 'http://localhost:8001/twin/scenarios/SCN-RECOVERY-V12/run' \
+            -H 'Content-Type: application/json' -d '{"adjustment_percent":10}' | grep -q 'AWAITING_APPROVAL'
           curl -sf http://localhost:3000/ > /dev/null
+          curl -sf http://localhost:3000/twin > /dev/null
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
+
+def utc_now() -> datetime:
+    """Naive UTC for database columns without triggering utcnow deprecation."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 class Project(Base):
     __tablename__ = "projects"
@@ -30,7 +34,7 @@ class Case(Base):
     deadline: Mapped[dict] = mapped_column(JSON)
     source_language: Mapped[dict] = mapped_column(JSON)
     detected_issues: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     project = relationship("Project")
 
 class Evidence(Base):
@@ -52,7 +56,7 @@ class AgentRun(Base):
     status: Mapped[str] = mapped_column(String(40), default="COMPLETED")
     summary: Mapped[dict] = mapped_column(JSON)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class Approval(Base):
     __tablename__ = "approvals"
@@ -62,7 +66,7 @@ class Approval(Base):
     approver_role: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="PENDING")
     risk: Mapped[str] = mapped_column(String(20), default="HIGH")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class Verification(Base):
     __tablename__ = "verifications"
@@ -73,7 +77,7 @@ class Verification(Base):
     evidence_score: Mapped[float] = mapped_column(Float)
     consistency_score: Mapped[float] = mapped_column(Float)
     findings: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
@@ -114,7 +118,7 @@ class IntakeSubmission(Base):
     parsed_text: Mapped[str] = mapped_column(Text)
     detected_language: Mapped[str] = mapped_column(String(8))
     case_id: Mapped[str | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class SourceDocument(Base):
     """A file attached to an intake submission (PDF / DOCX / TXT only in M1).
@@ -127,4 +131,113 @@ class SourceDocument(Base):
     file_type: Mapped[str] = mapped_column(String(16))
     storage_ref: Mapped[str] = mapped_column(String(255))
     parse_status: Mapped[str] = mapped_column(String(16), default="PARSED")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+# --- V2.0: Full-lifecycle Digital Twin --------------------------------------
+
+class TwinObject(Base):
+    """A stable, source-neutral identity for a spatial or functional asset."""
+    __tablename__ = "twin_objects"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("twin_objects.id"), nullable=True, index=True)
+    object_type: Mapped[str] = mapped_column(String(40), index=True)
+    name: Mapped[dict] = mapped_column(JSON)
+    lifecycle_stage: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(48), index=True)
+    health_score: Mapped[float] = mapped_column(Float, default=100.0)
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    geometry_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ifc_guid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    location: Mapped[dict] = mapped_column(JSON, default=dict)
+    properties: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+class TwinRelation(Base):
+    __tablename__ = "twin_relations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    target_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    relation_type: Mapped[str] = mapped_column(String(40), index=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+class TwinStateHistory(Base):
+    __tablename__ = "twin_state_history"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    previous_status: Mapped[str] = mapped_column(String(48))
+    status: Mapped[str] = mapped_column(String(48), index=True)
+    source_system: Mapped[str] = mapped_column(String(64))
+    evidence_ref: Mapped[str] = mapped_column(String(255))
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    effective_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+class TwinEvent(Base):
+    __tablename__ = "twin_events"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    severity: Mapped[str] = mapped_column(String(20), index=True)
+    title: Mapped[dict] = mapped_column(JSON)
+    domain: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(40))
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+class TwinScheduleLink(Base):
+    __tablename__ = "twin_schedule_links"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    wbs_code: Mapped[str] = mapped_column(String(64), index=True)
+    activity_id: Mapped[str] = mapped_column(String(64), index=True)
+    planned_progress: Mapped[float] = mapped_column(Float)
+    actual_progress: Mapped[float] = mapped_column(Float)
+    schedule_variance_days: Mapped[int] = mapped_column(Integer, default=0)
+    cost_code: Mapped[str] = mapped_column(String(64))
+    budget: Mapped[float] = mapped_column(Float, default=0.0)
+    forecast: Mapped[float] = mapped_column(Float, default=0.0)
+
+class TwinSensor(Base):
+    __tablename__ = "twin_sensors"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    sensor_type: Mapped[str] = mapped_column(String(40))
+    unit: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="ONLINE")
+    threshold_warning: Mapped[float] = mapped_column(Float)
+    threshold_critical: Mapped[float] = mapped_column(Float)
+    latest_value: Mapped[float] = mapped_column(Float)
+    sampled_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+class CommissioningItem(Base):
+    __tablename__ = "commissioning_items"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    system: Mapped[dict] = mapped_column(JSON)
+    test_pack: Mapped[str] = mapped_column(String(80))
+    stage: Mapped[str] = mapped_column(String(40), index=True)
+    punch_open: Mapped[int] = mapped_column(Integer, default=0)
+    document_completeness: Mapped[float] = mapped_column(Float, default=0.0)
+    readiness: Mapped[float] = mapped_column(Float, default=0.0)
+
+class MaintenanceRecord(Base):
+    __tablename__ = "maintenance_records"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    work_type: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    priority: Mapped[str] = mapped_column(String(20))
+    description: Mapped[dict] = mapped_column(JSON)
+    due_at: Mapped[datetime] = mapped_column(DateTime)
+
+class TwinScenario(Base):
+    __tablename__ = "twin_scenarios"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[dict] = mapped_column(JSON)
+    scenario_type: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="READY")
+    assumptions: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

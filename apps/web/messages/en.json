@@ -2,14 +2,15 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "PROJECT INTELLIGENCE",
-    "footerVersion": "V1.1 · Domain Architecture",
-    "footerSub": "8 intelligence domains · 24 disciplines",
+    "footerVersion": "V2.0 · Phase 6 Twin",
+    "footerSub": "Full lifecycle · Governed simulation",
     "groups": [
       {
         "label": "Global",
         "items": [
           { "href": "/", "label": "Command Center", "icon": "⌂" },
-          { "href": "/projects", "label": "Portfolio", "icon": "◫" }
+          { "href": "/projects", "label": "Portfolio", "icon": "◫" },
+          { "href": "/twin", "label": "Digital Twin", "icon": "DT" }
         ]
       },
       {
@@ -111,7 +112,7 @@
     "eyebrow": "GlobalInfra project intelligence model",
     "title": "One digital thread across the entire asset lifecycle.",
     "subtitle": "Traditional software fragments information by department. GlobalInfra AI is organized around the engineering event itself, connecting technical, delivery, commercial, risk, resource, knowledge and asset data.",
-    "badge": "V1.1 ARCHITECTURE",
+    "badge": "V2.0 TWIN ARCHITECTURE",
     "coreLabel": "GLOBALINFRA CORE",
     "coreTitle": "Infrastructure Digital Thread",
     "coreSub": "Country Pack + Domain Pack + Agent + Skill + Evidence + Workflow",
@@ -245,6 +246,45 @@
     "capabilityKicker": "CAPABILITY MAP",
     "capabilityTitle": "Connected intelligence services",
     "capabilityLink": "View specialist agents"
+  },
+  "Twin": {
+    "eyebrow": "V2.0 · Full-lifecycle infrastructure twin",
+    "title": "One living twin from design to operations.",
+    "subtitle": "BIM, GIS, WBS, schedule, cost, quality, commissioning and live asset signals are anchored to a stable Twin ID and governed evidence trail.",
+    "metricObjects": "Twin Objects",
+    "metricObjectsDelta": "{mapped} spatially mapped",
+    "metricHealth": "Asset Health",
+    "metricHealthDelta": "{events} active engineering events",
+    "metricSchedule": "Schedule Exposure",
+    "metricScheduleDelta": "+{cost}M forecast exposure",
+    "metricHandover": "Commissioning Readiness",
+    "metricHandoverDelta": "{docs}% handover documents",
+    "workspace": {
+      "tabs": ["Spatial Twin", "4D / 5D Controls", "Commissioning", "Operations", "Scenario Lab", "Twin Agents"],
+      "selectAsset": "Select asset",
+      "health": "Health",
+      "progress": "Progress",
+      "linkedEvents": "Linked engineering events",
+      "noEvents": "No active events linked to this object.",
+      "planned": "Planned",
+      "actual": "Actual",
+      "scheduleVariance": "Schedule variance",
+      "costExposure": "Cost exposure",
+      "readiness": "Stage / readiness",
+      "documents": "Documents",
+      "openPunch": "Open punch",
+      "telemetry": "Live asset telemetry",
+      "maintenance": "Predictive maintenance queue",
+      "warning": "Warning",
+      "runScenario": "Run governed simulation",
+      "running": "Simulating…",
+      "approvalRequired": "Approval required",
+      "simulationComplete": "Simulation complete · action gated",
+      "simulationFailed": "Simulation failed. Verify the API connection and try again.",
+      "evidence": "Evidence inputs",
+      "sceneHint": "Select a component to inspect its digital thread",
+      "live": "LIVE MODEL"
+    }
   },
   "Components": {
     "saving": "Saving…",
