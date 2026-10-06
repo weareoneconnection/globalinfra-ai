@@ -20,7 +20,7 @@ import httpx
 import pytest
 
 import app.llm as llm
-from app.llm import LLMError, generate
+from app.llm import LLMError, generate, reset_routing_trace, routing_trace
 
 _RealAsyncClient = httpx.AsyncClient  # saved before any monkeypatch replaces it
 
@@ -113,6 +113,35 @@ def test_generate_drops_temperature_then_response_format(monkeypatch):
     assert "temperature" in calls[0] and "response_format" in calls[0]
     assert "temperature" not in calls[1]  # temperature dropped first
     assert "response_format" not in calls[2]  # then response_format
+
+
+def test_routing_trace_survives_concurrent_gather(monkeypatch):
+    """M6 guard: when two ``generate`` calls run concurrently under
+    ``asyncio.gather`` (as the intake classify + extract layers now do), both
+    route records must remain visible to the parent's ``routing_trace()``.
+
+    ``gather`` runs each coroutine in its own copied context, so ``_record_route``
+    must mutate the trace list in place; a copy-then-``set`` would strand each
+    record in a child context and the parent would see an empty trace.
+    """
+    _real_model(monkeypatch)
+
+    def handler(request):
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr(llm.httpx, "AsyncClient", _mock_async_client(handler))
+
+    async def drive():
+        reset_routing_trace()
+        await asyncio.gather(
+            generate("system", "classify"),
+            generate("system", "extract"),
+        )
+        return routing_trace()
+
+    trace = asyncio.run(drive())
+    assert len(trace) == 2
+    assert all(entry["status"] == "success" for entry in trace)
 
 
 def test_generate_does_not_retry_unrelated_400_with_response_format(monkeypatch):

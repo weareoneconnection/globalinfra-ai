@@ -142,6 +142,43 @@ def test_intake_text_rejects_empty(client):
     assert r.status_code == 422
 
 
+def test_intake_dispatches_classification_and_extraction_concurrently(client, monkeypatch):
+    """M6: the two independent LLM layers are scheduled concurrently via
+    asyncio.gather, not awaited one after another.
+
+    Each layer is stubbed to record an 'enter' marker, yield control once, then
+    record an 'exit' marker. Under concurrent dispatch both coroutines reach
+    'enter' before either reaches 'exit' (extract_enter precedes classify_exit);
+    serial ``await`` would fully finish classify before extract even starts.
+    """
+    import asyncio
+    import app.main as main
+
+    order: list[str] = []
+    real_classify = main.classify_text_llm
+
+    async def classify_stub(text, *args, **kwargs):
+        order.append("classify_enter")
+        await asyncio.sleep(0)
+        order.append("classify_exit")
+        return await real_classify(text, *args, **kwargs)  # keep the real rules result
+
+    async def extract_stub(text, *args, **kwargs):
+        order.append("extract_enter")
+        await asyncio.sleep(0)
+        order.append("extract_exit")
+        return None  # deterministic extraction path, unchanged downstream
+
+    monkeypatch.setattr(main, "classify_text_llm", classify_stub)
+    monkeypatch.setattr(main, "extract_fields_llm", extract_stub)
+
+    r = client.post("/intake/text", json={"text": NEW_OWNER_LETTER})
+    assert r.status_code == 200
+    assert r.json()["intake"]["case_type"] == "Contract / Technical Interface"
+    # Concurrent: extract started before classify finished. Serial would fail here.
+    assert order.index("extract_enter") < order.index("classify_exit")
+
+
 # --- API: /intake/document --------------------------------------------------
 
 def test_intake_document_txt_creates_case(client):

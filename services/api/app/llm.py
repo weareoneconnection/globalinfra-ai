@@ -116,9 +116,17 @@ def routing_trace() -> list[dict]:
 
 
 def _record_route(provider: ModelProvider, status: str) -> None:
-    trace = list(_ROUTING_TRACE.get() or [])
+    # Append in place rather than copy-then-``set``: when the two intake layers
+    # run concurrently under ``asyncio.gather`` each coroutine executes in its
+    # own copied context, so a ``.set()`` of a fresh list would land only in the
+    # child context and be invisible to the parent's ``routing_trace()``. The
+    # list reference is shared across the copies (``reset_routing_trace`` seeds
+    # it first), so mutating it in place makes every record visible everywhere.
+    trace = _ROUTING_TRACE.get()
+    if trace is None:
+        trace = []
+        _ROUTING_TRACE.set(trace)
     trace.append({"provider": provider.name, "model": provider.model, "status": status})
-    _ROUTING_TRACE.set(trace)
 
 def _rejects_temperature(response: httpx.Response) -> bool:
     """True if a 400 is OpenAI's "this model only supports the default

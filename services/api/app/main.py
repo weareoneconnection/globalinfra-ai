@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import uuid
 from contextlib import asynccontextmanager
@@ -134,10 +135,18 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     # Layer 2 (M2): LLM-refined {type, risk} when a model is configured, else
     # the deterministic Layer-1 rules. Layer 3 (M3): LLM-refined, vocabulary-
     # constrained + text-grounded country/issues/entities, else None so
-    # build_intake_result keeps its deterministic extraction. Offline (no key)
-    # both layers are inert and the result is byte-for-byte the M1 output.
-    classification = await classify_text_llm(text, model_route, data_classification)
-    extraction = await extract_fields_llm(text, model_route, data_classification)
+    # build_intake_result keeps its deterministic extraction. The two layers
+    # share only the raw ``text`` and have no data dependency on each other, so
+    # dispatch both LLM round-trips concurrently (M6): real-model latency drops
+    # from classify+extract to max(classify, extract). Each coroutine already
+    # catches its own LLMError and degrades independently (classify -> rules,
+    # extract -> None), so gather never sees a raised exception; offline (no key)
+    # both layers are inert and return at once, leaving the result byte-for-byte
+    # the M1 output.
+    classification, extraction = await asyncio.gather(
+        classify_text_llm(text, model_route, data_classification),
+        extract_fields_llm(text, model_route, data_classification),
+    )
     result = build_intake_result(text, language_hint, classification=classification, extraction=extraction)
     detected_lang = result["language"]
     project_id = _select_project_id(db, result["country"])
