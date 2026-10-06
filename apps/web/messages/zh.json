@@ -248,6 +248,7 @@
   },
   "Components": {
     "saving": "保存中…",
+    "approvalFailed": "审批更新失败，请重试。",
     "approve": "批准",
     "reject": "驳回",
     "running": "专家智能体运行中…",

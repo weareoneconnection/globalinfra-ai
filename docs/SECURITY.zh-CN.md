@@ -13,7 +13,9 @@
 
 ## 目前已落地的能力
 
-- **试点阶段 API Key 网关**（`services/api/app/security.py`，默认通过 `REQUIRE_API_KEY=false` 关闭）：对除 `/health` 外的每个请求校验一个共享密钥，只需在对应环境设置 `REQUIRE_API_KEY=true` 与 `API_KEY=...` 即可启用，无需改代码。这只是试点阶段的网络边界兜底方案，**不能替代**下方的 SSO/OIDC 事项——它没有按用户区分的身份、角色或审计轨迹。
+- **试点阶段 API Key 网关**（`services/api/app/security.py`，默认通过 `REQUIRE_API_KEY=false` 关闭）：对除 `/health` 外的每个请求做抗时序侧信道的共享密钥校验；启用后如果未配置密钥会安全拒绝。Next.js 代理仅在服务端注入 `API_SERVICE_KEY`，浏览器代码不会拿到凭据。这仍只是试点阶段的网络边界兜底方案，**不能替代**下方的 SSO/OIDC——它没有按用户区分的身份、角色或审计轨迹。
+- **HTTP 与接入边界控制：** 显式 `CORS_ORIGINS` 白名单、浏览器安全响应头、文本请求长度限制、可配置上传大小上限、PDF/DOCX 文件签名校验以及二进制 TXT 拒绝。恶意软件扫描与 DLP 仍属于生产待办。
+- **依赖安全基线：** Next.js 固定到本项目使用的最新已修复 15.x 版本，并锁定已修复的 PostCSS/source-map 间接依赖，已通过 `npm audit` 验证。
 - Kubernetes 清单（`infra/kubernetes/`）已补充存活/就绪探针、资源请求/限制、`HorizontalPodAutoscaler`、说明所需密钥的 `api-secret.example.yaml`，以及带 TLS 的 `Ingress` 示例——这些都不能替代下面清单里的事项，但补上了"只有 Deployment"和"真正能运维起来的集群部署"之间的落差。
 - 新增的 Terraform 起始代码（`infra/terraform/`）会创建一个私有 VPC、加密的 RDS PostgreSQL、加密的 ElastiCache Redis，以及一个启用 KMS 加密的 S3 桶，作为可供评审的 AWS 参考实现（并非生产认证基线）。
 
@@ -27,6 +29,6 @@
 - 上传文件恶意软件扫描
 - 数据防泄漏（DLP）与敏感数据分类
 - 提示词注入（prompt-injection）测试套件
-- CSP / HSTS 与完整的 API 速率限制
+- CSP / HSTS 与完整的 API 速率限制（已启用防嵌入、内容类型、Referrer 与 Permissions 等基础响应头）
 - SIEM 集成
 - 备份/恢复演练

@@ -13,6 +13,14 @@ jobs:
       - run: python -m compileall services/api/app
       - run: python -m pytest services/api/tests -q
       - run: python evals/run_eval.py
+      - run: python evals/run_intake_eval.py
+      # Alembic migrations must apply cleanly to a bare database and produce the
+      # same schema the app's create_all path does (V1.3 M1 introduced them).
+      - name: Alembic upgrade on a bare database
+        working-directory: services/api
+        env:
+          DATABASE_URL: sqlite:////tmp/ci_migrations.db
+        run: python -m alembic upgrade head
   web:
     runs-on: ubuntu-latest
     defaults:
@@ -22,7 +30,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: npm install
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run build
         env:
           API_INTERNAL_URL: http://localhost:8000
@@ -45,6 +54,21 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"text":"Worker observed near unprotected edge at elevated workface."}')
           test "$code" = "200"
+          # V1.3 M1 universal intake: text -> new case -> specialist routing.
+          # M2/M3/M4: the IntakeResult reports which classification / extraction
+          # layer decided; offline (no key) both must be the deterministic rules,
+          # and the deterministic deadline (M4 field) must still be extracted.
+          intake=$(curl -sf -X POST http://localhost:8001/intake/text \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Owner notice: access road damage, rectification required within 48 hours."}')
+          echo "$intake" | grep -q 'CASE-INTAKE-'
+          echo "$intake" | grep -q '"classification_method": *"rules"'
+          echo "$intake" | grep -q '"extraction_method": *"rules"'
+          echo "$intake" | grep -q '"deadline": *"48 hours"'
+          # Document intake (TXT text extraction).
+          printf 'Worker near unprotected edge at elevated workface, no fall protection.' > /tmp/intake.txt
+          curl -sf -X POST http://localhost:8001/intake/document \
+            -F 'file=@/tmp/intake.txt;type=text/plain' | grep -q 'HSE'
           curl -sf http://localhost:3000/ > /dev/null
       - name: Dump logs on failure
         if: failure()

@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     # turn it on without any code change.
     require_api_key: bool = False
     api_key: str = ""
+    cors_origins: str = "http://localhost:3000"
+    max_upload_bytes: int = 10 * 1024 * 1024
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        """Return an explicit CORS allowlist; wildcard origins are rejected."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip() and origin.strip() != "*"]
 
 settings = Settings()

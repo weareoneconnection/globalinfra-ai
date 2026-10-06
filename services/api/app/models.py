@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -94,3 +94,37 @@ class TrainingModule(Base):
     risk: Mapped[str] = mapped_column(String(20))
     duration_min: Mapped[int] = mapped_column(Integer)
     modules: Mapped[list] = mapped_column(JSON, default=list)
+
+# --- V1.3 M1: Universal Intake Foundation ------------------------------------
+# These two tables are introduced *through Alembic* (migration 0002); they are
+# also part of models.Base.metadata so the offline/test ``create_all`` path in
+# main.lifespan keeps producing an identical schema without running migrations.
+
+class IntakeSubmission(Base):
+    """One universal-intake event: the raw text/document that was submitted,
+    the deterministic language detection result and a link to the Case it
+    produced. ``input_hash`` lets a reviewer confirm the parsed text matches
+    the original submission without persisting the raw blob itself."""
+    __tablename__ = "intake_submissions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Reference to the original input, not the input itself: "text:inline" for
+    # a pasted notice, or the uploaded filename for a document.
+    raw_input_ref: Mapped[str] = mapped_column(String(255))
+    input_hash: Mapped[str] = mapped_column(String(64), index=True)
+    parsed_text: Mapped[str] = mapped_column(Text)
+    detected_language: Mapped[str] = mapped_column(String(8))
+    case_id: Mapped[str | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class SourceDocument(Base):
+    """A file attached to an intake submission (PDF / DOCX / TXT only in M1).
+    ``storage_ref`` is a content-addressed pointer (``sha256:...``) rather than
+    an inline blob, matching the demo posture of not persisting raw uploads."""
+    __tablename__ = "source_documents"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    intake_submission_id: Mapped[int] = mapped_column(ForeignKey("intake_submissions.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    file_type: Mapped[str] = mapped_column(String(16))
+    storage_ref: Mapped[str] = mapped_column(String(255))
+    parse_status: Mapped[str] = mapped_column(String(16), default="PARSED")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

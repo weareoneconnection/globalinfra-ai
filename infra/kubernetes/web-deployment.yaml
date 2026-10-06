@@ -17,6 +17,11 @@ spec:
           env:
             - name: API_INTERNAL_URL
               value: http://globalinfra-api
+            - name: API_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-api-secrets
+                  key: API_KEY
           resources:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "500m", memory: "512Mi" }

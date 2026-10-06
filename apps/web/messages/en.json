@@ -248,6 +248,7 @@
   },
   "Components": {
     "saving": "Saving…",
+    "approvalFailed": "Approval update failed. Please try again.",
     "approve": "Approve",
     "reject": "Reject",
     "running": "Running specialist agents…",

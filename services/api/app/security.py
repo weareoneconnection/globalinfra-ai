@@ -12,6 +12,8 @@ no longer reachable by anyone who can see the URL once
 Disabled by default (``require_api_key=False``) so the V1.0 competition/demo
 experience — including every existing route and test — is unaffected.
 """
+import secrets
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -39,7 +41,9 @@ async def api_key_gate(request: Request, call_next):
     ``main.py``; the setting is re-read per request so tests/deployments can
     flip it without restarting the process."""
     if settings.require_api_key and request.url.path not in EXEMPT_PATHS:
+        if not settings.api_key:
+            return JSONResponse(status_code=503, content={"detail": "API authentication is enabled but not configured"})
         provided = _extract_key(request)
-        if not provided or provided != settings.api_key:
+        if not provided or not secrets.compare_digest(provided, settings.api_key):
             return JSONResponse(status_code=401, content={"detail": "Missing or invalid API key"})
     return await call_next(request)

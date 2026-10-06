@@ -29,22 +29,58 @@ def _rejects_temperature(response: httpx.Response) -> bool:
         return False
     return error.get("param") == "temperature" and error.get("code") == "unsupported_value"
 
-async def generate(system: str, user: str) -> str:
+def _rejects_response_format(response: httpx.Response) -> bool:
+    """True if a 400 is the endpoint/model rejecting the ``response_format``
+    (structured-output / JSON-schema) field -- e.g. an older OpenAI-compatible
+    gateway that does not implement structured outputs -- as opposed to any
+    other bad-request cause (bad model id, bad auth, ...) that should still
+    raise. We match on the ``param`` the API attributes the error to, so an
+    unrelated 400 is never swallowed."""
+    try:
+        error = response.json().get("error", {})
+    except ValueError:
+        return False
+    return error.get("param") == "response_format"
+
+async def generate(system: str, user: str, response_format: dict | None = None) -> str:
+    """Call the configured OpenAI-compatible chat model, or return the
+    deterministic demo string when no real model is configured (mock mode /
+    no API key).
+
+    ``response_format`` (V1.3 M5) optionally asks the endpoint for structured
+    JSON output (a JSON-schema ``response_format`` object). It is a *best-effort*
+    hardening: endpoints/models that do not implement structured outputs answer
+    with a 400 naming the ``response_format`` param, in which case the field is
+    dropped and the call retried once -- exactly as an explicit ``temperature``
+    is dropped for reasoning-style models -- so requesting structured output can
+    never break an otherwise-working model. Callers still validate the reply, so
+    a model that silently ignores the hint is handled too.
+    """
     if settings.llm_mode.lower() == "mock" or not settings.openai_compat_api_key:
         return "Deterministic demo mode active. No external model call was required."
     url = settings.openai_compat_base_url.rstrip('/') + '/chat/completions'
     messages = [{"role":"system","content":system},{"role":"user","content":user}]
     payload = {"model": settings.openai_compat_model, "messages": messages, "temperature":0.1}
+    if response_format is not None:
+        payload["response_format"] = response_format
     headers = {"Authorization": f"Bearer {settings.openai_compat_api_key}"}
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             r = await client.post(url, json=payload, headers=headers)
-            if r.status_code == 400 and _rejects_temperature(r):
-                # Some real models (e.g. gpt-5.5) only support the default
-                # temperature and 400 on any explicit value; retry once
-                # without it rather than failing the whole request.
-                retry_payload = {"model": settings.openai_compat_model, "messages": messages}
-                r = await client.post(url, json=retry_payload, headers=headers)
+            # Some real endpoints 400 on an optional tuning field: newer
+            # reasoning models (e.g. gpt-5.5) reject an explicit ``temperature``;
+            # gateways without structured-output support reject
+            # ``response_format``. Drop the named field and retry rather than
+            # failing the whole request. The loop terminates because each branch
+            # removes a key, so the same field can never be dropped twice.
+            while r.status_code == 400:
+                if _rejects_temperature(r) and "temperature" in payload:
+                    del payload["temperature"]
+                elif _rejects_response_format(r) and "response_format" in payload:
+                    del payload["response_format"]
+                else:
+                    break
+                r = await client.post(url, json=payload, headers=headers)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
     except httpx.HTTPStatusError as exc:

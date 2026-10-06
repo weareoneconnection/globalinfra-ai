@@ -91,6 +91,53 @@ The web app follows the browser's `Accept-Language` automatically (English or Ch
 
 The seed case is fully synthetic and sanitized.
 
+## Universal Intake (V1.3 M1 + M2 + M3 + M4 + M5)
+
+The "Universal Intake Foundation" turns an arbitrary real-world field input into a structured, routed, analyzed Case in one call — deterministic and offline by default (no API key required), with optional LLM layers for classification (M2) and structured extraction (M3 + M4) when a model is configured, both hardened with schema-constrained structured output (M5).
+
+```text
+text / PDF / DOCX / TXT  →  IntakeResult  →  Case  →  analyze_case  →  specialist team + evidence + approval gate
+```
+
+Two endpoints:
+
+- `POST /intake/text` — body `{"text": "...", "language": "en|zh (optional)"}`.
+- `POST /intake/document` — multipart `file=@...` upload. **Text extraction only** for PDF / DOCX / TXT, with signature/content validation and a configurable 10 MiB default limit (`MAX_UPLOAD_BYTES`). Image OCR and voice ASR are explicitly out of M1 scope (a `.png`/audio upload returns `400`).
+
+For a networked pilot, enable `REQUIRE_API_KEY=true`, set a strong `API_KEY` on the API service, and set the same value as the Web service's server-only `API_SERVICE_KEY`. Configure browser origins with the comma-separated `CORS_ORIGINS`; never expose either key through a `NEXT_PUBLIC_*` variable.
+
+Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`, localized to the requested language (`?lang=`/`Accept-Language`, same negotiation as every other route). The created Case is **new** (id `CASE-INTAKE-<hash>`, never a hardcoded demo id) and is run through the existing retrieval-grounded analysis workflow, so the response shows the Case id and the specialist team that was assembled.
+
+**`IntakeResult`** (see `services/api/app/intake.py`): `primary_domain`, `professional_domain`, `case_type`, `case_type_label`, `classification_method`, `extraction_method`, `lifecycle_stage`, `risk`, `risk_label`, `country`, `country_label`, `language`, `issues[]`, `entities[]`, `deadline`, `recommended_agents[]`, `required_approvals[]`, `confidence`.
+
+- **Layer 1 (deterministic, authoritative by default):** `case_type` + `risk` are produced by wrapping the existing deterministic rules in `classify.py` — its `{"type","risk"}` contract is unchanged, so `/cases/classify`, the eval harness and intake always agree.
+- **Layer 2 (LLM classification, M2):** when an OpenAI-compatible model is configured (`llm_mode` ≠ `mock` + an API key), `app/llm_classify.py` refines `case_type`/`risk` with the model, **constrained to exactly the same vocabulary** (the `workflow.SPECIALISTS_BY_CASE_TYPE` keys + risk levels) so the result always routes. It **falls back to the Layer-1 rules** whenever no model is configured (the default) or the call fails / returns malformed / out-of-vocabulary output — so with no key the intake path behaves byte-for-byte as in M1, and every unit test and eval stays green offline. `classification_method` in the `IntakeResult` reports which layer decided (`"rules"` / `"llm"`); `classify.py` is never modified.
+- **Layer 3 (LLM structured extraction, M3 + M4):** when a model is configured, `app/llm_extract.py` also extracts `country`, `issues` and `entities` (M3) plus the project `lifecycle` stage and the response `deadline` (M4) with the model — all in **one** call. Every field is **constrained to the same vocabularies** the deterministic heuristics use (the `COUNTRY_SIGNALS` / `ISSUE_SIGNALS` / `LIFECYCLE_SIGNALS` tables in `intake.py`, read as a single source of truth so anything returned still routes / still resolves to a real, bilingual stage) and **grounded** against the source text (an extracted entity — and the numeric `deadline` amount — must appear verbatim, so the model can pick the *right* reference or number among several but can never invent one). It **falls back to the deterministic keyword/regex extraction** whenever no model is configured (the default) or the call fails / returns malformed output; `lifecycle` and `deadline` fall back **per-field** when the model leaves them empty, so the LLM path never loses a value the regex would have found. Offline the intake path stays byte-for-byte identical to M1/M2. `extraction_method` in the `IntakeResult` reports which path produced these fields (`"rules"` / `"llm"`); the `intake.py` heuristics are never modified.
+- **Structured output (M5):** both LLM layers ask the endpoint for schema-valid JSON via a `response_format` JSON-schema whose enums are built from the **same** constrained vocabularies the parsers validate against (so schema and parser can never drift), instead of hoping the model returns a bare `{...}` to regex out. It is **best-effort hardening**: `llm.generate` drops the `response_format` field and retries once on the specific `400` that names it (exactly as it already does for `temperature` on reasoning-style models), and the reply is **always re-validated** by the layer's own vocabulary/grounding guards — which are stricter than any schema can express — so a gateway without structured-output support, or a model that ignores the hint, still degrades cleanly. Offline (no key) the whole path is inert and byte-for-byte identical to M1–M4.
+- **Enrichment:** every other field is derived by auditable rules/heuristics. `case_type_label`/`risk_label`/`issues` are bilingual EN/ZH (same `{"en","zh"}` pattern as `Case.type`); the canonical `case_type` English string is what routes the Case via `workflow.SPECIALISTS_BY_CASE_TYPE`.
+
+Two new tables back this (see **Database migrations** below): `intake_submissions` (raw input reference, input hash, parsed text, detected language, created-at, linked `case_id`) and `source_documents` (filename, file type, storage reference, parse status, linked `intake_submission_id`).
+
+## Database migrations (Alembic)
+
+V1.3 M1 introduces Alembic. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments, and its schema is verified in CI to match `create_all` exactly.
+
+```bash
+cd services/api
+# Fresh / bare database → create everything (baseline + intake tables):
+DATABASE_URL=postgresql+psycopg://... alembic upgrade head
+
+# Database already provisioned by the historic create_all path → adopt the
+# baseline without re-creating existing tables, then apply new migrations:
+DATABASE_URL=postgresql+psycopg://... alembic stamp 0001
+DATABASE_URL=postgresql+psycopg://... alembic upgrade head
+```
+
+- `0001_baseline_schema` captures the pre-existing V1.2 tables as the migration baseline.
+- `0002_intake_tables` adds `intake_submissions` and `source_documents`.
+
+The database URL is read from app settings (`DATABASE_URL`/`.env`) by `migrations/env.py`, not committed in `alembic.ini`.
+
 ## Repository layout
 
 ```text

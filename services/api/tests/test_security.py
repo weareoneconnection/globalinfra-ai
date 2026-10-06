@@ -33,6 +33,17 @@ def test_gate_blocks_requests_without_a_key_once_enabled(client):
         _disable_api_key()
 
 
+def test_gate_fails_closed_when_enabled_without_a_configured_key(client):
+    settings.require_api_key = True
+    settings.api_key = ""
+    try:
+        r = client.get("/projects")
+        assert r.status_code == 503
+        assert "not configured" in r.json()["detail"]
+    finally:
+        _disable_api_key()
+
+
 def test_gate_blocks_requests_with_the_wrong_key(client):
     _enable_api_key()
     try:

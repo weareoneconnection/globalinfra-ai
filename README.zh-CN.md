@@ -91,6 +91,52 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 种子工单数据完全是模拟且已脱敏的。
 
+## 通用接入（Universal Intake，V1.3 M1 + M2 + M3 + M4 + M5）
+
+"通用接入基座"把任意真实现场输入在一次调用内转化为结构化、已路由、已分析的工单；默认完全确定性、可离线运行（无需 API Key），并在配置了模型时启用可选的 LLM 分类层（M2）与结构化抽取层（M3 + M4），两层均以 schema 约束的结构化输出（M5）加固。
+
+```text
+文本 / PDF / DOCX / TXT  →  IntakeResult  →  工单（Case）  →  analyze_case  →  专家团队 + 证据 + 审批关卡
+```
+
+两个接口：
+
+- `POST /intake/text` — 请求体 `{"text": "...", "language": "en|zh（可选）"}`。
+- `POST /intake/document` — multipart 上传 `file=@...`。M1 **仅做文字抽取**（PDF / DOCX / TXT），并校验文件签名/内容，默认大小上限为可配置的 10 MiB（`MAX_UPLOAD_BYTES`）。图片 OCR 与语音 ASR 明确不在 M1 范围（上传 `.png`/音频返回 `400`）。
+
+用于联网试点时，请启用 `REQUIRE_API_KEY=true`，在 API 服务配置强随机 `API_KEY`，并在 Web 服务端将同一值配置为 `API_SERVICE_KEY`。浏览器直连来源使用逗号分隔的 `CORS_ORIGINS`；两个密钥都不得通过 `NEXT_PUBLIC_*` 暴露。
+
+两者均返回 `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`，并按请求语言本地化（`?lang=`/`Accept-Language`，与其他接口一致）。新建工单 id 为 `CASE-INTAKE-<hash>`（绝不硬编码演示 id），并送入既有检索驱动分析工作流，因此响应中可直接看到工单 id 与已组建的专家团队。
+
+**`IntakeResult`**（见 `services/api/app/intake.py`）字段：`primary_domain`、`professional_domain`、`case_type`、`case_type_label`、`classification_method`、`extraction_method`、`lifecycle_stage`、`risk`、`risk_label`、`country`、`country_label`、`language`、`issues[]`、`entities[]`、`deadline`、`recommended_agents[]`、`required_approvals[]`、`confidence`。
+
+- **Layer 1（确定性，默认权威层）：** `case_type` 与 `risk` 由包装既有 `classify.py` 规则产出，其 `{"type","risk"}` 契约保持不变，`/cases/classify`、评测与接入三者结论一致。
+- **Layer 2（LLM 分类层，M2）：** 当配置了 OpenAI 兼容模型（`llm_mode` ≠ `mock` 且有 API Key）时，`app/llm_classify.py` 用模型细化 `case_type`/`risk`，并**严格约束在同一词汇表**（`workflow.SPECIALISTS_BY_CASE_TYPE` 的键 + 风险等级）内，确保结果始终可路由。只要未配置模型（默认），或调用失败、返回格式错误/越界标签，即**回退到 Layer 1 规则**——因此无 Key 时接入路径与 M1 逐字节一致，全部单测与评测离线保持通过。`IntakeResult` 中的 `classification_method` 标明由哪一层判定（`"rules"`/`"llm"`）；`classify.py` 本体从不改动。
+- **Layer 3（LLM 结构化抽取层，M3 + M4）：** 配置了模型时，`app/llm_extract.py` 在**同一次调用**内抽取 `country`、`issues`、`entities`（M3），以及项目 `lifecycle` 阶段与响应 `deadline`（M4）。每个字段都**严格约束在确定性启发式所用的同一词汇表**（`intake.py` 的 `COUNTRY_SIGNALS` / `ISSUE_SIGNALS` / `LIFECYCLE_SIGNALS` 表，作为单一真源——因此模型返回的任何值仍可路由到项目、仍能解析为真实的双语阶段），且对原文**落地校验**（抽取的实体，以及 `deadline` 的数字，必须在原文逐字出现——模型可在多个引用/数字中挑出**正确**的那个，却无法凭空捏造）。只要未配置模型（默认），或调用失败、返回格式错误，即**回退到确定性关键词/正则抽取**；`lifecycle` 与 `deadline` 在模型留空时**逐字段回退**，因此 LLM 路径绝不会丢失正则本可找到的值。离线时接入路径与 M1/M2 逐字节一致。`IntakeResult` 中的 `extraction_method` 标明这些字段由哪条路径产出（`"rules"`/`"llm"`）；`intake.py` 的启发式本体从不改动。
+- **结构化输出（M5）：** 两个 LLM 层不再"寄望模型吐出裸 `{...}` 再正则抠出"，而是通过 `response_format` 的 JSON-schema 显式请求 schema 合法的 JSON；schema 的枚举值由解析器所校验的**同一套**受约束词汇表构建（因此 schema 与解析器永不漂移）。这是**尽力而为的加固**：`llm.generate` 在明确指向 `response_format` 的那个 `400` 上丢弃该字段并重试一次（与既有的 reasoning 模型 `temperature` 处理完全一致），且回复**始终**再经该层自己的词汇/落地校验（这些校验比任何 schema 能表达的都更严）——因此网关不支持结构化输出、或模型无视该提示时，仍能优雅降级。离线（无 Key）时整条路径处于惰性，与 M1–M4 逐字节一致。
+- **富化层：** 其余字段由可审计的规则/启发式产出。`case_type_label`/`risk_label`/`issues` 为中英双语（与 `Case.type` 相同的 `{"en","zh"}` 模式）；`case_type` 的英文规范值用于通过 `workflow.SPECIALISTS_BY_CASE_TYPE` 路由专家团队。
+
+新增两张表（见下文**数据库迁移**）：`intake_submissions`（原始输入引用、输入哈希、解析文本、检测语言、创建时间、关联 `case_id`）与 `source_documents`（文件名、文件类型、存储引用、解析状态、关联 `intake_submission_id`）。
+
+## 数据库迁移（Alembic）
+
+V1.3 M1 引入 Alembic。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径，CI 已校验其生成的表结构与 `create_all` 完全一致。
+
+```bash
+cd services/api
+# 全新/裸库 → 创建全部表（基线 + 接入表）：
+DATABASE_URL=postgresql+psycopg://... alembic upgrade head
+
+# 库中已由历史 create_all 建好表 → 先纳管基线（不重建已有表），再执行新迁移：
+DATABASE_URL=postgresql+psycopg://... alembic stamp 0001
+DATABASE_URL=postgresql+psycopg://... alembic upgrade head
+```
+
+- `0001_baseline_schema`：将已有 V1.2 表结构纳入迁移基线。
+- `0002_intake_tables`：新增 `intake_submissions` 与 `source_documents`。
+
+数据库 URL 由 `migrations/env.py` 从应用设置（`DATABASE_URL`/`.env`）读取，不写入 `alembic.ini`。
+
 ## 仓库结构
 
 ```text
