@@ -58,9 +58,9 @@ PROFESSIONAL_DOMAINS = [
 TRUSTED_ACTION_STAGES = [bi("Event", "事件"), bi("Case", "工单"), bi("Evidence", "证据"), bi("Decision", "决策"), bi("Action", "行动"), bi("Verification", "核验")]
 
 PROJECT_INTELLIGENCE = {
-    1: {"phase":"construction","progress":62.4,"budget":2840,"committed":2176,"forecast":2916,"schedule_variance":-18,"next_gate":bi("Systems integration readiness","系统集成就绪度"),"gate_date":"18 Oct 2026"},
-    2: {"phase":"procurement","progress":38.7,"budget":1680,"committed":912,"forecast":1654,"schedule_variance":4,"next_gate":bi("Pavement package award","路面标段授标"),"gate_date":"03 Nov 2026"},
-    3: {"phase":"design","progress":24.1,"budget":5120,"committed":1385,"forecast":5248,"schedule_variance":-11,"next_gate":bi("60% design freeze","60% 设计冻结"),"gate_date":"26 Oct 2026"},
+    1: {"phase":"construction","progress":62.4,"budget":2840,"committed":2176,"forecast":2916,"schedule_variance":-18,"next_gate":bi("Systems integration readiness","系统集成就绪度"),"gate_date":"18 Oct 2026","latitude":3.139,"longitude":101.687,"location_name":bi("Kuala Lumpur corridor","吉隆坡走廊")},
+    2: {"phase":"procurement","progress":38.7,"budget":1680,"committed":912,"forecast":1654,"schedule_variance":4,"next_gate":bi("Pavement package award","路面标段授标"),"gate_date":"03 Nov 2026","latitude":-1.265,"longitude":116.832,"location_name":bi("Nusantara corridor","努桑塔拉走廊")},
+    3: {"phase":"design","progress":24.1,"budget":5120,"committed":1385,"forecast":5248,"schedule_variance":-11,"next_gate":bi("60% design freeze","60% 设计冻结"),"gate_date":"26 Oct 2026","latitude":24.714,"longitude":46.675,"location_name":bi("Riyadh metropolitan area","利雅得都市区")},
 }
 
 DOMAIN_HEALTH = {

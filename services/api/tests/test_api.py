@@ -22,6 +22,9 @@ def test_projects_are_localized_by_the_lang_query_param(client):
     my_zh = next(p for p in zh if p["country_code"] == "MY")
     assert my_en["country_name"] == "Malaysia"
     assert my_zh["country_name"] == "马来西亚"
+    assert my_en["latitude"] == 3.139
+    assert my_en["longitude"] == 101.687
+    assert my_zh["location_name"] == "吉隆坡走廊"
 
 
 def test_projects_default_to_english_without_a_lang_hint(client):

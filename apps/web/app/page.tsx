@@ -5,15 +5,18 @@ import { Metric } from '@/components/Metric';
 import { RiskBadge } from '@/components/RiskBadge';
 import { LifecycleRail } from '@/components/LifecycleRail';
 import { DomainCard, Domain } from '@/components/DomainCard';
+import { PortfolioGlobe, GlobeProject } from '@/components/PortfolioGlobe';
 
 type Summary = { projects:number; countries:number; open_cases:number; critical_risks:number; pending_approvals:number; verified_decisions:number };
 type Case = { id:string; title:string; type:string; risk:string; status:string; project_name:string; deadline:string };
 type Stage = { id:string; name:string; short:string; order:number };
+type TwinSummary = { maturity:string;sync_status:string;model_version:string;objects:number;mapped_objects:number;average_health:number;active_events:number;critical_events:number;online_sensors:number;schedule_variance_days:number;cost_exposure_m:number;commissioning_readiness:number;handover_completeness:number };
 
 export default async function Page() {
   const t = await getTranslations('Home');
-  const [summary, cases, domains, lifecycle] = await Promise.all([
-    api<Summary>('/dashboard/summary'), api<Case[]>('/cases'), api<Domain[]>('/domains'), api<Stage[]>('/lifecycle')
+  const [summary, cases, domains, lifecycle, projects, twin] = await Promise.all([
+    api<Summary>('/dashboard/summary'), api<Case[]>('/cases'), api<Domain[]>('/domains'), api<Stage[]>('/lifecycle'),
+    api<GlobeProject[]>('/projects'), api<TwinSummary>('/twin/summary?project_id=1')
   ]);
   const trustedFlow = t.raw('trustedFlow') as string[];
   return <>
@@ -26,6 +29,23 @@ export default async function Page() {
       <Metric label={t('metricCases')} value={summary.open_cases} delta={t('metricCasesDelta', { critical: summary.critical_risks })} />
       <Metric label={t('metricApprovals')} value={summary.pending_approvals || 3} delta={t('metricApprovalsDelta')} />
       <Metric label={t('metricVerified')} value={summary.verified_decisions} delta={t('metricVerifiedDelta')} />
+    </div>
+    <div className="portfolio-command-grid section">
+      <section className="card portfolio-globe-card">
+        <div className="section-title"><div><span className="section-kicker">{t('mapKicker')}</span><h3>{t('mapTitle')}</h3></div><span>{t('mapSpan',{count:projects.length})}</span></div>
+        <PortfolioGlobe projects={projects} labels={t.raw('mapLabels')} />
+      </section>
+      <section className="card home-twin-panel">
+        <div className="section-title"><div><span className="section-kicker">{t('twinKicker')}</span><h3>{t('twinTitle')}</h3></div><span className="badge ok">{twin.sync_status}</span></div>
+        <div className="home-twin-visual"><div className="twin-core-mini">DT<span>{twin.average_health}</span></div><i className="orbit o1"/><i className="orbit o2"/><span className="twin-satellite s1">4D</span><span className="twin-satellite s2">IoT</span><span className="twin-satellite s3">5D</span></div>
+        <div className="home-twin-kpis">
+          <div><span>{t('twinObjects')}</span><b>{twin.objects}</b><small>{t('twinMapped',{count:twin.mapped_objects})}</small></div>
+          <div><span>{t('twinEvents')}</span><b>{twin.active_events}</b><small>{t('twinCritical',{count:twin.critical_events})}</small></div>
+          <div><span>{t('twinSensors')}</span><b>{twin.online_sensors}</b><small>{t('twinSensorsLive')}</small></div>
+          <div><span>{t('twinSchedule')}</span><b className={twin.schedule_variance_days<0?'negative':'positive'}>{twin.schedule_variance_days}d</b><small>{t('twinCost',{cost:twin.cost_exposure_m})}</small></div>
+        </div>
+        <div className="home-twin-foot"><span>{twin.maturity} · {twin.model_version}</span><Link href="/twin">{t('openTwin')}<b>↗</b></Link></div>
+      </section>
     </div>
     <section className="section card lifecycle-card">
       <div className="section-title"><div><span className="section-kicker">{t('lifecycleKicker')}</span><h3>{t('lifecycleTitle')}</h3></div><span>{t('lifecycleSpan')}</span></div>
