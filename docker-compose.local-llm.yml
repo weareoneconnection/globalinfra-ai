@@ -1,0 +1,13 @@
+services:
+  api:
+    environment:
+      LLM_MODE: local
+      OPENAI_COMPAT_BASE_URL: ${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      OPENAI_COMPAT_API_KEY: ${LOCAL_LLM_API_KEY:-}
+      OPENAI_COMPAT_MODEL: ${LOCAL_LLM_MODEL:-qwen3:8b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Keep local-model iteration fast and ensure the container runs the current
+    # checkout even when an already-built dependency image is reused.
+    volumes:
+      - ./services/api/app:/app/app:ro

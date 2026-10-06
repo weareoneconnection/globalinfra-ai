@@ -28,7 +28,7 @@ import re
 
 from .classify import classify_text
 from .config import settings
-from .llm import LLMError, generate
+from .llm import LLMError, generate, is_llm_configured
 from .workflow import SPECIALISTS_BY_CASE_TYPE
 
 # Single source of truth for the routable vocabulary: the specialist routing
@@ -119,7 +119,7 @@ async def classify_text_llm(text: str) -> dict:
     ``analyze_case`` runs on the newly created Case.
     """
     rule = classify_text(text)
-    if settings.llm_mode.lower() == "mock" or not settings.openai_compat_api_key:
+    if not is_llm_configured():
         return {**rule, "method": "rules"}
     try:
         raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT)

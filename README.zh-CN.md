@@ -47,6 +47,17 @@ docker compose up --build
 
 （`docker-compose.yml` 把 API 容器内部的 8000 端口映射到了宿主机的 8001 端口，因为 8000 在很多机器上已被占用；Web 容器通过 Docker 内部网络用 8000 端口访问 API，`API_INTERNAL_URL` 不受影响。）
 
+### 使用本地 Ollama 模型运行
+
+安装 Ollama 并拉取模型（例如 `qwen3:8b`），然后使用本地模型覆盖配置启动同一套服务。Ollama 不需要填写占位 API Key。
+
+```bash
+ollama pull qwen3:8b
+docker compose -f docker-compose.yml -f docker-compose.local-llm.yml up --build
+```
+
+如需使用其他 OpenAI-compatible 本地网关，可在 `.env` 中覆盖 `LOCAL_LLM_MODEL` 或 `LOCAL_LLM_BASE_URL`。API 容器通过 `host.docker.internal` 访问宿主机；云端模式仍强制要求 `OPENAI_COMPAT_API_KEY`。
+
 V1.0 竞赛模式中有意跳过了演示登录环节。生产部署前请接入企业级 SSO。
 
 ## 快速开始：本地开发
@@ -111,7 +122,7 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 **`IntakeResult`**（见 `services/api/app/intake.py`）字段：`primary_domain`、`professional_domain`、`case_type`、`case_type_label`、`classification_method`、`extraction_method`、`lifecycle_stage`、`risk`、`risk_label`、`country`、`country_label`、`language`、`issues[]`、`entities[]`、`deadline`、`recommended_agents[]`、`required_approvals[]`、`confidence`。
 
 - **Layer 1（确定性，默认权威层）：** `case_type` 与 `risk` 由包装既有 `classify.py` 规则产出，其 `{"type","risk"}` 契约保持不变，`/cases/classify`、评测与接入三者结论一致。
-- **Layer 2（LLM 分类层，M2）：** 当配置了 OpenAI 兼容模型（`llm_mode` ≠ `mock` 且有 API Key）时，`app/llm_classify.py` 用模型细化 `case_type`/`risk`，并**严格约束在同一词汇表**（`workflow.SPECIALISTS_BY_CASE_TYPE` 的键 + 风险等级）内，确保结果始终可路由。只要未配置模型（默认），或调用失败、返回格式错误/越界标签，即**回退到 Layer 1 规则**——因此无 Key 时接入路径与 M1 逐字节一致，全部单测与评测离线保持通过。`IntakeResult` 中的 `classification_method` 标明由哪一层判定（`"rules"`/`"llm"`）；`classify.py` 本体从不改动。
+- **Layer 2（LLM 分类层，M2）：** 当配置了 OpenAI 兼容模型（`llm_mode` ≠ `mock`；云端模式需要 API Key，`local` 模式不需要）时，`app/llm_classify.py` 用模型细化 `case_type`/`risk`，并**严格约束在同一词汇表**（`workflow.SPECIALISTS_BY_CASE_TYPE` 的键 + 风险等级）内，确保结果始终可路由。只要未配置模型（默认），或调用失败、返回格式错误/越界标签，即**回退到 Layer 1 规则**——因此默认云端配置在无 Key 时与 M1 逐字节一致，全部单测与评测离线保持通过。`IntakeResult` 中的 `classification_method` 标明由哪一层判定（`"rules"`/`"llm"`）；`classify.py` 本体从不改动。
 - **Layer 3（LLM 结构化抽取层，M3 + M4）：** 配置了模型时，`app/llm_extract.py` 在**同一次调用**内抽取 `country`、`issues`、`entities`（M3），以及项目 `lifecycle` 阶段与响应 `deadline`（M4）。每个字段都**严格约束在确定性启发式所用的同一词汇表**（`intake.py` 的 `COUNTRY_SIGNALS` / `ISSUE_SIGNALS` / `LIFECYCLE_SIGNALS` 表，作为单一真源——因此模型返回的任何值仍可路由到项目、仍能解析为真实的双语阶段），且对原文**落地校验**（抽取的实体，以及 `deadline` 的数字，必须在原文逐字出现——模型可在多个引用/数字中挑出**正确**的那个，却无法凭空捏造）。只要未配置模型（默认），或调用失败、返回格式错误，即**回退到确定性关键词/正则抽取**；`lifecycle` 与 `deadline` 在模型留空时**逐字段回退**，因此 LLM 路径绝不会丢失正则本可找到的值。离线时接入路径与 M1/M2 逐字节一致。`IntakeResult` 中的 `extraction_method` 标明这些字段由哪条路径产出（`"rules"`/`"llm"`）；`intake.py` 的启发式本体从不改动。
 - **结构化输出（M5）：** 两个 LLM 层不再"寄望模型吐出裸 `{...}` 再正则抠出"，而是通过 `response_format` 的 JSON-schema 显式请求 schema 合法的 JSON；schema 的枚举值由解析器所校验的**同一套**受约束词汇表构建（因此 schema 与解析器永不漂移）。这是**尽力而为的加固**：`llm.generate` 在明确指向 `response_format` 的那个 `400` 上丢弃该字段并重试一次（与既有的 reasoning 模型 `temperature` 处理完全一致），且回复**始终**再经该层自己的词汇/落地校验（这些校验比任何 schema 能表达的都更严）——因此网关不支持结构化输出、或模型无视该提示时，仍能优雅降级。离线（无 Key）时整条路径处于惰性，与 M1–M4 逐字节一致。
 - **富化层：** 其余字段由可审计的规则/启发式产出。`case_type_label`/`risk_label`/`issues` 为中英双语（与 `Case.type` 相同的 `{"en","zh"}` 模式）；`case_type` 的英文规范值用于通过 `workflow.SPECIALISTS_BY_CASE_TYPE` 路由专家团队。

@@ -18,6 +18,18 @@ class LLMError(RuntimeError):
     surfacing an opaque ``Internal Server Error`` with a leaked stack trace.
     """
 
+
+def is_llm_configured() -> bool:
+    """Return whether requests should be routed to a real model endpoint.
+
+    Hosted OpenAI-compatible gateways require a credential. Local gateways
+    such as Ollama normally do not, so ``LLM_MODE=local`` intentionally treats
+    the API key as optional while every other non-mock mode keeps the safer
+    credential requirement.
+    """
+    mode = settings.llm_mode.strip().lower()
+    return mode != "mock" and (mode == "local" or bool(settings.openai_compat_api_key))
+
 def _rejects_temperature(response: httpx.Response) -> bool:
     """True if a 400 is OpenAI's "this model only supports the default
     temperature" error (seen on the newer ``gpt-5.x`` reasoning-style model
@@ -56,14 +68,16 @@ async def generate(system: str, user: str, response_format: dict | None = None) 
     never break an otherwise-working model. Callers still validate the reply, so
     a model that silently ignores the hint is handled too.
     """
-    if settings.llm_mode.lower() == "mock" or not settings.openai_compat_api_key:
+    if not is_llm_configured():
         return "Deterministic demo mode active. No external model call was required."
     url = settings.openai_compat_base_url.rstrip('/') + '/chat/completions'
     messages = [{"role":"system","content":system},{"role":"user","content":user}]
     payload = {"model": settings.openai_compat_model, "messages": messages, "temperature":0.1}
     if response_format is not None:
         payload["response_format"] = response_format
-    headers = {"Authorization": f"Bearer {settings.openai_compat_api_key}"}
+    headers = {}
+    if settings.openai_compat_api_key:
+        headers["Authorization"] = f"Bearer {settings.openai_compat_api_key}"
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             r = await client.post(url, json=payload, headers=headers)
@@ -110,7 +124,7 @@ async def translate(text: str, target_lang: str, source_lang: str = "en") -> str
     """
     if not text or target_lang == source_lang:
         return text
-    if settings.llm_mode.lower() != "mock" and settings.openai_compat_api_key:
+    if is_llm_configured():
         system = (
             f"You are a professional technical translator for overseas transportation "
             f"infrastructure projects. Translate the user's text from {LANGUAGE_NAMES.get(source_lang, source_lang)} "

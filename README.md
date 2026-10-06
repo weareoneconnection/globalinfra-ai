@@ -47,6 +47,20 @@ Open:
 
 (`docker-compose.yml` maps the API container's internal port 8000 to host port 8001, since 8000 is commonly already in use. The web container talks to the API over the internal Docker network on port 8000, so `API_INTERNAL_URL` is unaffected.)
 
+### Run with a local Ollama model
+
+Install Ollama, pull a model such as `qwen3:8b`, then start the same stack with
+the local-model override. Ollama does not require a placeholder API key.
+
+```bash
+ollama pull qwen3:8b
+docker compose -f docker-compose.yml -f docker-compose.local-llm.yml up --build
+```
+
+Override `LOCAL_LLM_MODEL` or `LOCAL_LLM_BASE_URL` in `.env` for another
+OpenAI-compatible local gateway. The API container reaches the host gateway via
+`host.docker.internal`; hosted modes still require `OPENAI_COMPAT_API_KEY`.
+
 Demo login is intentionally skipped in V1.0 competition mode. Add enterprise SSO before production deployment.
 
 ## Quick start: local development
@@ -111,7 +125,7 @@ Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: 
 **`IntakeResult`** (see `services/api/app/intake.py`): `primary_domain`, `professional_domain`, `case_type`, `case_type_label`, `classification_method`, `extraction_method`, `lifecycle_stage`, `risk`, `risk_label`, `country`, `country_label`, `language`, `issues[]`, `entities[]`, `deadline`, `recommended_agents[]`, `required_approvals[]`, `confidence`.
 
 - **Layer 1 (deterministic, authoritative by default):** `case_type` + `risk` are produced by wrapping the existing deterministic rules in `classify.py` — its `{"type","risk"}` contract is unchanged, so `/cases/classify`, the eval harness and intake always agree.
-- **Layer 2 (LLM classification, M2):** when an OpenAI-compatible model is configured (`llm_mode` ≠ `mock` + an API key), `app/llm_classify.py` refines `case_type`/`risk` with the model, **constrained to exactly the same vocabulary** (the `workflow.SPECIALISTS_BY_CASE_TYPE` keys + risk levels) so the result always routes. It **falls back to the Layer-1 rules** whenever no model is configured (the default) or the call fails / returns malformed / out-of-vocabulary output — so with no key the intake path behaves byte-for-byte as in M1, and every unit test and eval stays green offline. `classification_method` in the `IntakeResult` reports which layer decided (`"rules"` / `"llm"`); `classify.py` is never modified.
+- **Layer 2 (LLM classification, M2):** when an OpenAI-compatible model is configured (`llm_mode` ≠ `mock`; hosted modes require an API key, while `local` mode does not), `app/llm_classify.py` refines `case_type`/`risk` with the model, **constrained to exactly the same vocabulary** (the `workflow.SPECIALISTS_BY_CASE_TYPE` keys + risk levels) so the result always routes. It **falls back to the Layer-1 rules** whenever no model is configured (the default) or the call fails / returns malformed / out-of-vocabulary output — so with no key the default hosted path behaves byte-for-byte as in M1, and every unit test and eval stays green offline. `classification_method` in the `IntakeResult` reports which layer decided (`"rules"` / `"llm"`); `classify.py` is never modified.
 - **Layer 3 (LLM structured extraction, M3 + M4):** when a model is configured, `app/llm_extract.py` also extracts `country`, `issues` and `entities` (M3) plus the project `lifecycle` stage and the response `deadline` (M4) with the model — all in **one** call. Every field is **constrained to the same vocabularies** the deterministic heuristics use (the `COUNTRY_SIGNALS` / `ISSUE_SIGNALS` / `LIFECYCLE_SIGNALS` tables in `intake.py`, read as a single source of truth so anything returned still routes / still resolves to a real, bilingual stage) and **grounded** against the source text (an extracted entity — and the numeric `deadline` amount — must appear verbatim, so the model can pick the *right* reference or number among several but can never invent one). It **falls back to the deterministic keyword/regex extraction** whenever no model is configured (the default) or the call fails / returns malformed output; `lifecycle` and `deadline` fall back **per-field** when the model leaves them empty, so the LLM path never loses a value the regex would have found. Offline the intake path stays byte-for-byte identical to M1/M2. `extraction_method` in the `IntakeResult` reports which path produced these fields (`"rules"` / `"llm"`); the `intake.py` heuristics are never modified.
 - **Structured output (M5):** both LLM layers ask the endpoint for schema-valid JSON via a `response_format` JSON-schema whose enums are built from the **same** constrained vocabularies the parsers validate against (so schema and parser can never drift), instead of hoping the model returns a bare `{...}` to regex out. It is **best-effort hardening**: `llm.generate` drops the `response_format` field and retries once on the specific `400` that names it (exactly as it already does for `temperature` on reasoning-style models), and the reply is **always re-validated** by the layer's own vocabulary/grounding guards — which are stricter than any schema can express — so a gateway without structured-output support, or a model that ignores the hint, still degrades cleanly. Offline (no key) the whole path is inert and byte-for-byte identical to M1–M4.
 - **Enrichment:** every other field is derived by auditable rules/heuristics. `case_type_label`/`risk_label`/`issues` are bilingual EN/ZH (same `{"en","zh"}` pattern as `Case.type`); the canonical `case_type` English string is what routes the Case via `workflow.SPECIALISTS_BY_CASE_TYPE`.

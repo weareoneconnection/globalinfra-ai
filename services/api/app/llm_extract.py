@@ -47,7 +47,7 @@ from .intake import (
     _DEFAULT_LIFECYCLE,
     format_deadline,
 )
-from .llm import LLMError, generate
+from .llm import LLMError, generate, is_llm_configured
 
 # Single source of truth for the constrained vocabularies -- read from the same
 # deterministic tables intake.py routes / labels on, so anything the model
@@ -225,7 +225,7 @@ async def extract_fields_llm(text: str) -> dict | None:
     raises on an upstream failure -- the heuristics are a complete fallback for
     this step.
     """
-    if settings.llm_mode.lower() == "mock" or not settings.openai_compat_api_key:
+    if not is_llm_configured():
         return None
     try:
         raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT)

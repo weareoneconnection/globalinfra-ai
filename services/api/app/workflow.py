@@ -50,7 +50,7 @@ from sqlalchemy.orm import Session
 from .agents import AGENTS
 from .config import settings
 from .i18n import bi
-from .llm import generate, translate
+from .llm import generate, is_llm_configured, translate
 from .models import AgentRun, Approval, Case, Evidence, KnowledgeDocument, Verification
 from .retrieval import KnowledgeIndex, case_query_text
 
@@ -114,7 +114,7 @@ def _lang(value: dict, lang: str) -> str:
 
 
 def _llm_ready() -> bool:
-    return settings.llm_mode.lower() != "mock" and bool(settings.openai_compat_api_key)
+    return is_llm_configured()
 
 
 async def _specialist_summary(agent_id: str, hits: list[tuple[float, object]], llm_ready: bool) -> dict:
