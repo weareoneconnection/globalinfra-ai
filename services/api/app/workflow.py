@@ -113,11 +113,17 @@ def _lang(value: dict, lang: str) -> str:
     return value.get(lang) or value.get("en") or next(iter(value.values()), "")
 
 
-def _llm_ready() -> bool:
-    return is_llm_configured()
+def _llm_ready(model_route: str | None = None, data_classification: str = "internal") -> bool:
+    return is_llm_configured(model_route, data_classification)
 
 
-async def _specialist_summary(agent_id: str, hits: list[tuple[float, object]], llm_ready: bool) -> dict:
+async def _specialist_summary(
+    agent_id: str,
+    hits: list[tuple[float, object]],
+    llm_ready: bool,
+    model_route: str | None = None,
+    data_classification: str = "internal",
+) -> dict:
     """Build the (en, zh) finding text for one specialist agent."""
     focus = FOCUS_LABEL[agent_id]
     if llm_ready:
@@ -130,8 +136,13 @@ async def _specialist_summary(agent_id: str, hits: list[tuple[float, object]], l
             "if it is insufficient to support a conclusion, say so explicitly instead of guessing."
         )
         user = f"Your discipline focus: {focus['en']}.\nRetrieved evidence:\n{evidence_lines}\nWrite your finding."
-        english = (await generate(system, user)).strip()
-        chinese = (await translate(english, "zh")).strip()
+        routing = {}
+        if model_route is not None:
+            routing["route"] = model_route
+        if data_classification != "internal":
+            routing["sensitivity"] = data_classification
+        english = (await generate(system, user, **routing)).strip()
+        chinese = (await translate(english, "zh", **routing)).strip()
         return bi(english, chinese)
 
     if not hits:
@@ -173,7 +184,12 @@ def _plan_steps(specialist_ids: list[str], confident_ids: set[str]) -> tuple[lis
     return steps_en, steps_zh
 
 
-async def analyze_case(db: Session, case_id: str):
+async def analyze_case(
+    db: Session,
+    case_id: str,
+    model_route: str | None = None,
+    data_classification: str = "internal",
+):
     case = db.get(Case, case_id)
     if not case:
         raise KeyError(case_id)
@@ -185,7 +201,7 @@ async def analyze_case(db: Session, case_id: str):
     db.execute(delete(Verification).where(Verification.case_id == case_id))
     db.execute(delete(Approval).where(Approval.case_id == case_id))
 
-    llm_ready = _llm_ready()
+    llm_ready = _llm_ready(model_route, data_classification)
 
     # --- intake: normalize + classify the case itself, not a canned case ---
     t0 = perf_counter()
@@ -214,7 +230,9 @@ async def analyze_case(db: Session, case_id: str):
         t0 = perf_counter()
         hits = [(score, doc) for score, doc in index.search(f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE)
                 if score >= MIN_RELEVANCE]
-        summary = await _specialist_summary(agent_id, hits, llm_ready)
+        summary = await _specialist_summary(
+            agent_id, hits, llm_ready, model_route, data_classification
+        )
         db.add(AgentRun(
             case_id=case_id, agent=AGENTS_BY_ID[agent_id]["name"], status="COMPLETED", summary=summary,
             duration_ms=max(1, round((perf_counter() - t0) * 1000)),

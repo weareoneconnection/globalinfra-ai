@@ -216,7 +216,9 @@ def _parse(raw: str, text: str) -> dict | None:
     }
 
 
-async def extract_fields_llm(text: str) -> dict | None:
+async def extract_fields_llm(
+    text: str, model_route: str | None = None, data_classification: str = "internal"
+) -> dict | None:
     """Layer 3 structured extraction, or ``None`` for the deterministic path.
 
     Returns ``{"country", "issues", "entities", "lifecycle", "deadline"}`` when a
@@ -225,10 +227,15 @@ async def extract_fields_llm(text: str) -> dict | None:
     raises on an upstream failure -- the heuristics are a complete fallback for
     this step.
     """
-    if not is_llm_configured():
+    if not is_llm_configured(model_route, data_classification):
         return None
     try:
-        raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT)
+        routing = {}
+        if model_route is not None:
+            routing["route"] = model_route
+        if data_classification != "internal":
+            routing["sensitivity"] = data_classification
+        raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT, **routing)
     except LLMError:
         return None
     return _parse(raw, text or "")

@@ -61,6 +61,35 @@ Override `LOCAL_LLM_MODEL` or `LOCAL_LLM_BASE_URL` in `.env` for another
 OpenAI-compatible local gateway. The API container reaches the host gateway via
 `host.docker.internal`; hosted modes still require `OPENAI_COMPAT_API_KEY`.
 
+### Runtime model routing
+
+The same running API supports `local`, `openai`, and `auto` on each model-backed
+request. No process-wide setting is mutated. `auto` starts with
+`LLM_PREFERRED_PROVIDER` and can fail over to the other configured provider;
+set `LLM_CLOUD_FALLBACK_ENABLED=false` to prohibit local-to-cloud fallback.
+Data marked `restricted` is always local-only, and an explicit OpenAI request is
+rejected before any network call.
+
+```bash
+# Safe status: provider/model availability, never credentials
+curl http://localhost:8001/llm/status
+
+# Explicit OpenAI route
+curl http://localhost:8001/i18n/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Engineering review required.","target_lang":"zh","model_route":"openai","data_classification":"internal"}'
+
+# Automatic route with a local-only data boundary
+curl http://localhost:8001/i18n/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Confidential claim evidence.","target_lang":"zh","model_route":"auto","data_classification":"restricted"}'
+```
+
+Responses include a credential-free `model_routing.trace` showing every
+provider/model attempt and whether it succeeded. The same fields are accepted by
+`POST /intake/text`; document intake and case re-analysis accept them as query
+parameters.
+
 Demo login is intentionally skipped in V1.0 competition mode. Add enterprise SSO before production deployment.
 
 ## Quick start: local development

@@ -131,7 +131,7 @@ Domain Packs isolate transport vertical semantics: rail, highway, bridge, tunnel
 
 ## 9. Model Gateway
 
-`LLM_MODE=mock` is default. Production must route by sensitivity, latency, cost, capability, jurisdiction and data policy, and must support a local/regional model route when cross-border processing is not permitted. The translation-model integration point (`translate()` in `services/api/app/llm.py`) shares the same gateway abstraction: it calls the real model when one is configured, otherwise it falls back to a deterministic offline phrase table so the demo environment produces bilingual content without network access.
+`LLM_MODE=mock` is default. The runtime router supports explicit `local` / `openai` selection and an `auto` policy with provider failover. Each request carries a `public`, `internal`, or `restricted` classification; restricted data is enforced as local-only before any cloud request is made. Credential-free route traces make the actual provider/model attempts auditable. The translation-model integration point (`translate()` in `services/api/app/llm.py`) shares the same gateway abstraction: it calls the selected real model when configured, otherwise it falls back to a deterministic offline phrase table so the demo environment produces bilingual content without network access.
 
 ## 10. Deployment evolution
 

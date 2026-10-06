@@ -105,7 +105,9 @@ def _parse(raw: str) -> dict | None:
     return {"type": case_type, "risk": risk}
 
 
-async def classify_text_llm(text: str) -> dict:
+async def classify_text_llm(
+    text: str, model_route: str | None = None, data_classification: str = "internal"
+) -> dict:
     """Layer 2 classification with a deterministic Layer-1 fallback.
 
     Returns ``{"type", "risk", "method"}`` where ``method`` is ``"llm"`` when a
@@ -119,10 +121,15 @@ async def classify_text_llm(text: str) -> dict:
     ``analyze_case`` runs on the newly created Case.
     """
     rule = classify_text(text)
-    if not is_llm_configured():
+    if not is_llm_configured(model_route, data_classification):
         return {**rule, "method": "rules"}
     try:
-        raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT)
+        routing = {}
+        if model_route is not None:
+            routing["route"] = model_route
+        if data_classification != "internal":
+            routing["sensitivity"] = data_classification
+        raw = await generate(_system_prompt(), text or "", response_format=RESPONSE_FORMAT, **routing)
     except LLMError:
         return {**rule, "method": "rules"}
     parsed = _parse(raw)

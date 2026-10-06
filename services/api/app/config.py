@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     openai_compat_base_url: str = "https://api.openai.com/v1"
     openai_compat_api_key: str = ""
     openai_compat_model: str = "gpt-5.6-mini"
+    local_llm_base_url: str = "http://host.docker.internal:11434/v1"
+    local_llm_api_key: str = ""
+    local_llm_model: str = "qwen3:8b"
+    llm_preferred_provider: str = "local"
+    llm_cloud_fallback_enabled: bool = True
     # Pilot-stage auth gate (see app.security): a single shared-secret API
     # key, *not* a replacement for enterprise SSO/OIDC. Off by default so
     # the V1.0 competition/demo flow is unaffected; a pilot deployment can

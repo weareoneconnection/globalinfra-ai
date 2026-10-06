@@ -58,6 +58,27 @@ docker compose -f docker-compose.yml -f docker-compose.local-llm.yml up --build
 
 如需使用其他 OpenAI-compatible 本地网关，可在 `.env` 中覆盖 `LOCAL_LLM_MODEL` 或 `LOCAL_LLM_BASE_URL`。API 容器通过 `host.docker.internal` 访问宿主机；云端模式仍强制要求 `OPENAI_COMPAT_API_KEY`。
 
+### 运行时模型路由
+
+同一个运行中的 API 可按每次请求选择 `local`、`openai` 或 `auto`，不会修改进程级全局状态。`auto` 先使用 `LLM_PREFERRED_PROVIDER`，失败时可切换到另一个已配置提供方；设置 `LLM_CLOUD_FALLBACK_ENABLED=false` 可禁止从本地回退到云端。标记为 `restricted` 的数据始终只能在本地处理，即使显式请求 OpenAI，也会在发出网络请求前被拒绝。
+
+```bash
+# 安全状态接口：只显示提供方/模型可用性，绝不返回密钥
+curl http://localhost:8001/llm/status
+
+# 显式使用 OpenAI
+curl http://localhost:8001/i18n/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Engineering review required.","target_lang":"zh","model_route":"openai","data_classification":"internal"}'
+
+# 自动路由，并设置只允许本地处理的数据边界
+curl http://localhost:8001/i18n/translate \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Confidential claim evidence.","target_lang":"zh","model_route":"auto","data_classification":"restricted"}'
+```
+
+响应包含不带凭据的 `model_routing.trace`，记录每次提供方/模型尝试及成功状态。`POST /intake/text` 接受相同字段；文档接入和工单重新分析通过查询参数接受这两个字段。
+
 V1.0 竞赛模式中有意跳过了演示登录环节。生产部署前请接入企业级 SSO。
 
 ## 快速开始：本地开发

@@ -1,6 +1,7 @@
 import hashlib
 import uuid
 from contextlib import asynccontextmanager
+from typing import Literal
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ from .agents import AGENTS
 from .workflow import analyze_case, AGENTS_BY_ID
 from .domain import LIFECYCLE_STAGES, INTELLIGENCE_DOMAINS, TRUSTED_ACTION_STAGES, PROJECT_INTELLIGENCE, DOMAIN_HEALTH, professional_domains
 from .i18n import bi, get_lang, localize
-from .llm import translate, LLMError
+from .llm import LLMError, reset_routing_trace, routing_status, routing_trace, translate
 from .classify import classify_text
 from .intake import build_intake_result, detect_language, LANGUAGE_DISPLAY
 from .llm_classify import classify_text_llm
@@ -51,15 +52,40 @@ class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
     target_lang: str = "zh"
     source_lang: str = "en"
+    model_route: Literal["local", "openai", "auto"] | None = None
+    data_classification: Literal["public", "internal", "restricted"] = "internal"
+
+@app.get('/llm/status')
+def llm_status():
+    return routing_status()
 
 @app.post('/i18n/translate')
 async def translate_endpoint(payload: TranslateRequest):
     """Direct access to the translation-model integration (see llm.translate).
     Uses the configured OpenAI-compatible model when available, otherwise the
     deterministic offline phrase table used throughout the demo dataset."""
-    try: translation = await translate(payload.text, payload.target_lang, payload.source_lang)
+    reset_routing_trace()
+    routing = {}
+    if payload.model_route is not None:
+        routing["route"] = payload.model_route
+    if payload.data_classification != "internal":
+        routing["sensitivity"] = payload.data_classification
+    try:
+        translation = await translate(
+            payload.text, payload.target_lang, payload.source_lang, **routing
+        )
     except LLMError as exc: raise HTTPException(502, str(exc))
-    return {"source_lang": payload.source_lang, "target_lang": payload.target_lang, "text": payload.text, "translation": translation}
+    return {
+        "source_lang": payload.source_lang,
+        "target_lang": payload.target_lang,
+        "text": payload.text,
+        "translation": translation,
+        "model_routing": {
+            "requested": payload.model_route or settings.llm_mode,
+            "data_classification": payload.data_classification,
+            "trace": routing_trace(),
+        },
+    }
 
 class ClassifyRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
@@ -77,6 +103,8 @@ def classify_endpoint(payload: ClassifyRequest):
 class IntakeTextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500_000)
     language: str | None = None  # optional hint; auto-detected when omitted
+    model_route: Literal["local", "openai", "auto"] | None = None
+    data_classification: Literal["public", "internal", "restricted"] = "internal"
 
 def _select_project_id(db: Session, country_code: str | None) -> int:
     """Attach a new intake Case to the project whose country matches the
@@ -93,11 +121,13 @@ def _case_title(text: str) -> str:
     return (first_line[:117] + "…") if len(first_line) > 118 else (first_line or "Intake submission")
 
 async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str,
-                           language_hint: str | None, source_file: tuple[str, str, str] | None):
+                           language_hint: str | None, source_file: tuple[str, str, str] | None,
+                           model_route: str | None = None, data_classification: str = "internal"):
     """Shared core for both intake endpoints: classify (Layer 1) + enrich,
     create a Case, persist the intake submission (and optional source
     document), then run the real analysis workflow. Returns the localized
     response payload."""
+    reset_routing_trace()
     if not (text or "").strip():
         raise HTTPException(422, "Intake text is empty after extraction; nothing to classify.")
 
@@ -106,8 +136,8 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     # constrained + text-grounded country/issues/entities, else None so
     # build_intake_result keeps its deterministic extraction. Offline (no key)
     # both layers are inert and the result is byte-for-byte the M1 output.
-    classification = await classify_text_llm(text)
-    extraction = await extract_fields_llm(text)
+    classification = await classify_text_llm(text, model_route, data_classification)
+    extraction = await extract_fields_llm(text, model_route, data_classification)
     result = build_intake_result(text, language_hint, classification=classification, extraction=extraction)
     detected_lang = result["language"]
     project_id = _select_project_id(db, result["country"])
@@ -143,7 +173,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     db.commit()
 
     try:
-        analysis = await analyze_case(db, case_id)
+        analysis = await analyze_case(db, case_id, model_route, data_classification)
     except LLMError as exc:
         raise HTTPException(502, str(exc))
 
@@ -156,6 +186,11 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
             for agent_id in result["recommended_agents"]
         ],
         "analysis": analysis,
+        "model_routing": {
+            "requested": model_route or settings.llm_mode,
+            "data_classification": data_classification,
+            "trace": routing_trace(),
+        },
     }
     return localize(payload, lang)
 
@@ -168,10 +203,17 @@ async def intake_text(payload: IntakeTextRequest, db: Session = Depends(get_db),
     return await _intake_pipeline(
         db, payload.text, lang, raw_input_ref="text:inline",
         language_hint=payload.language, source_file=None,
+        model_route=payload.model_route, data_classification=payload.data_classification,
     )
 
 @app.post('/intake/document')
-async def intake_document(file: UploadFile = File(...), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+async def intake_document(
+    file: UploadFile = File(...),
+    model_route: Literal["local", "openai", "auto"] | None = Query(default=None),
+    data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
     """Universal intake for an uploaded document (PDF / DOCX / TXT text
     extraction only in M1 -- image OCR and voice ASR are deferred). Extracts
     text, then runs the same intake pipeline as ``/intake/text``."""
@@ -188,6 +230,7 @@ async def intake_document(file: UploadFile = File(...), db: Session = Depends(ge
     return await _intake_pipeline(
         db, text, lang, raw_input_ref=file.filename or "upload",
         language_hint=None, source_file=(file.filename or "upload", file_type, storage_ref),
+        model_route=model_route, data_classification=data_classification,
     )
 
 @app.get('/dashboard/summary')
@@ -277,10 +320,22 @@ def case_detail(case_id: str, db: Session = Depends(get_db), lang: str = Depends
     return localize(payload, lang)
 
 @app.post('/cases/{case_id}/analyze')
-async def analyze(case_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    try: result = await analyze_case(db, case_id)
+async def analyze(
+    case_id: str,
+    model_route: Literal["local", "openai", "auto"] | None = Query(default=None),
+    data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    reset_routing_trace()
+    try: result = await analyze_case(db, case_id, model_route, data_classification)
     except KeyError: raise HTTPException(404, 'Case not found')
     except LLMError as exc: raise HTTPException(502, str(exc))
+    result["model_routing"] = {
+        "requested": model_route or settings.llm_mode,
+        "data_classification": data_classification,
+        "trace": routing_trace(),
+    }
     return localize(result, lang)
 
 @app.get('/knowledge')
