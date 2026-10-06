@@ -19,6 +19,7 @@
     "typescript": "^5.8.0"
   },
   "overrides": {
+    "@swc/helpers": "0.5.23",
     "postcss": "8.5.29",
     "source-map-js": "1.2.2"
   }
