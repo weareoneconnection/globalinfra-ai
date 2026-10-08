@@ -34,3 +34,45 @@ body{overflow-x:hidden}.content,.command-hero>div:first-child{min-width:0}@media
 @media(max-width:1280px){.portfolio-command-grid{grid-template-columns:1fr}.home-twin-panel{display:grid;grid-template-columns:minmax(240px,.65fr) 1fr;align-items:center}.home-twin-panel>.section-title,.home-twin-panel>.home-twin-foot{grid-column:1/-1}.home-twin-kpis{border-left:1px solid var(--line)}}
 @media(max-width:760px){.portfolio-map-layout{grid-template-columns:1fr}.globe-stage{min-height:290px}.globe-project-detail{border-left:0;border-top:1px solid var(--line)}.home-twin-panel{display:block}.home-twin-kpis{border-left:0}}
 @media(prefers-reduced-motion:reduce){.globe-scan,.project-map-point:before,.project-map-point:after{animation:none}}
+
+/* Geospatial command globe — orthographic, Asia-centred and fully self-contained. */
+.globe-stage{min-height:440px;isolation:isolate;background:
+  radial-gradient(circle at 51% 48%,rgba(48,180,207,.16),transparent 35%),
+  radial-gradient(circle at 15% 18%,rgba(35,89,127,.16),transparent 25%),
+  linear-gradient(152deg,#06141e 0%,#030b12 54%,#06121a 100%)}
+.globe-stage:before{content:"";position:absolute;inset:0;z-index:-1;opacity:.34;background-image:
+  linear-gradient(rgba(111,218,239,.025) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(111,218,239,.025) 1px,transparent 1px);background-size:32px 32px;mask-image:radial-gradient(circle at 50% 50%,#000,transparent 76%)}
+.globe-stars{position:absolute;inset:-20%;z-index:-1;opacity:.72;background-image:
+  radial-gradient(circle at 9% 19%,#b9f5ff 0 1px,transparent 1.5px),
+  radial-gradient(circle at 21% 71%,#70cfe2 0 1px,transparent 1.4px),
+  radial-gradient(circle at 38% 9%,#fff 0 1px,transparent 1.5px),
+  radial-gradient(circle at 69% 17%,#82d8e9 0 1px,transparent 1.5px),
+  radial-gradient(circle at 83% 68%,#d9faff 0 1px,transparent 1.4px),
+  radial-gradient(circle at 94% 31%,#68b9cb 0 1px,transparent 1.5px);background-size:230px 190px,290px 250px,330px 270px,260px 210px,310px 280px,360px 240px;animation:star-drift 26s linear infinite}
+.globe-halo{width:min(82%,520px);aspect-ratio:1;border-color:rgba(82,211,239,.13);box-shadow:0 0 90px rgba(28,158,193,.13),inset 0 0 55px rgba(56,188,218,.05)}
+.globe-halo.halo-a{transform:rotate(-16deg) scaleY(.34)}
+.globe-halo.halo-b{width:min(68%,440px);transform:rotate(52deg) scaleY(.26);border-style:dashed;opacity:.58}
+.globe-sphere{width:min(76%,470px);aspect-ratio:1;filter:drop-shadow(0 34px 42px rgba(0,0,0,.62));z-index:1}
+.globe-world{overflow:visible}.globe-depth-shadow{fill:#000712;opacity:.9;filter:blur(14px)}
+.globe-grid path{fill:none;stroke:rgba(125,225,240,.105);stroke-width:1.25;vector-effect:non-scaling-stroke}
+.landmasses{filter:drop-shadow(0 5px 8px rgba(0,0,0,.3))}
+.continent{fill:url(#landLight);fill-opacity:.78;stroke:rgba(143,239,225,.38);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.continent-secondary{fill-opacity:.55}.islands{fill:#39958d;stroke:rgba(149,239,223,.45);stroke-width:1}
+.earth-texture{fill:#d5fbff;mix-blend-mode:soft-light}.globe-outline{fill:none;stroke:rgba(133,235,249,.55);stroke-width:2.5;filter:drop-shadow(0 0 7px rgba(91,218,242,.62))}
+.globe-rim-light{fill:none;stroke:rgba(221,252,255,.9);stroke-linecap:round;stroke-width:4;filter:drop-shadow(0 0 9px rgba(119,230,247,.9))}
+.globe-atmosphere{position:absolute;inset:7.5%;border:1px solid rgba(129,235,249,.56);border-radius:50%;pointer-events:none;box-shadow:
+  0 0 11px rgba(102,224,245,.6),0 0 36px rgba(49,175,210,.3),0 0 82px rgba(35,143,179,.18),
+  inset -24px -18px 45px rgba(0,3,9,.68),inset 12px 9px 24px rgba(154,244,255,.08)}
+.globe-scan{inset:7.5%;border-radius:50%;background:linear-gradient(180deg,transparent 0,rgba(98,220,250,.04) 47%,rgba(134,239,255,.19) 49.5%,rgba(134,239,255,.06) 51%,transparent 54%);background-size:100% 42%;mask-image:radial-gradient(circle,#000 67%,transparent 70%)}
+.globe-route{fill:none;stroke:rgba(255,202,112,.75);stroke-width:1.7;stroke-linecap:round;stroke-dasharray:4 8;vector-effect:non-scaling-stroke;animation:route-flow 2.6s linear infinite}
+.city-lights{fill:#ffd684;filter:drop-shadow(0 0 4px #ffb84f)}
+.project-map-point{width:22px;height:22px}.project-map-point i{inset:6px;border:1px solid rgba(255,255,255,.78)}
+.project-map-point span{left:23px;top:-3px;padding:4px 7px;border-color:rgba(103,224,245,.3);background:rgba(3,14,22,.88);box-shadow:0 5px 16px rgba(0,0,0,.32);backdrop-filter:blur(8px);font-size:8px}
+.project-map-point.active{transform:translate(-50%,-50%) scale(1.12)}.project-map-point.active span{color:#dbfaff;border-color:rgba(102,220,250,.58);box-shadow:0 0 18px rgba(79,203,228,.17)}
+.map-coordinates{position:absolute;top:15px;left:18px;display:flex;align-items:center;gap:8px;color:rgba(151,205,219,.58);font:7px ui-monospace,monospace;letter-spacing:.13em}.map-coordinates i{width:18px;height:1px;background:rgba(105,207,226,.25)}
+.map-status{bottom:16px;font-size:8px}.globe-project-detail{background:radial-gradient(circle at 50% 4%,rgba(41,131,151,.13),transparent 29%),linear-gradient(180deg,rgba(13,35,44,.98),rgba(5,15,21,.99))}
+@keyframes route-flow{to{stroke-dashoffset:-24}}
+@keyframes star-drift{to{transform:translate3d(34px,12px,0)}}
+@media(max-width:760px){.globe-stage{min-height:370px}.globe-sphere{width:min(82%,410px)}.globe-halo{width:min(88%,450px)}.map-coordinates{top:11px;left:12px}}
+@media(prefers-reduced-motion:reduce){.globe-stars,.globe-route{animation:none}}
