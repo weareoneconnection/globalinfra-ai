@@ -4,9 +4,8 @@ This binds Alembic to the application's own configuration and metadata so the
 migration path stays consistent with the offline ``Base.metadata.create_all``
 path used at startup / in tests:
 
-* The database URL comes from ``app.config.settings`` (DATABASE_URL / .env),
-  not from alembic.ini -- migrations target exactly the database the service
-  uses.
+* The database URL comes from ``app.database`` (DATABASE_URL / .env), not from
+  alembic.ini -- migrations use the same driver-normalized URL as the service.
 * ``target_metadata`` is ``app.database.Base.metadata`` with every model
   imported, so ``alembic revision --autogenerate`` and offline SQL generation
   see the full, current schema.
@@ -16,12 +15,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.config import settings
-from app.database import Base
+from app.database import Base, database_url
 import app.models  # noqa: F401 -- ensure all tables register on Base.metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
