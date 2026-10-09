@@ -1,0 +1,7 @@
+{
+  "name": "globalinfra-railway-iac",
+  "private": true,
+  "devDependencies": {
+    "railway": "3.13.1"
+  }
+}
