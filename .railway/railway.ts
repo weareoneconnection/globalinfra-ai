@@ -22,7 +22,10 @@ export default defineRailway(() => {
     preDeploy: "alembic upgrade head",
     env: {
       DATABASE_URL: Postgres.env.DATABASE_URL,
-      LLM_MODE: "mock",
+      LLM_MODE: "openai",
+      OPENAI_COMPAT_API_KEY: preserve(),
+      OPENAI_COMPAT_BASE_URL: preserve(),
+      OPENAI_COMPAT_MODEL: preserve(),
       PORT: "8000",
       REQUIRE_API_KEY: "false",
     },
