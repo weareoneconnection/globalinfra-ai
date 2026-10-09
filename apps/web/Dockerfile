@@ -14,4 +14,5 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app .
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+# Railway injects PORT; Docker Compose keeps the documented 3000 default.
+CMD ["sh", "-c", "npm run start -- --hostname 0.0.0.0 --port ${PORT:-3000}"]
