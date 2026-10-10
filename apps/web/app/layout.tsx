@@ -3,11 +3,24 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
+import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import type { Metadata, Viewport } from 'next';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'GlobalInfra AI',
   description: 'Global Transportation Infrastructure Intelligence & Trusted Execution Platform',
-  icons: { icon: '/favicon.svg' }
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'GlobalInfra AI' },
+  formatDetection: { telephone: false },
+  icons: { icon: '/favicon.svg', apple: '/icons/icon-192.png' }
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#071016'
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          <ServiceWorkerRegistration />
           <div className="shell">
             <Sidebar />
             <main className="main">
