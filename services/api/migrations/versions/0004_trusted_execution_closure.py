@@ -21,9 +21,15 @@ def _batch_recreate_mode() -> str:
 
 def upgrade() -> None:
     # Intake must be able to remain unassigned until a human confirms routing.
-    op.alter_column("cases", "project_id", existing_type=sa.Integer(), nullable=True)
-    op.add_column("cases", sa.Column("project_routing_confidence", sa.Float(), nullable=True))
-    op.add_column("cases", sa.Column("routing_status", sa.String(length=40), nullable=False, server_default="ROUTED"))
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("cases", recreate="always") as batch_op:
+            batch_op.alter_column("project_id", existing_type=sa.Integer(), nullable=True)
+            batch_op.add_column(sa.Column("project_routing_confidence", sa.Float(), nullable=True))
+            batch_op.add_column(sa.Column("routing_status", sa.String(length=40), nullable=False, server_default="ROUTED"))
+    else:
+        op.alter_column("cases", "project_id", existing_type=sa.Integer(), nullable=True)
+        op.add_column("cases", sa.Column("project_routing_confidence", sa.Float(), nullable=True))
+        op.add_column("cases", sa.Column("routing_status", sa.String(length=40), nullable=False, server_default="ROUTED"))
 
     op.create_table(
         "claims",
@@ -167,6 +173,12 @@ def downgrade() -> None:
         batch_op.drop_column("claim_id")
     op.drop_index("ix_claims_case_id", table_name="claims")
     op.drop_table("claims")
-    op.drop_column("cases", "routing_status")
-    op.drop_column("cases", "project_routing_confidence")
-    op.alter_column("cases", "project_id", existing_type=sa.Integer(), nullable=False)
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("cases", recreate="always") as batch_op:
+            batch_op.drop_column("routing_status")
+            batch_op.drop_column("project_routing_confidence")
+            batch_op.alter_column("project_id", existing_type=sa.Integer(), nullable=False)
+    else:
+        op.drop_column("cases", "routing_status")
+        op.drop_column("cases", "project_routing_confidence")
+        op.alter_column("cases", "project_id", existing_type=sa.Integer(), nullable=False)
