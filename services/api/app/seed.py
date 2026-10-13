@@ -1,12 +1,13 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .models import Project, Case, KnowledgeDocument, TrainingModule
+from .models import AIQualityRun, Connector, Organization, Project, Case, KnowledgeDocument, TrainingModule, TwinSource
 from .i18n import bi
 from .twin_seed import seed_twin
 
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
         seed_twin(db)
+        seed_phase7(db)
         return
     projects = [
         Project(id=1, code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
@@ -104,3 +105,26 @@ def seed(db: Session):
     ])
     db.commit()
     seed_twin(db)
+    seed_phase7(db)
+
+
+def seed_phase7(db: Session):
+    if db.get(Organization, "globalinfra-demo") is None:
+        db.add(Organization(id="globalinfra-demo", name="GlobalInfra Demo Organization"))
+    if db.scalar(select(TwinSource.id).limit(1)) is None:
+        db.add_all([
+            TwinSource(id="TS-MYRAIL-IFC", organization_id="globalinfra-demo", project_id=1, source_type="IFC", name="Viaduct federated model", uri="ifc://MYRAIL/STR-V12", version="REV-C", coordinate_reference_system="EPSG:32647", status="SAMPLE", checksum=None, metadata_json={"schema":"IFC4.3","objects":4182}),
+            TwinSource(id="TS-MYRAIL-TILES", organization_id="globalinfra-demo", project_id=1, source_type="3D_TILES", name="Corridor geospatial tiles", uri="tiles://MYRAIL/corridor/root.json", version="2026.10", coordinate_reference_system="EPSG:4326", status="SAMPLE", checksum=None, metadata_json={"lod":"streaming","terrain":True}),
+            TwinSource(id="TS-MYRAIL-IOT", organization_id="globalinfra-demo", project_id=1, source_type="IOT", name="BMS / SCADA telemetry", uri="mqtt://MYRAIL/telemetry", version="v1", coordinate_reference_system=None, status="SAMPLE", checksum=None, metadata_json={"sampling":"60s","signals":3}),
+        ])
+    if db.scalar(select(Connector.id).limit(1)) is None:
+        db.add_all([
+            Connector(id="CON-DEMO-P6", organization_id="globalinfra-demo", project_id=1, connector_type="primavera_p6", name="P6 programme adapter", status="SAMPLE", config={"endpoint_alias":"P6_DEMO","schedule_id":"MYRAIL"}),
+            Connector(id="CON-DEMO-ACC", organization_id="globalinfra-demo", project_id=1, connector_type="autodesk_acc", name="ACC document adapter", status="SAMPLE", config={"endpoint_alias":"ACC_DEMO","project_ref":"MYRAIL"}),
+        ])
+    if db.scalar(select(AIQualityRun.id).limit(1)) is None:
+        db.add_all([
+            AIQualityRun(id="EVAL-DEMO-GROUNDING", organization_id="globalinfra-demo", suite="engineering-grounding", model_provider="governed-router", model_name="configured-model", status="PASSED", score=.94, thresholds={"minimum_score":.9}, metrics={"citation_precision":.97,"unsupported_claim_rate":.02}, dataset_version="2026.10"),
+            AIQualityRun(id="EVAL-DEMO-ROUTING", organization_id="globalinfra-demo", suite="case-routing", model_provider="hybrid", model_name="rules-plus-llm", status="PASSED", score=.98, thresholds={"minimum_score":.95}, metrics={"domain_accuracy":.98,"risk_recall":1.0}, dataset_version="2026.10"),
+        ])
+    db.commit()

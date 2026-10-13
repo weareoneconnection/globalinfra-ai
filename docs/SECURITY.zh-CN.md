@@ -13,7 +13,7 @@
 
 ## 目前已落地的能力
 
-- **试点阶段 API Key 网关**（`services/api/app/security.py`，默认通过 `REQUIRE_API_KEY=false` 关闭）：对除 `/health` 外的每个请求做抗时序侧信道的共享密钥校验；启用后如果未配置密钥会安全拒绝。Next.js 代理仅在服务端注入 `API_SERVICE_KEY`，浏览器代码不会拿到凭据。这仍只是试点阶段的网络边界兜底方案，**不能替代**下方的 SSO/OIDC——它没有按用户区分的身份、角色或审计轨迹。
+- **三态身份边界**（`services/api/app/security.py`）：`disabled` 保留公开演示，`api_key` 提供抗时序侧信道的试点服务边界，`oidc` 通过 JWKS 验证签发方签名的 JWT。OIDC 声明会标准化为组织、角色和项目范围；变更接口执行 RBAC，审计平面记录操作者、请求与结果。
 - **HTTP 与接入边界控制：** 显式 `CORS_ORIGINS` 白名单、浏览器安全响应头、文本请求长度限制、可配置上传大小上限、PDF/DOCX 文件签名校验以及二进制 TXT 拒绝。恶意软件扫描与 DLP 仍属于生产待办。
 - **依赖安全基线：** Next.js 固定到本项目使用的最新已修复 15.x 版本，并锁定已修复的 PostCSS/source-map 间接依赖，已通过 `npm audit` 验证。
 - Kubernetes 清单（`infra/kubernetes/`）已补充存活/就绪探针、资源请求/限制、`HorizontalPodAutoscaler`、说明所需密钥的 `api-secret.example.yaml`，以及带 TLS 的 `Ingress` 示例——这些都不能替代下面清单里的事项，但补上了"只有 Deployment"和"真正能运维起来的集群部署"之间的落差。
@@ -21,7 +21,7 @@
 
 ## 生产环境待办事项
 
-- SSO / OIDC / SAML + 多因素认证（MFA）（上面的 API Key 网关只是过渡性的网络边界控制，不是身份系统）
+- 启用客户身份租户、条件访问和 MFA，并验证最终声明映射及角色分配治理流程。
 - RBAC + ABAC
 - 行级租户/项目安全隔离
 - KMS 支持的密钥加密

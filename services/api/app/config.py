@@ -20,6 +20,22 @@ class Settings(BaseSettings):
     api_key: str = ""
     cors_origins: str = "http://localhost:3000"
     max_upload_bytes: int = 10 * 1024 * 1024
+    # Phase 7 production-pilot controls. ``disabled`` preserves the public
+    # competition demo; production pilots should use ``oidc``.
+    auth_mode: str = "disabled"
+    oidc_issuer: str = ""
+    oidc_audience: str = ""
+    oidc_jwks_url: str = ""
+    oidc_roles_claim: str = "roles"
+    oidc_organization_claim: str = "org_id"
+    oidc_projects_claim: str = "projects"
+    default_organization_id: str = "globalinfra-demo"
+    audit_mutations: bool = True
+    rate_limit_per_minute: int = 180
+    connector_webhook_secret: str = ""
+    object_storage_endpoint: str = ""
+    object_storage_bucket: str = "globalinfra-field"
+    telemetry_stale_seconds: int = 300
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

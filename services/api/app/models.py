@@ -215,6 +215,123 @@ class SourceDocument(Base):
     parse_status: Mapped[str] = mapped_column(String(16), default="PARSED")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+# --- V3.0 / Phase 7: production-pilot operating plane -----------------------
+
+class Organization(Base):
+    __tablename__ = "organizations"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24), default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class Identity(Base):
+    """OIDC subject mapped to a GlobalInfra organization and project scope."""
+    __tablename__ = "identities"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    issuer: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    roles: Mapped[list] = mapped_column(JSON, default=list)
+    project_ids: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(24), default="ACTIVE")
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    actor_id: Mapped[str] = mapped_column(String(255), index=True)
+    request_id: Mapped[str] = mapped_column(String(64), index=True)
+    action: Mapped[str] = mapped_column(String(160), index=True)
+    resource_type: Mapped[str] = mapped_column(String(80), index=True)
+    resource_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(24), index=True)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class FieldObservation(Base):
+    __tablename__ = "field_observations"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(96), unique=True, index=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    twin_id: Mapped[str | None] = mapped_column(ForeignKey("twin_objects.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(48), index=True)
+    severity: Mapped[str] = mapped_column(String(20), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    location: Mapped[dict] = mapped_column(JSON, default=dict)
+    attachments: Mapped[list] = mapped_column(JSON, default=list)
+    reporter_id: Mapped[str] = mapped_column(String(255), index=True)
+    sync_status: Mapped[str] = mapped_column(String(24), default="SYNCED", index=True)
+    case_id: Mapped[str | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class TwinSource(Base):
+    __tablename__ = "twin_sources"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    source_type: Mapped[str] = mapped_column(String(40), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    uri: Mapped[str] = mapped_column(String(500))
+    version: Mapped[str] = mapped_column(String(80))
+    coordinate_reference_system: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="REGISTERED", index=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class Connector(Base):
+    __tablename__ = "connectors"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    connector_type: Mapped[str] = mapped_column(String(48), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(24), default="CONFIGURED", index=True)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ConnectorSyncRun(Base):
+    __tablename__ = "connector_sync_runs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    connector_id: Mapped[str] = mapped_column(ForeignKey("connectors.id"), index=True)
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    cursor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    records_read: Mapped[int] = mapped_column(Integer, default=0)
+    records_written: Mapped[int] = mapped_column(Integer, default=0)
+    records_rejected: Mapped[int] = mapped_column(Integer, default=0)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AIQualityRun(Base):
+    __tablename__ = "ai_quality_runs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    suite: Mapped[str] = mapped_column(String(80), index=True)
+    model_provider: Mapped[str] = mapped_column(String(48))
+    model_name: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    score: Mapped[float] = mapped_column(Float)
+    thresholds: Mapped[dict] = mapped_column(JSON, default=dict)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    dataset_version: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
 # --- V2.0: Full-lifecycle Digital Twin --------------------------------------
 
 class TwinObject(Base):

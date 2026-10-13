@@ -1,5 +1,5 @@
-const CACHE_NAME = 'globalinfra-mobile-v1';
-const APP_SHELL = ['/', '/offline', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE_NAME = 'globalinfra-phase7-v2';
+const APP_SHELL = ['/', '/field', '/offline', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
@@ -41,4 +41,11 @@ self.addEventListener('fetch', event => {
       }))
     );
   }
+});
+
+self.addEventListener('sync', event => {
+  if (event.tag !== 'globalinfra-field-sync') return;
+  event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(clients => {
+    clients.forEach(client => client.postMessage({type:'GLOBALINFRA_FIELD_SYNC'}));
+  }));
 });

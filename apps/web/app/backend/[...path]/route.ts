@@ -6,7 +6,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const target = `${base}/${path.join('/')}${req.nextUrl.search}`;
   const body = ['GET','HEAD'].includes(req.method) ? undefined : await req.arrayBuffer();
   const headers = new Headers();
-  for (const name of ['content-type', 'accept', 'accept-language']) {
+  for (const name of ['content-type', 'accept', 'accept-language', 'authorization', 'x-request-id']) {
     const value = req.headers.get(name);
     if (value) headers.set(name, value);
   }

@@ -2,8 +2,8 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "PROJECT INTELLIGENCE",
-    "footerVersion": "V2.1 · Trusted Execution Closure",
-    "footerSub": "Full lifecycle · Governed simulation",
+    "footerVersion": "V3.0 · Phase 7 Pilot",
+    "footerSub": "Field · Twin · Enterprise integrations",
     "groups": [
       {
         "label": "Global",
@@ -16,6 +16,7 @@
       {
         "label": "Project Operations",
         "items": [
+          { "href": "/field", "label": "Field Operations", "icon": "FO" },
           { "href": "/cases", "label": "Cases", "icon": "◎" },
           { "href": "/approvals", "label": "Approvals", "icon": "✓" },
           { "href": "/knowledge", "label": "Knowledge", "icon": "◇" }
@@ -37,6 +38,8 @@
       {
         "label": "Platform",
         "items": [
+          { "href": "/integrations", "label": "Integrations", "icon": "↔" },
+          { "href": "/platform", "label": "Pilot Control", "icon": "P7" },
           { "href": "/agents", "label": "Agent Organization", "icon": "AI" },
           { "href": "/architecture", "label": "Architecture", "icon": "⌘" }
         ]
@@ -311,6 +314,59 @@
       "sceneHint": "Select a component to inspect its digital thread",
       "live": "LIVE MODEL"
     }
+  },
+  "Field": {
+    "eyebrow": "PHASE 7 · FIELD OPERATIONS",
+    "title": "Capture the engineering event where it happens.",
+    "subtitle": "Offline-first inspection, NCR, HSE, progress and commissioning capture linked directly to Project, Twin ID and a governed Case.",
+    "badge": "OFFLINE READY",
+    "captureKicker": "FIELD CAPTURE",
+    "captureTitle": "New site observation",
+    "project": "Project",
+    "eventType": "Event type",
+    "severity": "Severity",
+    "twinId": "Twin ID / QR reference",
+    "description": "Observation",
+    "descriptionHint": "Describe the condition, requirement and immediate control…",
+    "media": "Photo / video / audio evidence",
+    "mediaHint": "Camera capture is hashed locally; binary upload awaits configured object storage.",
+    "files": "{count} evidence file(s) selected",
+    "captureLocation": "Capture GPS",
+    "noLocation": "No location captured",
+    "locationCaptured": "High-accuracy location captured",
+    "locationUnavailable": "Location permission is unavailable",
+    "save": "Save & synchronize",
+    "savedOffline": "Saved securely to the offline queue",
+    "queueKicker": "OFFLINE QUEUE",
+    "queueTitle": "Observations waiting on this device",
+    "queueHint": "Idempotent client IDs prevent duplicate cases when a weak connection retries.",
+    "syncNow": "Synchronize now",
+    "syncing": "Synchronizing…",
+    "synced": "{count} observation(s) synchronized",
+    "offlineQueued": "Connection unavailable — item remains in the offline queue",
+    "working": "Preparing evidence…",
+    "connectivity": "Automatic sync when the connection returns"
+  },
+  "Integrations": {
+    "eyebrow": "PHASE 7 · DATA PLANE",
+    "title": "Enterprise integration control plane",
+    "subtitle": "Schedule, engineering, documents, commercial, geospatial and telemetry sources map into one governed event contract.",
+    "catalog": "Connector catalog",
+    "configured": "Configured connectors",
+    "sources": "Registered twin sources",
+    "empty": "No production connector configured yet",
+    "secretPolicy": "Credentials are read from deployment secrets and are never stored in connector configuration."
+  },
+  "Platform": {
+    "eyebrow": "PHASE 7 · PRODUCTION PILOT",
+    "title": "Pilot readiness and release controls",
+    "subtitle": "Identity, field operations, real twin sources, connectors, AI quality gates and operational telemetry in one control plane.",
+    "capabilities": "Stage 7 capabilities",
+    "quality": "AI release gates",
+    "identity": "Identity boundary",
+    "passed": "Release gate open",
+    "blocked": "Release gate closed",
+    "noRuns": "No AI quality run has been recorded"
   },
   "Components": {
     "saving": "Saving…",

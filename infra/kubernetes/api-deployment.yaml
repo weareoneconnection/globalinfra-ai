@@ -24,12 +24,12 @@ spec:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "500m", memory: "512Mi" }
           readinessProbe:
-            httpGet: { path: /health, port: 8000 }
+            httpGet: { path: /readyz, port: 8000 }
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /health, port: 8000 }
+            httpGet: { path: /livez, port: 8000 }
             initialDelaySeconds: 15
             periodSeconds: 20
             failureThreshold: 3

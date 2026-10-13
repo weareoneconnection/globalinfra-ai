@@ -37,12 +37,23 @@ services:
       LLM_CLOUD_FALLBACK_ENABLED: ${LLM_CLOUD_FALLBACK_ENABLED:-true}
       REQUIRE_API_KEY: ${REQUIRE_API_KEY:-false}
       API_KEY: ${API_KEY:-}
+      AUTH_MODE: ${AUTH_MODE:-disabled}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      DEFAULT_ORGANIZATION_ID: ${DEFAULT_ORGANIZATION_ID:-globalinfra-demo}
+      AUDIT_MUTATIONS: ${AUDIT_MUTATIONS:-true}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-180}
+      CONNECTOR_WEBHOOK_SECRET: ${CONNECTOR_WEBHOOK_SECRET:-}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-globalinfra-field}
+      TELEMETRY_STALE_SECONDS: ${TELEMETRY_STALE_SECONDS:-300}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
     ports:
       - "8001:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
       interval: 5s
       timeout: 5s
       retries: 20

@@ -2,8 +2,8 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "项目智能",
-    "footerVersion": "V2.1 · 可信执行闭环",
-    "footerSub": "全生命周期 · 受控仿真",
+    "footerVersion": "V3.0 · 阶段 7 试点",
+    "footerSub": "现场 · 孪生 · 企业集成",
     "groups": [
       {
         "label": "全局",
@@ -16,6 +16,7 @@
       {
         "label": "项目运营",
         "items": [
+          { "href": "/field", "label": "现场作业", "icon": "FO" },
           { "href": "/cases", "label": "工单", "icon": "◎" },
           { "href": "/approvals", "label": "审批", "icon": "✓" },
           { "href": "/knowledge", "label": "知识库", "icon": "◇" }
@@ -37,6 +38,8 @@
       {
         "label": "平台",
         "items": [
+          { "href": "/integrations", "label": "企业集成", "icon": "↔" },
+          { "href": "/platform", "label": "试点控制", "icon": "P7" },
           { "href": "/agents", "label": "智能体组织", "icon": "AI" },
           { "href": "/architecture", "label": "架构", "icon": "⌘" }
         ]
@@ -311,6 +314,59 @@
       "sceneHint": "选择构件查看其数字主线",
       "live": "实时模型"
     }
+  },
+  "Field": {
+    "eyebrow": "阶段 7 · 现场作业",
+    "title": "在工程事件发生的地方完成采集。",
+    "subtitle": "离线优先采集检验、NCR、HSE、进度与调试事件，并直接关联项目、Twin ID 和受管控工单。",
+    "badge": "离线可用",
+    "captureKicker": "现场采集",
+    "captureTitle": "新建现场观察",
+    "project": "项目",
+    "eventType": "事件类型",
+    "severity": "严重程度",
+    "twinId": "Twin ID / 二维码引用",
+    "description": "现场观察",
+    "descriptionHint": "描述现场状况、要求和已采取的即时控制措施……",
+    "media": "照片 / 视频 / 语音证据",
+    "mediaHint": "媒体在本地计算摘要；配置对象存储后上传原始文件。",
+    "files": "已选择 {count} 个证据文件",
+    "captureLocation": "获取 GPS",
+    "noLocation": "尚未获取位置",
+    "locationCaptured": "已获取高精度位置",
+    "locationUnavailable": "无法获取位置权限",
+    "save": "保存并同步",
+    "savedOffline": "已安全保存到离线队列",
+    "queueKicker": "离线队列",
+    "queueTitle": "本设备待同步观察",
+    "queueHint": "幂等客户端 ID 可避免弱网重试时重复创建工单。",
+    "syncNow": "立即同步",
+    "syncing": "同步中……",
+    "synced": "已同步 {count} 条观察",
+    "offlineQueued": "当前无法连接，事件仍保留在离线队列",
+    "working": "正在准备证据……",
+    "connectivity": "网络恢复后自动同步"
+  },
+  "Integrations": {
+    "eyebrow": "阶段 7 · 数据平面",
+    "title": "企业集成控制平面",
+    "subtitle": "进度、工程、文档、商务、空间与遥测数据统一映射到受管控事件契约。",
+    "catalog": "连接器目录",
+    "configured": "已配置连接器",
+    "sources": "已注册孪生数据源",
+    "empty": "尚未配置生产连接器",
+    "secretPolicy": "凭据只从部署密钥读取，绝不写入连接器配置。"
+  },
+  "Platform": {
+    "eyebrow": "阶段 7 · 生产试点",
+    "title": "试点就绪度与发布控制",
+    "subtitle": "身份、现场作业、真实孪生源、企业连接器、AI 质量门禁和运行遥测统一管控。",
+    "capabilities": "阶段 7 能力",
+    "quality": "AI 发布门禁",
+    "identity": "身份边界",
+    "passed": "发布门禁已打开",
+    "blocked": "发布门禁已关闭",
+    "noRuns": "尚未记录 AI 质量评测"
   },
   "Components": {
     "saving": "保存中…",

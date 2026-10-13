@@ -25,8 +25,10 @@ from .intake import build_intake_result, detect_language, LANGUAGE_DISPLAY
 from .llm_classify import classify_text_llm
 from .llm_extract import extract_fields_llm
 from .documents import extract_text, UnsupportedDocument
-from .security import api_key_gate
+from .security import Principal, api_key_gate, require_roles
 from .config import settings
+from .operations import metrics_response, production_controls
+from .phase7 import router as phase7_router
 from .governed_execution import (
     GovernedExecutionError, artifact_payload, close_action, execute_action, verify_action,
 )
@@ -40,7 +42,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="3.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -51,10 +53,23 @@ app.add_middleware(
 # Off by default (see app.security / app.config.settings.require_api_key);
 # turning it on in a pilot deployment needs only an env var, no code change.
 app.middleware("http")(api_key_gate)
+app.middleware("http")(production_controls)
 app.include_router(twin_router)
+app.include_router(phase7_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"2.1.0","product_version":"V2.1","architecture":"trusted-execution-closure"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"3.0.0","product_version":"V3.0","architecture":"phase-7-production-pilot"}
+
+@app.get('/livez')
+def livez(): return {"status": "alive"}
+
+@app.get('/readyz')
+def readyz(db: Session = Depends(get_db)):
+    db.execute(select(1))
+    return {"status": "ready", "database": "ok", "auth_mode": settings.auth_mode, "llm_mode": settings.llm_mode}
+
+@app.get('/metrics', include_in_schema=False)
+def metrics(): return metrics_response()
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
@@ -392,12 +407,13 @@ def approvals(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     return localize(result, lang)
 
 @app.post('/approvals/{approval_id}/approve')
-def approve(approval_id: int, db: Session = Depends(get_db)):
+def approve(approval_id: int, principal: Principal = Depends(require_roles("approver")), db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
     if a.status == "REJECTED":
         raise HTTPException(409, "Rejected approval requires rework before it can be approved.")
     a.status = "APPROVED"
+    a.decided_by = principal.subject
     a.decided_at = utc_now()
     action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
     case = db.get(Case, a.case_id)
@@ -412,10 +428,11 @@ def approve(approval_id: int, db: Session = Depends(get_db)):
     return {"status": "APPROVED", "case_status": case.status, "action_id": None if action is None else action.id, "action_status": None if action is None else action.status}
 
 @app.post('/approvals/{approval_id}/reject')
-def reject(approval_id: int, db: Session = Depends(get_db)):
+def reject(approval_id: int, principal: Principal = Depends(require_roles("approver")), db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
     a.status = 'REJECTED'
+    a.decided_by = principal.subject
     a.decided_at = utc_now()
     action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
     c = db.get(Case, a.case_id)
@@ -470,20 +487,28 @@ def action_detail(action_id: str, db: Session = Depends(get_db), lang: str = Dep
 
 
 @app.post('/actions/{action_id}/execute')
-def execute(action_id: str, payload: ExecutionRequest | None = None, db: Session = Depends(get_db)):
+def execute(
+    action_id: str, payload: ExecutionRequest | None = None,
+    principal: Principal = Depends(require_roles("engineer", "project_manager")),
+    db: Session = Depends(get_db),
+):
     try:
-        return execute_action(db, action_id, payload.executor if payload else "governed.document.generate")
+        return execute_action(db, action_id, payload.executor if payload else principal.subject)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
 
 @app.post('/cases/{case_id}/execute')
-def execute_case(case_id: str, payload: ExecutionRequest | None = None, db: Session = Depends(get_db)):
+def execute_case(
+    case_id: str, payload: ExecutionRequest | None = None,
+    principal: Principal = Depends(require_roles("engineer", "project_manager")),
+    db: Session = Depends(get_db),
+):
     action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
     if not action:
         raise HTTPException(404, "No governed action exists for case")
     try:
-        result = execute_action(db, action.id, payload.executor if payload else "governed.document.generate")
+        result = execute_action(db, action.id, payload.executor if payload else principal.subject)
         result["case_id"] = case_id
         return result
     except GovernedExecutionError as exc:
@@ -491,26 +516,35 @@ def execute_case(case_id: str, payload: ExecutionRequest | None = None, db: Sess
 
 
 @app.post('/actions/{action_id}/verify')
-def verify(action_id: str, payload: VerificationRequest | None = None, db: Session = Depends(get_db)):
+def verify(
+    action_id: str, payload: VerificationRequest | None = None,
+    principal: Principal = Depends(require_roles("verifier")), db: Session = Depends(get_db),
+):
     try:
-        return verify_action(db, action_id, payload.verifier if payload else "independent.verifier")
+        return verify_action(db, action_id, payload.verifier if payload else principal.subject)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
 
 @app.post('/cases/{case_id}/verify')
-def verify_case(case_id: str, payload: VerificationRequest | None = None, db: Session = Depends(get_db)):
+def verify_case(
+    case_id: str, payload: VerificationRequest | None = None,
+    principal: Principal = Depends(require_roles("verifier")), db: Session = Depends(get_db),
+):
     action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
     if not action:
         raise HTTPException(404, "No governed action exists for case")
     try:
-        return verify_action(db, action.id, payload.verifier if payload else "independent.verifier")
+        return verify_action(db, action.id, payload.verifier if payload else principal.subject)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
 
 @app.post('/actions/{action_id}/close')
-def close(action_id: str, db: Session = Depends(get_db)):
+def close(
+    action_id: str, principal: Principal = Depends(require_roles("project_manager")),
+    db: Session = Depends(get_db),
+):
     try:
         return close_action(db, action_id)
     except GovernedExecutionError as exc:

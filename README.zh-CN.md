@@ -1,10 +1,10 @@
 > **Language / 语言**: [English](README.md) · 简体中文
 
-# GlobalInfra AI V1.1
+# GlobalInfra AI V3.0
 
 **全球交通基础设施智能与可信执行平台**
 
-GlobalInfra AI V1.1 是一个独立的、可直接用于竞赛展示的海外交通基础设施项目平台。它建立在一个双轴模型之上：完整的项目生命周期 与 八大互联智能领域。每一个事件都通过一个有证据支撑、受管控的行动闭环来解决。
+GlobalInfra AI V3.0 是一个独立的、面向真实海外交通基础设施项目生产试点的平台。它建立在完整项目生命周期与八大互联智能领域组成的双轴模型之上，每一个事件都通过有证据支撑、受管控的行动闭环解决。
 
 > 范围说明：本仓库是一个全新的独立代码库。它不依赖、不导入、不调用、也不暴露 TheOne 或任何 TheOne 品牌的运行时。
 
@@ -164,6 +164,10 @@ V2.1 将候选决策演示升级为受管控的执行生命周期。分析阶段
 
 工单上的旧 `verification` 对象表示分析质量评分（`WARN`），不是行动成功的证明；可信执行证明分别由 `execution_receipt` 和 `verification_receipt` 提供。
 
+## V3.0 阶段 7 生产试点
+
+阶段 7 新增 OIDC/RBAC 身份边界、组织与项目范围、变更审计链、离线优先现场 PWA、真实孪生数据源注册、六类企业连接器契约、AI 质量发布门禁、Prometheus 兼容指标、运行限流和独立存活/就绪探针。启用边界与生产清单见[阶段 7：生产试点](docs/PHASE7_PRODUCTION_PILOT.zh-CN.md)。
+
 ## V2.0 阶段 6 数字孪生
 
 `/twin` 已成为覆盖全生命周期、由真实数据模型支撑的孪生运行工作台，而不是一个与业务割裂的三维演示。稳定的 `Twin ID` 将空间身份、资产层级、状态历史、工程事件、WBS、进度、成本、调试、遥测、维护与受管控 AI 仿真连接起来。
@@ -199,6 +203,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0002_intake_tables`：新增 `intake_submissions` 与 `source_documents`。
 - `0003_digital_twin`：新增孪生对象图谱、状态历史、工程事件、4D/5D 关联、传感器、调试、维护与受管控场景。
 - `0004_trusted_execution_closure`：新增主张、受管控行动意图、执行/核验回执、内容寻址产物及待人工确认的工单路由字段。
+- `0005_phase7_production_pilot`：新增组织、身份、审计事件、现场观察、真实孪生数据源、连接器同步记录与 AI 质量发布门禁。
 
 数据库 URL 由 `migrations/env.py` 从应用设置（`DATABASE_URL`/`.env`）读取，不写入 `alembic.ini`。
 

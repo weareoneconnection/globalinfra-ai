@@ -1,10 +1,10 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V1.1
+# GlobalInfra AI V3.0
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V1.1 is an independent, competition-ready platform for overseas transportation infrastructure projects. It is built on a two-axis model: the complete project lifecycle and eight connected intelligence domains. Every event is resolved through an evidence-backed, governed action loop.
+GlobalInfra AI V3.0 is an independent production-pilot platform for overseas transportation infrastructure projects. It is built on a two-axis model: the complete project lifecycle and eight connected intelligence domains. Every event is resolved through an evidence-backed, governed action loop.
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 
@@ -175,6 +175,10 @@ Key APIs: `POST /actions/{id}/execute`, `POST /actions/{id}/verify`, `POST /acti
 
 The legacy `verification` object on a Case is analysis-quality scoring (`WARN`), not proof that an action succeeded. Trusted proof is exposed separately as `execution_receipt` and `verification_receipt`.
 
+## V3.0 Phase 7 Production Pilot
+
+Phase 7 adds OIDC/RBAC identity boundaries, organization and project scope, mutation audit trails, an offline-first field PWA, real twin-source registration, six enterprise connector contracts, AI quality release gates, Prometheus-compatible metrics, rate limits and dedicated liveness/readiness probes. See [Phase 7 Production Pilot](docs/PHASE7_PRODUCTION_PILOT.md) for activation boundaries and the production checklist.
+
 ## V2.0 Phase 6 Digital Twin
 
 `/twin` is a complete, data-backed reference implementation of the full-lifecycle twin operating model — not a disconnected 3D mock-up. A stable `Twin ID` connects spatial identity, asset hierarchy, state history, engineering events, WBS, schedule, cost, commissioning, telemetry, maintenance and governed AI simulation.
@@ -211,6 +215,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0002_intake_tables` adds `intake_submissions` and `source_documents`.
 - `0003_digital_twin` adds the Twin object graph, state history, engineering events, 4D/5D links, sensors, commissioning, maintenance and governed scenarios.
 - `0004_trusted_execution_closure` adds claims, governed action intents, execution/verification receipts, content-addressed artifacts, and unassigned-intake routing fields.
+- `0005_phase7_production_pilot` adds organizations, identities, audit events, field observations, real twin sources, connector sync runs and AI quality release gates.
 
 The database URL is read from app settings (`DATABASE_URL`/`.env`) by `migrations/env.py`, not committed in `alembic.ini`.
 

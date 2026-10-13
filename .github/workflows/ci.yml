@@ -1,15 +1,22 @@
 name: ci
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
   pull_request:
 jobs:
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install -r services/api/requirements-dev.txt
+      - run: python -m pip check
       - run: python -m compileall services/api/app
       - run: python -m pytest services/api/tests -q
       - run: python evals/run_eval.py
@@ -23,6 +30,7 @@ jobs:
         run: python -m alembic upgrade head
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
@@ -41,6 +49,7 @@ jobs:
     # building the web app in isolation. Catches breakage in docker-compose.yml,
     # the Dockerfiles and inter-service wiring that the two jobs above cannot see.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
@@ -49,6 +58,9 @@ jobs:
         run: |
           set -e
           curl -sf http://localhost:8001/health
+          curl -sf http://localhost:8001/readyz | grep -q '"database":"ok"'
+          curl -sf http://localhost:8001/metrics | grep -q 'globalinfra_http_requests_total'
+          curl -sf http://localhost:8001/platform/capabilities | grep -q 'PHASE_7_PRODUCTION_PILOT'
           curl -sf http://localhost:8001/projects | grep -q 'MY-RAIL-A'
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8001/cases/classify \
             -H 'Content-Type: application/json' \
@@ -77,6 +89,9 @@ jobs:
             -H 'Content-Type: application/json' -d '{"adjustment_percent":10}' | grep -q 'AWAITING_APPROVAL'
           curl -sf http://localhost:3000/ > /dev/null
           curl -sf http://localhost:3000/twin > /dev/null
+          curl -sf http://localhost:3000/field > /dev/null
+          curl -sf http://localhost:3000/integrations > /dev/null
+          curl -sf http://localhost:3000/platform > /dev/null
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs
