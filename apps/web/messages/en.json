@@ -288,6 +288,11 @@
     "metricScheduleDelta": "+{cost}M forecast exposure",
     "metricHandover": "Commissioning Readiness",
     "metricHandoverDelta": "{docs}% handover documents",
+    "projectTwin": "PROJECT SYNTHETIC TWIN PACK",
+    "selectProject": "Select digital twin project",
+    "syntheticNotice": "Downloadable demonstration data generated from shared Twin IDs; not an as-built or customer model.",
+    "formatCoverage": "format instances covered",
+    "openArtifact": "Open instance",
     "workspace": {
       "tabs": ["Spatial Twin", "4D / 5D Controls", "Commissioning", "Operations", "Scenario Lab", "Twin Agents"],
       "selectAsset": "Select asset",

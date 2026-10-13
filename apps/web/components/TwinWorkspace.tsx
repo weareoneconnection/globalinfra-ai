@@ -14,7 +14,7 @@ type Labels = { tabs:string[]; selectAsset:string; health:string; progress:strin
 
 export function TwinWorkspace({ objects, events, controls, commissioning, operations, scenarios, agents, labels }: { objects:TwinObject[];events:TwinEvent[];controls:Control[];commissioning:Commissioning[];operations:Operations;scenarios:Scenario[];agents:TwinAgent[];labels:Labels }) {
   const [tab,setTab]=useState(0);
-  const [selected,setSelected]=useState('TWIN-MYRAIL-V12-P47');
+  const [selected,setSelected]=useState(objects.find(object=>object.id.includes('P47'))?.id||objects.find(object=>object.object_type!=='PROJECT')?.id||objects[0]?.id||'');
   const [running,setRunning]=useState('');
   const [result,setResult]=useState<Record<string,string|number>|null>(null);
   const [error,setError]=useState('');
@@ -40,7 +40,7 @@ export function TwinWorkspace({ objects, events, controls, commissioning, operat
         <div className="scene-toolbar"><span><i className="live-dot"/>{labels.live} · IFC 4.3 / 3D Tiles</span><small>{labels.sceneHint}</small></div>
         <div className="scene-sky"><div className="scene-grid"/>
           <div className="rail-line"/><div className="station-block"><b>ST-04</b><span>HVAC</span></div>
-          {objects.filter(x=>['ASSET','COMPONENT'].includes(x.object_type)).map((object,index)=><button key={object.id} onClick={()=>setSelected(object.id)} className={`twin-node n${index+1} ${selected===object.id?'selected':''} ${object.health_score<70?'risk':''}`} title={object.name}><span>{object.object_type}</span><b>{object.name}</b><i>{Math.round(object.health_score)}</i></button>)}
+          {objects.filter(x=>x.object_type!=='PROJECT').slice(0,8).map((object,index)=><button key={object.id} onClick={()=>setSelected(object.id)} className={`twin-node n${index+1} ${selected===object.id?'selected':''} ${object.health_score<70?'risk':''}`} title={object.name}><span>{object.object_type}</span><b>{object.name}</b><i>{Math.round(object.health_score)}</i></button>)}
           <div className="scene-axis">N ↑</div>
         </div>
         <div className="scene-legend"><span><i className="lg-ok"/>Normal</span><span><i className="lg-watch"/>Watch</span><span><i className="lg-risk"/>Risk / Hold</span></div>

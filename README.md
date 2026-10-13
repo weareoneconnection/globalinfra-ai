@@ -179,6 +179,8 @@ The legacy `verification` object on a Case is analysis-quality scoring (`WARN`),
 
 Phase 7 adds OIDC/RBAC identity boundaries, organization and project scope, mutation audit trails, an offline-first field PWA, real twin-source registration, six enterprise connector contracts, AI quality release gates, Prometheus-compatible metrics, rate limits and dedicated liveness/readiness probes. See [Phase 7 Production Pilot](docs/PHASE7_PRODUCTION_PILOT.md) for activation boundaries and the production checklist.
 
+For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
+
 ## V2.0 Phase 6 Digital Twin
 
 `/twin` is a complete, data-backed reference implementation of the full-lifecycle twin operating model — not a disconnected 3D mock-up. A stable `Twin ID` connects spatial identity, asset hierarchy, state history, engineering events, WBS, schedule, cost, commissioning, telemetry, maintenance and governed AI simulation.
@@ -194,7 +196,7 @@ The six delivered phases are:
 
 Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/twin/controls`, `/twin/commissioning`, `/twin/operations`, `/twin/scenarios`, `/twin/agents`; `POST /twin/scenarios/{scenario_id}/run`.
 
-The bundled IFC/glTF/3D Tiles references, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
+The generated IFC/glTF/3D Tiles/GeoJSON/WMS artifacts, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
 
 ## Database migrations (Alembic)
 

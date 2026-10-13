@@ -33,6 +33,7 @@ from .governed_execution import (
     GovernedExecutionError, artifact_payload, close_action, execute_action, verify_action,
 )
 from .twin import router as twin_router
+from .twin_demo import router as twin_demo_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,6 +56,7 @@ app.add_middleware(
 app.middleware("http")(api_key_gate)
 app.middleware("http")(production_controls)
 app.include_router(twin_router)
+app.include_router(twin_demo_router)
 app.include_router(phase7_router)
 
 @app.get('/health')

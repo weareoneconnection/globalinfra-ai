@@ -72,3 +72,49 @@ def seed_twin(db: Session) -> None:
         TwinScenario(id="SCN-CARBON-ST04", project_id=1, name=bi("Station energy optimization", "车站能耗优化"), scenario_type="ENERGY", assumptions={"setpointDelta": 1.5, "occupancyControl": True}, result={"annualEnergyReduction": 11.8, "carbonReductionT": 184, "comfortRisk": "LOW", "confidence": .79}, requires_approval=True),
     ])
     db.commit()
+
+
+def ensure_demo_twin_coverage(db: Session) -> None:
+    """Add a presentation-grade asset graph for every synthetic project.
+
+    This is additive so existing pilot databases receive new demo coverage on
+    restart without replacing any user-created twin records.
+    """
+    now = utc_now()
+    rows = [
+        TwinObject(id="TWIN-IDHWY-B", project_id=2, object_type="PROJECT", name=bi("Trans-Nusantara Highway B", "跨努桑塔拉高速公路 B"), lifecycle_stage="construction", status="ACTIVE", health_score=89, progress=57, geometry_ref="tiles://id-highway-b/tileset.json", location={"lat": -6.2088, "lng": 106.8456}, properties={"crs": "EPSG:4326", "modelVersion": "2026.10-B"}),
+        TwinObject(id="TWIN-IDHWY-B-COR88", project_id=2, parent_id="TWIN-IDHWY-B", object_type="FACILITY", name=bi("Highway Corridor KM 88", "高速公路 KM 88 走廊"), lifecycle_stage="construction", status="IN_PROGRESS", health_score=84, progress=61, geometry_ref="gltf://id-highway-b/model.gltf#COR88", location={"chainage": "KM 87+800–89+200"}, properties={"package": "PKG-HWY-04"}),
+        TwinObject(id="TWIN-IDHWY-B-BRG88", project_id=2, parent_id="TWIN-IDHWY-B-COR88", object_type="ASSET", name=bi("Bridge BR-88", "BR-88 桥梁"), lifecycle_stage="construction", status="DECK_WORK", health_score=86, progress=66, geometry_ref="ifc://IDHWY#BR88", ifc_guid="BR88IDHWY2026GI", location={"chainage": "KM 88+110"}, properties={"wbs": "4.2.88"}),
+        TwinObject(id="TWIN-IDHWY-B-TOLL09", project_id=2, parent_id="TWIN-IDHWY-B-COR88", object_type="SYSTEM", name=bi("Toll System TS-09", "TS-09 收费系统"), lifecycle_stage="commissioning", status="FACTORY_TEST", health_score=93, progress=76, geometry_ref="gltf://id-highway-b/model.gltf#TS09", location={"chainage": "KM 89+020"}, properties={"systemCode": "ITS-TS09"}),
+        TwinObject(id="TWIN-SAMETRO-C", project_id=3, object_type="PROJECT", name=bi("Gulf Metro Program C", "海湾地铁项目 C"), lifecycle_stage="design", status="ACTIVE", health_score=77, progress=38, geometry_ref="tiles://sa-metro-c/tileset.json", location={"lat": 24.7136, "lng": 46.6753}, properties={"crs": "EPSG:4326", "modelVersion": "2026.10-C"}),
+        TwinObject(id="TWIN-SAMETRO-C-ST07", project_id=3, parent_id="TWIN-SAMETRO-C", object_type="FACILITY", name=bi("Underground Station 07", "07 号地下车站"), lifecycle_stage="design", status="DESIGN_COORDINATION", health_score=79, progress=42, geometry_ref="ifc://SAMETRO#ST07", ifc_guid="ST07SAMETRO2026GI", location={"chainage": "CH 06+920"}, properties={"designPackage": "ST-07"}),
+        TwinObject(id="TWIN-SAMETRO-C-VENT07", project_id=3, parent_id="TWIN-SAMETRO-C-ST07", object_type="SYSTEM", name=bi("Tunnel Ventilation System TVS-07", "隧道通风系统 TVS-07"), lifecycle_stage="design", status="INTERFACE_REVIEW", health_score=72, progress=31, geometry_ref="gltf://sa-metro-c/model.gltf#TVS07", location={"zone": "ST07/TUN05"}, properties={"systemCode": "TVS-07"}),
+    ]
+    for row in rows:
+        if db.get(TwinObject, row.id) is None:
+            db.add(row)
+    db.flush()
+    drainage = db.get(TwinObject, "TWIN-IDHWY-B-DRAIN21")
+    tunnel = db.get(TwinObject, "TWIN-SAMETRO-C-TUN05")
+    if drainage:
+        drainage.parent_id = "TWIN-IDHWY-B-COR88"
+    if tunnel:
+        tunnel.parent_id = "TWIN-SAMETRO-C"
+
+    if db.get(TwinSensor, "SNS-WATER-DRAIN21") is None:
+        db.add(TwinSensor(id="SNS-WATER-DRAIN21", twin_id="TWIN-IDHWY-B-DRAIN21", sensor_type="WATER_LEVEL", unit="mm", threshold_warning=420, threshold_critical=650, latest_value=286, sampled_at=now))
+    if db.get(TwinSensor, "SNS-CONV-TUN05") is None:
+        db.add(TwinSensor(id="SNS-CONV-TUN05", twin_id="TWIN-SAMETRO-C-TUN05", sensor_type="CONVERGENCE", unit="mm", threshold_warning=12, threshold_critical=18, latest_value=8.4, sampled_at=now))
+    if db.scalar(select(TwinScheduleLink.id).where(TwinScheduleLink.twin_id == "TWIN-IDHWY-B-DRAIN21")) is None:
+        db.add(TwinScheduleLink(twin_id="TWIN-IDHWY-B-DRAIN21", wbs_code="4.5.21", activity_id="HWY-DRAIN-21", planned_progress=80, actual_progress=73, schedule_variance_days=-4, cost_code="DRAIN", budget=1.2, forecast=1.28))
+    if db.scalar(select(TwinScheduleLink.id).where(TwinScheduleLink.twin_id == "TWIN-SAMETRO-C-TUN05")) is None:
+        db.add(TwinScheduleLink(twin_id="TWIN-SAMETRO-C-TUN05", wbs_code="2.3.05", activity_id="METRO-TUN-05-DES", planned_progress=46, actual_progress=38, schedule_variance_days=-11, cost_code="TUN-DES", budget=14.8, forecast=15.6))
+    if db.get(CommissioningItem, "CX-TOLL-09") is None:
+        db.add(CommissioningItem(id="CX-TOLL-09", twin_id="TWIN-IDHWY-B-TOLL09", system=bi("Toll System 09", "09 号收费系统"), test_pack="TP-ITS-009", stage="FACTORY_ACCEPTANCE", punch_open=3, document_completeness=78, readiness=69))
+    if db.get(CommissioningItem, "CX-VENT-07") is None:
+        db.add(CommissioningItem(id="CX-VENT-07", twin_id="TWIN-SAMETRO-C-VENT07", system=bi("Tunnel Ventilation 07", "07 号隧道通风"), test_pack="TP-TVS-007", stage="DESIGN_READINESS", punch_open=5, document_completeness=64, readiness=52))
+    if db.get(TwinScenario, "SCN-DRAIN-RECOVERY") is None:
+        db.add(TwinScenario(id="SCN-DRAIN-RECOVERY", project_id=2, name=bi("Drainage recovery sequence", "排水结构恢复方案"), scenario_type="SCHEDULE", assumptions={"additionalCrew": 1, "precastOption": True}, result={"daysRecovered": 3, "costDeltaM": .08, "confidence": .82}, requires_approval=True))
+    if db.get(TwinScenario, "SCN-TUNNEL-SEQUENCE") is None:
+        db.add(TwinScenario(id="SCN-TUNNEL-SEQUENCE", project_id=3, name=bi("Tunnel design release sequence", "隧道设计释放顺序"), scenario_type="DESIGN", assumptions={"parallelReview": True, "interfaceWorkshop": 2}, result={"daysRecovered": 7, "costDeltaM": .12, "confidence": .77}, requires_approval=True))
+    db.commit()

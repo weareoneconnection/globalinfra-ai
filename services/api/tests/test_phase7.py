@@ -94,6 +94,47 @@ def test_real_twin_source_registry(client):
     assert "Twin ID" in synced.json()["contract"]
 
 
+def test_every_project_has_a_complete_downloadable_synthetic_twin_pack(client):
+    expected = {"IFC", "GLTF", "3D_TILES", "GEOJSON", "WMS", "IOT"}
+    for project_id in (1, 2, 3):
+        manifest = client.get(f"/twin/demo-pack/{project_id}/manifest")
+        assert manifest.status_code == 200
+        body = manifest.json()
+        assert body["coverage"] == "6/6"
+        assert body["provenance"] == "SYNTHETIC_DEMO"
+        assert {item["type"] for item in body["artifacts"]} == expected
+        assert body["twin_ids"]
+
+        sources = client.get(f"/twin/sources?project_id={project_id}").json()
+        assert expected.issubset({item["source_type"] for item in sources})
+        assert all(item["status"] == "SYNTHETIC_DEMO" for item in sources if item["source_type"] in expected and "synthetic instance" in item["name"])
+
+        ifc = client.get(f"/twin/demo-pack/{project_id}/model.ifc")
+        assert ifc.status_code == 200
+        assert ifc.text.startswith("ISO-10303-21;")
+        assert "SYNTHETIC_DEMO" == ifc.headers["x-data-provenance"]
+
+        gltf = client.get(f"/twin/demo-pack/{project_id}/model.gltf").json()
+        assert gltf["asset"]["version"] == "2.0"
+        assert all("twin_id" in node["extras"] for node in gltf["nodes"])
+
+        tiles = client.get(f"/twin/demo-pack/{project_id}/tileset.json").json()
+        assert tiles["asset"]["version"] == "1.1"
+        assert tiles["root"]["content"]["uri"] == "model.gltf"
+
+        geojson = client.get(f"/twin/demo-pack/{project_id}/features.geojson")
+        assert geojson.headers["content-type"].startswith("application/geo+json")
+        assert geojson.json()["type"] == "FeatureCollection"
+
+        capabilities = client.get(f"/twin/demo-pack/{project_id}/wms")
+        assert "WMS_Capabilities" in capabilities.text
+        assert client.get(f"/twin/demo-pack/{project_id}/wms?request=GetMap").headers["content-type"].startswith("image/svg+xml")
+
+        telemetry = client.get(f"/twin/demo-pack/{project_id}/iot/telemetry").json()
+        assert telemetry["readings"]
+        assert telemetry["provenance"] == "SYNTHETIC_DEMO"
+
+
 def test_connector_plane_rejects_secrets_and_tracks_sync(client):
     rejected = client.post("/integrations/connectors", json={
         "connector_type": "primavera_p6", "name": "Unsafe", "config": {"password": "nope"},

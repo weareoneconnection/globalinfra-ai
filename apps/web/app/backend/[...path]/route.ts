@@ -23,7 +23,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     });
     const data = await res.arrayBuffer();
     const responseHeaders = new Headers();
-    for (const name of ['content-type', 'content-language', 'retry-after']) {
+    for (const name of ['content-type', 'content-language', 'content-disposition', 'x-data-provenance', 'retry-after']) {
       const value = res.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }

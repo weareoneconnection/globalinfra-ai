@@ -2,12 +2,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .models import AIQualityRun, Connector, Organization, Project, Case, KnowledgeDocument, TrainingModule, TwinSource
 from .i18n import bi
-from .twin_seed import seed_twin
+from .twin_seed import ensure_demo_twin_coverage, seed_twin
+from .twin_demo import seed_synthetic_twin_sources
 
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
         seed_twin(db)
+        ensure_demo_twin_coverage(db)
         seed_phase7(db)
+        seed_synthetic_twin_sources(db)
         return
     projects = [
         Project(id=1, code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
@@ -105,7 +108,9 @@ def seed(db: Session):
     ])
     db.commit()
     seed_twin(db)
+    ensure_demo_twin_coverage(db)
     seed_phase7(db)
+    seed_synthetic_twin_sources(db)
 
 
 def seed_phase7(db: Session):

@@ -288,6 +288,11 @@
     "metricScheduleDelta": "+{cost}M 预测成本敞口",
     "metricHandover": "调试准备度",
     "metricHandoverDelta": "{docs}% 移交文件完整度",
+    "projectTwin": "项目级合成数字孪生包",
+    "selectProject": "选择数字孪生项目",
+    "syntheticNotice": "由统一 Twin ID 生成的可下载演示数据，不代表真实竣工模型或客户数据。",
+    "formatCoverage": "格式实例覆盖",
+    "openArtifact": "打开实例",
     "workspace": {
       "tabs": ["空间孪生", "4D / 5D 项控", "调试移交", "运营维护", "场景实验室", "孪生智能体"],
       "selectAsset": "选择资产",
