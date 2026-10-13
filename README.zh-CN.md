@@ -150,6 +150,20 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 新增两张表（见下文**数据库迁移**）：`intake_submissions`（原始输入引用、输入哈希、解析文本、检测语言、创建时间、关联 `case_id`）与 `source_documents`（文件名、文件类型、存储引用、解析状态、关联 `intake_submission_id`）。
 
+## V2.1 可信执行闭环
+
+V2.1 将候选决策演示升级为受管控的执行生命周期。分析阶段会生成主张/证据图和行动意图，但绝不会生成核验 PASS。人工审批只会把行动推进到 `APPROVED`，不会执行工具，也不会修改任何核验记录。
+
+本版本首个可执行工具是 `document.generate`：它只生成带内容摘要的业主回复草案，并明确标记 `DRAFT_ONLY_NOT_SENT` 与 `external_delivery_performed: false`，不会发送邮件或对外函件。完整生命周期为：
+
+```text
+分析 → 主张/证据 → 行动意图 → 人工审批 → 执行回执 → 独立核验回执 → 关闭
+```
+
+主要接口：`POST /actions/{id}/execute`、`POST /actions/{id}/verify`、`POST /actions/{id}/close`，以及对应的工单级接口。执行受证据引用约束且具备幂等性；核验会检查审批关联、回执完整性、产物摘要、证据引用和输出契约。检查失败会保持 `VERIFICATION_FAILED`，不能直接关闭。
+
+工单上的旧 `verification` 对象表示分析质量评分（`WARN`），不是行动成功的证明；可信执行证明分别由 `execution_receipt` 和 `verification_receipt` 提供。
+
 ## V2.0 阶段 6 数字孪生
 
 `/twin` 已成为覆盖全生命周期、由真实数据模型支撑的孪生运行工作台，而不是一个与业务割裂的三维演示。稳定的 `Twin ID` 将空间身份、资产层级、状态历史、工程事件、WBS、进度、成本、调试、遥测、维护与受管控 AI 仿真连接起来。
@@ -169,7 +183,7 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 ## 数据库迁移（Alembic）
 
-V1.3 引入 Alembic，V2.0 将其扩展到全生命周期数字孪生。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径。
+V1.3 引入 Alembic，V2.0 将其扩展到全生命周期数字孪生，V2.1 再加入可信执行闭环。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径。
 
 ```bash
 cd services/api
@@ -184,6 +198,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0001_baseline_schema`：将已有 V1.2 表结构纳入迁移基线。
 - `0002_intake_tables`：新增 `intake_submissions` 与 `source_documents`。
 - `0003_digital_twin`：新增孪生对象图谱、状态历史、工程事件、4D/5D 关联、传感器、调试、维护与受管控场景。
+- `0004_trusted_execution_closure`：新增主张、受管控行动意图、执行/核验回执、内容寻址产物及待人工确认的工单路由字段。
 
 数据库 URL 由 `migrations/env.py` 从应用设置（`DATABASE_URL`/`.env`）读取，不写入 `alembic.ini`。
 

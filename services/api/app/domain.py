@@ -55,7 +55,36 @@ PROFESSIONAL_DOMAINS = [
     ("Claims & Disputes", "索赔与争议", "EOT, variation, claim, evidence chain, disputes", "EOT、Variation、Claim、证据链、争议", "commercial"),
 ]
 
-TRUSTED_ACTION_STAGES = [bi("Event", "事件"), bi("Case", "工单"), bi("Evidence", "证据"), bi("Decision", "决策"), bi("Action", "行动"), bi("Verification", "核验")]
+# V2.1 Trusted Execution Closure lifecycle. Case and Action share the same
+# governed execution states; failure and rework states are explicit rather than
+# being represented by a misleading verification PASS.
+CASE_ACTION_LIFECYCLE = [
+    "NEW", "ANALYZING", "EVIDENCE_READY", "AWAITING_APPROVAL", "APPROVED",
+    "EXECUTING", "EXECUTED", "VERIFYING", "VERIFIED", "CLOSED",
+    "EXECUTION_FAILED", "VERIFICATION_FAILED", "REWORK_REQUIRED", "REJECTED",
+]
+LIFECYCLE_TRANSITIONS = {
+    "NEW": {"ANALYZING", "NEEDS_PROJECT_CONFIRMATION"},
+    "ANALYZING": {"EVIDENCE_READY", "EXECUTION_FAILED"},
+    "EVIDENCE_READY": {"AWAITING_APPROVAL"},
+    "AWAITING_APPROVAL": {"APPROVED", "REJECTED", "REWORK_REQUIRED"},
+    "APPROVED": {"EXECUTING", "REJECTED", "REWORK_REQUIRED"},
+    "EXECUTING": {"EXECUTED", "EXECUTION_FAILED"},
+    "EXECUTED": {"VERIFYING", "REWORK_REQUIRED"},
+    "VERIFYING": {"VERIFIED", "VERIFICATION_FAILED", "REWORK_REQUIRED"},
+    "VERIFIED": {"CLOSED", "REWORK_REQUIRED"},
+    "CLOSED": set(),
+    "EXECUTION_FAILED": {"REWORK_REQUIRED", "APPROVED"},
+    "VERIFICATION_FAILED": {"REWORK_REQUIRED", "VERIFYING"},
+    "REWORK_REQUIRED": {"ANALYZING", "EVIDENCE_READY", "AWAITING_APPROVAL"},
+    "REJECTED": {"REWORK_REQUIRED"},
+}
+
+TRUSTED_ACTION_STAGES = [
+    bi("Event", "事件"), bi("Case", "工单"), bi("Claim / Evidence", "主张 / 证据"),
+    bi("Action", "行动"), bi("Execution Receipt", "执行回执"),
+    bi("Verification Receipt", "核验回执"),
+]
 
 PROJECT_INTELLIGENCE = {
     1: {"phase":"construction","progress":62.4,"budget":2840,"committed":2176,"forecast":2916,"schedule_variance":-18,"next_gate":bi("Systems integration readiness","系统集成就绪度"),"gate_date":"18 Oct 2026","latitude":3.139,"longitude":101.687,"location_name":bi("Kuala Lumpur corridor","吉隆坡走廊")},

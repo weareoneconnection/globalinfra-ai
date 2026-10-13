@@ -1,9 +1,9 @@
-"""V2.0 full-lifecycle digital twin API.
+"""V2.1 full-lifecycle digital twin API.
 
 The module keeps geometry references, engineering identity, 4D/5D controls,
-commissioning, telemetry and governed simulations behind one project-scoped
-contract. Seed data is synthetic; adapters can replace it without changing the
-UI or Twin ID model.
+commissioning, telemetry and Governed Scenario Analysis behind one
+project-scoped contract. Seed data is explicitly synthetic fixture data;
+adapters can replace it without changing the UI or Twin ID model.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -49,6 +49,8 @@ def summary(project_id: int | None = Query(default=None), db: Session = Depends(
     commissioning = list(db.scalars(select(CommissioningItem).where(CommissioningItem.twin_id.in_(ids)))) if ids else []
     payload = {
         "maturity": "PHASE_6", "sync_status": "SYNCHRONIZED", "model_version": "IFC-REV-C / GIS-2026.10",
+        "data_provenance": "SYNTHETIC_FIXTURE_DATA",
+        "is_synthetic_fixture": True,
         "objects": len(objects), "mapped_objects": len([o for o in objects if o.geometry_ref]),
         "average_health": round(sum(o.health_score for o in objects) / len(objects), 1) if objects else 0,
         "active_events": len([e for e in events if e.status not in {"CLOSED", "RESOLVED"}]),
@@ -61,7 +63,7 @@ def summary(project_id: int | None = Query(default=None), db: Session = Depends(
         "layers": [
             bi("Spatial / BIM / GIS", "空间 / BIM / GIS"), bi("Asset graph", "资产图谱"),
             bi("4D schedule", "4D 进度"), bi("5D cost", "5D 成本"), bi("Quality & HSE", "质量与 HSE"),
-            bi("Commissioning", "调试移交"), bi("Operations / IoT", "运营 / IoT"), bi("AI simulation", "AI 仿真"),
+            bi("Commissioning", "调试移交"), bi("Operations / IoT", "运营 / IoT"), bi("Governed Scenario Analysis", "受管控场景分析"),
         ],
     }
     return localize(payload, lang)
@@ -74,6 +76,8 @@ def scene(project_id: int = Query(default=1), db: Session = Depends(get_db), lan
     events = list(db.scalars(select(TwinEvent).where(TwinEvent.twin_id.in_(ids)).order_by(TwinEvent.occurred_at.desc()))) if ids else []
     payload = {
         "project_id": project_id,
+        "data_provenance": "SYNTHETIC_FIXTURE_DATA",
+        "is_synthetic_fixture": True,
         "coordinate_system": "EPSG:4326 + Project Chainage",
         "geometry_protocols": ["IFC 4.3", "glTF 2.0", "3D Tiles 1.1", "GeoJSON"],
         "objects": [_object(obj) for obj in objects],
@@ -166,10 +170,12 @@ def run_scenario(scenario_id: str, payload: ScenarioRunRequest, db: Session = De
     result["execution_status"] = "AWAITING_APPROVAL" if scenario.requires_approval else "ADVISORY_ONLY"
     result["evidence"] = ["Twin object state", "4D/5D baseline", "Latest telemetry", "Scenario assumptions"]
     scenario.result = result
-    scenario.status = "SIMULATED"
+    scenario.status = "ANALYZED"
     scenario.updated_at = utc_now()
     db.commit()
     return localize({"scenario_id": scenario.id, "result": result,
+                     "analysis_type": "Governed Scenario Analysis",
+                     "data_provenance": "SYNTHETIC_FIXTURE_DATA",
                      "governance": bi("No operational state changed; human approval is required.", "未改变任何运营状态；执行前必须人工审批。")}, lang)
 
 

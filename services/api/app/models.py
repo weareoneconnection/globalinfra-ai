@@ -25,7 +25,7 @@ class Project(Base):
 class Case(Base):
     __tablename__ = "cases"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     title: Mapped[dict] = mapped_column(JSON)
     description: Mapped[dict] = mapped_column(JSON)
     type: Mapped[dict] = mapped_column(JSON)
@@ -34,13 +34,26 @@ class Case(Base):
     deadline: Mapped[dict] = mapped_column(JSON)
     source_language: Mapped[dict] = mapped_column(JSON)
     detected_issues: Mapped[list] = mapped_column(JSON, default=list)
+    project_routing_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    routing_status: Mapped[str] = mapped_column(String(40), default="ROUTED")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     project = relationship("Project")
+
+class Claim(Base):
+    """A case-scoped assertion that can be traced to one or more evidence rows."""
+    __tablename__ = "claims"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    statement: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(32), default="UNVERIFIED")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
 
 class Evidence(Base):
     __tablename__ = "evidence"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    claim_id: Mapped[int | None] = mapped_column(ForeignKey("claims.id"), nullable=True, index=True)
     title: Mapped[dict] = mapped_column(JSON)
     source_type: Mapped[dict] = mapped_column(JSON)
     source_ref: Mapped[str] = mapped_column(String(160))
@@ -66,7 +79,76 @@ class Approval(Base):
     approver_role: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="PENDING")
     risk: Mapped[str] = mapped_column(String(20), default="HIGH")
+    action_id: Mapped[str | None] = mapped_column(ForeignKey("actions.id"), nullable=True, index=True)
+    decided_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class Action(Base):
+    """A governed, idempotent intent to invoke one real tool."""
+    __tablename__ = "actions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    approval_id: Mapped[int] = mapped_column(ForeignKey("approvals.id"), index=True)
+    action_type: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="AWAITING_APPROVAL", index=True)
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    input_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Artifact(Base):
+    """Content-addressed output produced by a governed action."""
+    __tablename__ = "artifacts"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    action_id: Mapped[str] = mapped_column(ForeignKey("actions.id"), unique=True, index=True)
+    artifact_ref: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    artifact_type: Mapped[str] = mapped_column(String(80))
+    media_type: Mapped[str] = mapped_column(String(120))
+    content: Mapped[str] = mapped_column(Text)
+    digest: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ExecutionReceipt(Base):
+    """Immutable audit record for one real tool invocation."""
+    __tablename__ = "execution_receipts"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    action_id: Mapped[str] = mapped_column(ForeignKey("actions.id"), unique=True, index=True)
+    approval_id: Mapped[int] = mapped_column(ForeignKey("approvals.id"), index=True)
+    executor: Mapped[str] = mapped_column(String(120))
+    action_type: Mapped[str] = mapped_column(String(80))
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    input_digest: Mapped[str] = mapped_column(String(64))
+    output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class VerificationReceipt(Base):
+    """Independent post-execution verification, distinct from analysis scoring."""
+    __tablename__ = "verification_receipts"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    action_id: Mapped[str] = mapped_column(ForeignKey("actions.id"), unique=True, index=True)
+    execution_receipt_id: Mapped[str] = mapped_column(ForeignKey("execution_receipts.id"), unique=True, index=True)
+    approval_id: Mapped[int] = mapped_column(ForeignKey("approvals.id"), index=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    findings: Mapped[list] = mapped_column(JSON, default=list)
+    checks: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    artifact_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verified_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
 
 class Verification(Base):
     __tablename__ = "verifications"

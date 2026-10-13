@@ -43,6 +43,7 @@ offline without depending on a fixed per-string phrase table for text that
 was never known in advance.
 """
 from time import perf_counter
+import uuid
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -51,7 +52,7 @@ from .agents import AGENTS
 from .config import settings
 from .i18n import bi
 from .llm import generate, is_llm_configured, translate
-from .models import AgentRun, Approval, Case, Evidence, KnowledgeDocument, Verification
+from .models import Action, AgentRun, Approval, Case, Claim, Evidence, ExecutionReceipt, KnowledgeDocument, Verification
 from .retrieval import KnowledgeIndex, case_query_text
 
 AGENTS_BY_ID = {a["id"]: a for a in AGENTS}
@@ -193,13 +194,26 @@ async def analyze_case(
     case = db.get(Case, case_id)
     if not case:
         raise KeyError(case_id)
+    existing_action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
+    if existing_action and db.scalar(select(ExecutionReceipt).where(ExecutionReceipt.action_id == existing_action.id)):
+        return {
+            "case_id": case_id,
+            "status": case.status,
+            "action_id": existing_action.id,
+            "message": bi("This case already has an execution receipt; analysis is preserved.", "该工单已有执行回执；分析结果已保留。"),
+        }
+
+    case.status = "ANALYZING"
+    case.routing_status = "ROUTED" if case.project_id is not None else "NEEDS_PROJECT_CONFIRMATION"
 
     # Idempotent run: replace prior runtime artifacts rather than
     # accumulating them, so re-analyzing a case is safe to repeat.
     db.execute(delete(Evidence).where(Evidence.case_id == case_id))
+    db.execute(delete(Claim).where(Claim.case_id == case_id))
     db.execute(delete(AgentRun).where(AgentRun.case_id == case_id))
     db.execute(delete(Verification).where(Verification.case_id == case_id))
-    db.execute(delete(Approval).where(Approval.case_id == case_id))
+    if existing_action is None:
+        db.execute(delete(Approval).where(Approval.case_id == case_id))
 
     llm_ready = _llm_ready(model_route, data_classification)
 
@@ -247,10 +261,17 @@ async def analyze_case(
                 if not existing or confidence > existing["confidence"]:
                     evidence_by_ref[doc.source_ref] = {"doc": doc, "confidence": confidence, "verified": score >= CONFIDENT_RELEVANCE}
 
+    claim = Claim(
+        case_id=case_id,
+        statement=bi("The case has an evidence-backed response basis.", "该工单具备有证据支撑的响应基础。"),
+        status="SUPPORTED" if evidence_by_ref else "UNVERIFIED",
+    )
+    db.add(claim)
+    db.flush()
     for item in sorted(evidence_by_ref.values(), key=lambda x: -x["confidence"]):
         doc = item["doc"]
         db.add(Evidence(
-            case_id=case_id, title=doc.title, source_type=doc.category, source_ref=doc.source_ref,
+            case_id=case_id, claim_id=claim.id, title=doc.title, source_type=doc.category, source_ref=doc.source_ref,
             excerpt=doc.summary, confidence=item["confidence"], verified=item["verified"],
         ))
 
@@ -283,10 +304,58 @@ async def analyze_case(
         ),
         duration_ms=max(1, round((perf_counter() - t0) * 1000)),
     ))
-    db.add(Approval(
-        case_id=case_id, title=bi("Approve external response / governed action", "审批对外回复 / 受管控行动"),
-        approver_role=APPROVER_ROLE, status="PENDING", risk=case.risk,
-    ))
+    if case.project_id is None:
+        case.status = "NEEDS_PROJECT_CONFIRMATION"
+        db.commit()
+        return {
+            "case_id": case_id,
+            "status": case.status,
+            "message": bi(
+                "Evidence analysis is available, but project confirmation is required before governed action creation.",
+                "证据分析已完成，但创建受管控行动前需要确认项目归属。",
+            ),
+        }
+
+    required_roles = [APPROVER_ROLE]
+    if case_type_en == "HSE" and case.risk == "CRITICAL":
+        required_roles.append(bi("HSE Manager sign-off", "HSE 经理会签"))
+    approvals = list(db.scalars(select(Approval).where(Approval.case_id == case_id).order_by(Approval.id)))
+    if not approvals:
+        approvals = [Approval(
+            case_id=case_id,
+            title=bi("Approve owner-response draft / governed action", "审批业主回复草案 / 受管控行动"),
+            approver_role=role,
+            status="PENDING",
+            risk=case.risk,
+        ) for role in required_roles]
+        db.add_all(approvals)
+        db.flush()
+    elif existing_action is not None:
+        # Re-analysis changes the evidence/action input. Previous approval must
+        # not authorize the newly generated intent, so require fresh decisions.
+        for approval in approvals:
+            approval.status = "PENDING"
+            approval.decided_by = None
+            approval.decided_at = None
+    if existing_action is None:
+        action = Action(
+            id=f"ACT-{uuid.uuid4().hex.upper()}",
+            case_id=case_id,
+            approval_id=approvals[0].id,
+            action_type="document.generate",
+            status="AWAITING_APPROVAL",
+            evidence_refs=refs,
+        )
+        db.add(action)
+        db.flush()
+    else:
+        action = existing_action
+        action.approval_id = approvals[0].id
+        action.action_type = "document.generate"
+        action.status = "AWAITING_APPROVAL"
+        action.evidence_refs = refs
+    for approval in approvals:
+        approval.action_id = action.id
 
     # --- verification: scores computed from this run's own evidence/findings ---
     t0 = perf_counter()
@@ -323,9 +392,11 @@ async def analyze_case(
         duration_ms=max(1, round((perf_counter() - t0) * 1000)),
     ))
 
+    case.status = "EVIDENCE_READY"
+    action.status = "AWAITING_APPROVAL"
     case.status = "AWAITING_APPROVAL"
     db.commit()
     return {
-        "case_id": case_id, "status": case.status,
-        "message": bi("Analysis completed; external action is gated by approval.", "分析已完成；对外行动需经审批后方可执行。"),
+        "case_id": case_id, "status": case.status, "action_id": action.id,
+        "message": bi("Evidence is ready; the owner-response draft is gated by human approval.", "证据已就绪；业主回复草案需经人工审批。"),
     }

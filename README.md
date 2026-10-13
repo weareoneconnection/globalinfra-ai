@@ -161,6 +161,20 @@ Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: 
 
 Two new tables back this (see **Database migrations** below): `intake_submissions` (raw input reference, input hash, parsed text, detected language, created-at, linked `case_id`) and `source_documents` (filename, file type, storage reference, parse status, linked `intake_submission_id`).
 
+## V2.1 Trusted Execution Closure
+
+V2.1 turns the candidate-decision demo into a governed execution lifecycle. Analysis creates a claim/evidence graph and an action intent, but it never creates a verification PASS. Human approval only moves the action to `APPROVED`; it does not execute the tool or alter any verification record.
+
+The first executable tool is `document.generate`. It produces a content-addressed owner-response draft with `DRAFT_ONLY_NOT_SENT` and `external_delivery_performed: false`—no email or external letter is sent. The lifecycle is:
+
+```text
+analysis → claim/evidence → action intent → human approval → execution receipt → independent verification receipt → close
+```
+
+Key APIs: `POST /actions/{id}/execute`, `POST /actions/{id}/verify`, `POST /actions/{id}/close`, plus the case-scoped equivalents. Execution is evidence-bound and idempotent; verification checks approval linkage, receipt integrity, artifact digest, evidence references and the output contract. A failed check remains `VERIFICATION_FAILED` and cannot be closed.
+
+The legacy `verification` object on a Case is analysis-quality scoring (`WARN`), not proof that an action succeeded. Trusted proof is exposed separately as `execution_receipt` and `verification_receipt`.
+
 ## V2.0 Phase 6 Digital Twin
 
 `/twin` is a complete, data-backed reference implementation of the full-lifecycle twin operating model — not a disconnected 3D mock-up. A stable `Twin ID` connects spatial identity, asset hierarchy, state history, engineering events, WBS, schedule, cost, commissioning, telemetry, maintenance and governed AI simulation.
@@ -180,7 +194,7 @@ The bundled IFC/glTF/3D Tiles references, BMS/SCADA readings and scenarios are s
 
 ## Database migrations (Alembic)
 
-V1.3 introduced Alembic and V2.0 extends it for the full-lifecycle twin. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments.
+V1.3 introduced Alembic, V2.0 extended it for the full-lifecycle twin, and V2.1 adds the trusted execution closure. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments.
 
 ```bash
 cd services/api
@@ -196,6 +210,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0001_baseline_schema` captures the pre-existing V1.2 tables as the migration baseline.
 - `0002_intake_tables` adds `intake_submissions` and `source_documents`.
 - `0003_digital_twin` adds the Twin object graph, state history, engineering events, 4D/5D links, sensors, commissioning, maintenance and governed scenarios.
+- `0004_trusted_execution_closure` adds claims, governed action intents, execution/verification receipts, content-addressed artifacts, and unassigned-intake routing fields.
 
 The database URL is read from app settings (`DATABASE_URL`/`.env`) by `migrations/env.py`, not committed in `alembic.ini`.
 

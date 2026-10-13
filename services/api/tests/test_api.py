@@ -68,18 +68,90 @@ def test_analyze_case_is_idempotent(client):
     assert detail_second["status"] == "AWAITING_APPROVAL"
 
 
-def test_approval_flow_updates_case_and_verification_status(client):
+def test_approval_does_not_execute_or_mark_verification_pass(client):
     client.post(f"/cases/{SEEDED_CASE_ID}/analyze")
     approvals = client.get("/approvals").json()
     pending = next(a for a in approvals if a["case_id"] == SEEDED_CASE_ID and a["status"] == "PENDING")
+    action_id = pending["action_id"]
+
+    blocked = client.post(f"/actions/{action_id}/execute")
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "APPROVAL_REQUIRED"
 
     r = client.post(f"/approvals/{pending['id']}/approve")
     assert r.status_code == 200
     assert r.json()["status"] == "APPROVED"
 
     detail = client.get(f"/cases/{SEEDED_CASE_ID}").json()
-    assert detail["status"] == "APPROVED_FOR_ACTION"
-    assert detail["verification"]["status"] == "PASS"
+    assert detail["status"] == "APPROVED"
+    assert detail["action"]["status"] == "APPROVED"
+    assert detail["verification"]["status"] == "WARN"
+    assert detail["verification_receipt"] is None
+    assert detail["execution_receipt"] is None
+
+
+def test_trusted_execution_requires_execution_before_independent_verification(client):
+    case_id = "CASE-2026-0194"
+    assert client.post(f"/cases/{case_id}/analyze").status_code == 200
+    approvals = [a for a in client.get("/approvals").json() if a["case_id"] == case_id]
+    action_id = approvals[0]["action_id"]
+    assert len(approvals) == 2
+
+    first = client.post(f"/approvals/{approvals[0]['id']}/approve")
+    assert first.status_code == 200
+    assert first.json()["case_status"] == "AWAITING_APPROVAL"
+    assert client.post(f"/actions/{action_id}/execute").status_code == 409
+
+    second = client.post(f"/approvals/{approvals[1]['id']}/approve")
+    assert second.status_code == 200
+    assert second.json()["case_status"] == "APPROVED"
+
+    executed = client.post(f"/actions/{action_id}/execute", json={"executor": "test.executor"})
+    assert executed.status_code == 200
+    assert executed.json()["status"] == "EXECUTED"
+    assert executed.json()["execution_receipt"]["status"] == "SUCCEEDED"
+    artifact = executed.json()["execution_receipt"]["artifact"]
+    assert artifact["digest"]
+    assert artifact["ref"] == f"artifact://sha256/{artifact['digest']}"
+
+    verified = client.post(f"/actions/{action_id}/verify", json={"verifier": "test.verifier"})
+    assert verified.status_code == 200
+    assert verified.json()["result"] == "PASS"
+    assert verified.json()["verification_receipt"]["status"] == "VERIFIED"
+
+    replay = client.post(f"/actions/{action_id}/execute")
+    assert replay.status_code == 200
+    assert replay.json()["idempotent"] is True
+
+    closed = client.post(f"/actions/{action_id}/close")
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "CLOSED"
+    execute_after_close = client.post(f"/actions/{action_id}/execute")
+    assert execute_after_close.status_code == 409
+    assert execute_after_close.json()["detail"]["code"] == "ACTION_CLOSED"
+    verify_after_close = client.post(f"/actions/{action_id}/verify")
+    assert verify_after_close.status_code == 409
+    assert verify_after_close.json()["detail"]["code"] == "ACTION_CLOSED"
+
+    detail = client.get(f"/cases/{case_id}").json()
+    assert detail["status"] == "CLOSED"
+    assert detail["execution_receipt"]["status"] == "SUCCEEDED"
+    assert detail["verification_receipt"]["status"] == "VERIFIED"
+
+
+def test_reanalysis_invalidates_prior_approval_before_new_execution(client):
+    case_id = "CASE-2026-0209"
+    assert client.post(f"/cases/{case_id}/analyze").status_code == 200
+    approval = next(a for a in client.get("/approvals").json() if a["case_id"] == case_id and a["status"] == "PENDING")
+    action_id = approval["action_id"]
+    assert client.post(f"/approvals/{approval['id']}/approve").status_code == 200
+
+    rerun = client.post(f"/cases/{case_id}/analyze")
+    assert rerun.status_code == 200
+    refreshed = [a for a in client.get("/approvals").json() if a["case_id"] == case_id]
+    assert all(a["status"] == "PENDING" for a in refreshed)
+    assert client.get(f"/actions/{action_id}").json()["status"] == "AWAITING_APPROVAL"
+    assert client.post(f"/actions/{action_id}/execute").status_code == 409
 
 
 def test_approve_unknown_approval_returns_404(client):

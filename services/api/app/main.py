@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 from .database import Base, SessionLocal, engine, get_db
-from .models import Project, Case, Evidence, AgentRun, Approval, Verification, KnowledgeDocument, TrainingModule, IntakeSubmission, SourceDocument
+from .models import (
+    Project, Case, Claim, Evidence, AgentRun, Approval, Verification, Action,
+    Artifact, ExecutionReceipt, VerificationReceipt, KnowledgeDocument, utc_now,
+    TrainingModule, IntakeSubmission, SourceDocument,
+)
 from .seed import seed
 from .agents import AGENTS
 from .workflow import analyze_case, AGENTS_BY_ID
@@ -23,6 +27,9 @@ from .llm_extract import extract_fields_llm
 from .documents import extract_text, UnsupportedDocument
 from .security import api_key_gate
 from .config import settings
+from .governed_execution import (
+    GovernedExecutionError, artifact_payload, close_action, execute_action, verify_action,
+)
 from .twin import router as twin_router
 
 @asynccontextmanager
@@ -33,7 +40,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="2.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -47,7 +54,7 @@ app.middleware("http")(api_key_gate)
 app.include_router(twin_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"2.0.0","architecture":"project-intelligence-digital-twin"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"2.1.0","product_version":"V2.1","architecture":"trusted-execution-closure"}
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
@@ -107,15 +114,17 @@ class IntakeTextRequest(BaseModel):
     model_route: Literal["local", "openai", "auto"] | None = None
     data_classification: Literal["public", "internal", "restricted"] = "internal"
 
-def _select_project_id(db: Session, country_code: str | None) -> int:
-    """Attach a new intake Case to the project whose country matches the
-    detected country, else to the lowest-id seeded project. Never hardcodes a
-    specific id -- the fallback is resolved from whatever is actually seeded."""
+def _select_project_id(db: Session, country_code: str | None) -> tuple[int | None, float]:
+    """Route only when the detected country resolves to a real project.
+
+    There is intentionally no lowest-id fallback: an unidentified intake must
+    remain unassigned until a human confirms its project.
+    """
     if country_code:
         pid = db.scalar(select(Project.id).where(Project.country_code == country_code).order_by(Project.id).limit(1))
         if pid:
-            return pid
-    return db.scalar(select(Project.id).order_by(Project.id).limit(1))
+            return pid, 0.95
+    return None, 0.0
 
 def _case_title(text: str) -> str:
     first_line = next((line.strip() for line in text.splitlines() if line.strip()), text.strip())
@@ -149,19 +158,22 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     )
     result = build_intake_result(text, language_hint, classification=classification, extraction=extraction)
     detected_lang = result["language"]
-    project_id = _select_project_id(db, result["country"])
-    if project_id is None:
-        raise HTTPException(503, "No project is available for intake routing.")
+    project_id, project_routing_confidence = _select_project_id(db, result["country"])
     case_id = f"CASE-INTAKE-{uuid.uuid4().hex[:8].upper()}"
     title = _case_title(text)
 
+    routing_status = "ROUTED" if project_id is not None else "NEEDS_PROJECT_CONFIRMATION"
+    result["project_routing_status"] = routing_status
+    result["project_routing_confidence"] = project_routing_confidence
     case = Case(
         id=case_id, project_id=project_id,
         title=bi(title), description=bi(text[:600] + ("…" if len(text) > 600 else "")),
-        type=result["case_type_label"], risk=result["risk"], status="NEW",
+        type=result["case_type_label"], risk=result["risk"], status="NEW" if project_id is not None else routing_status,
         deadline=result["deadline"] or bi("Not specified", "未指定"),
         source_language=LANGUAGE_DISPLAY.get(detected_lang, bi(detected_lang)),
         detected_issues=result["issues"],
+        project_routing_confidence=project_routing_confidence,
+        routing_status=routing_status,
     )
     db.add(case)
 
@@ -249,7 +261,7 @@ def dashboard(db: Session = Depends(get_db)):
     open_cases = db.scalar(select(func.count(Case.id)).where(Case.status != 'CLOSED')) or 0
     critical = db.scalar(select(func.count(Case.id)).where(Case.risk.in_(['HIGH','CRITICAL']))) or 0
     pending = db.scalar(select(func.count(Approval.id)).where(Approval.status == 'PENDING')) or 0
-    verified = 3418 + (db.scalar(select(func.count(Verification.id))) or 0)
+    verified = db.scalar(select(func.count(VerificationReceipt.id)).where(VerificationReceipt.status == "VERIFIED")) or 0
     return {"projects":projects,"countries":countries,"open_cases":open_cases,"critical_risks":critical,"pending_approvals":pending,"verified_decisions":verified}
 
 @app.get('/projects')
@@ -308,23 +320,34 @@ def digital_thread(lang: str = Depends(get_lang)): return localize(DIGITAL_THREA
 
 @app.get('/cases')
 def cases(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    rows = db.execute(select(Case, Project.name).join(Project, Case.project_id==Project.id).order_by(Case.created_at.desc())).all()
-    result = [dict(id=c.id,title=c.title,type=c.type,risk=c.risk,status=c.status,project_name=project_name,deadline=c.deadline,detected_issues=c.detected_issues) for c, project_name in rows]
+    rows = db.execute(select(Case, Project.name).join(Project, Case.project_id==Project.id, isouter=True).order_by(Case.created_at.desc())).all()
+    result = [dict(id=c.id,title=c.title,type=c.type,risk=c.risk,status=c.status,project_name=project_name,deadline=c.deadline,detected_issues=c.detected_issues,routing_status=c.routing_status,project_routing_confidence=c.project_routing_confidence) for c, project_name in rows]
     return localize(result, lang)
 
 @app.get('/cases/{case_id}')
 def case_detail(case_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     c = db.get(Case, case_id)
     if not c: raise HTTPException(404, 'Case not found')
-    project = db.get(Project, c.project_id)
+    project = db.get(Project, c.project_id) if c.project_id is not None else None
     evidence = list(db.scalars(select(Evidence).where(Evidence.case_id==case_id).order_by(Evidence.id)))
+    claims = list(db.scalars(select(Claim).where(Claim.case_id==case_id).order_by(Claim.id)))
     runs = list(db.scalars(select(AgentRun).where(AgentRun.case_id==case_id).order_by(AgentRun.id)))
     v = db.scalar(select(Verification).where(Verification.case_id==case_id))
+    action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
+    execution = db.scalar(select(ExecutionReceipt).where(ExecutionReceipt.case_id == case_id).order_by(ExecutionReceipt.started_at.desc()))
+    verification_receipt = db.scalar(select(VerificationReceipt).where(VerificationReceipt.case_id == case_id).order_by(VerificationReceipt.verified_at.desc()))
+    artifact = db.scalar(select(Artifact).where(Artifact.action_id == action.id)) if action else None
     payload = {
-      "id":c.id,"title":c.title,"description":c.description,"type":c.type,"risk":c.risk,"status":c.status,"deadline":c.deadline,"project_name":project.name,"source_language":c.source_language,"detected_issues":c.detected_issues,
-      "evidence":[{"id":e.id,"title":e.title,"source_type":e.source_type,"source_ref":e.source_ref,"excerpt":e.excerpt,"confidence":e.confidence,"verified":e.verified} for e in evidence],
+      "id":c.id,"title":c.title,"description":c.description,"type":c.type,"risk":c.risk,"status":c.status,"deadline":c.deadline,"project_name":None if project is None else project.name,"source_language":c.source_language,"detected_issues":c.detected_issues,
+      "routing_status":c.routing_status,"project_routing_confidence":c.project_routing_confidence,
+      "claims":[{"id":claim.id,"statement":claim.statement,"status":claim.status} for claim in claims],
+      "evidence":[{"id":e.id,"claim_id":e.claim_id,"title":e.title,"source_type":e.source_type,"source_ref":e.source_ref,"excerpt":e.excerpt,"confidence":e.confidence,"verified":e.verified} for e in evidence],
       "agent_runs":[{"id":r.id,"agent":r.agent,"status":r.status,"summary":r.summary,"duration_ms":r.duration_ms} for r in runs],
-      "verification": None if not v else {"status":v.status,"citation_score":v.citation_score,"evidence_score":v.evidence_score,"consistency_score":v.consistency_score,"findings":v.findings}
+      "verification": None if not v else {"status":v.status,"citation_score":v.citation_score,"evidence_score":v.evidence_score,"consistency_score":v.consistency_score,"findings":v.findings},
+      "action": None if not action else {"id":action.id,"action_type":action.action_type,"status":action.status,"approval_id":action.approval_id,"evidence_refs":action.evidence_refs,"input_digest":action.input_digest,"output_digest":action.output_digest,"artifact_ref":action.artifact_ref},
+      "execution_receipt": None if not execution else {"id":execution.id,"case_id":execution.case_id,"action_id":execution.action_id,"approval_id":execution.approval_id,"executor":execution.executor,"action_type":execution.action_type,"started_at":execution.started_at.isoformat(),"completed_at":execution.completed_at.isoformat() if execution.completed_at else None,"status":execution.status,"evidence_refs":execution.evidence_refs,"input_digest":execution.input_digest,"output_digest":execution.output_digest,"artifact_ref":execution.artifact_ref},
+      "verification_receipt": None if not verification_receipt else {"id":verification_receipt.id,"status":verification_receipt.status,"checks":verification_receipt.checks,"findings":verification_receipt.findings,"artifact_ref":verification_receipt.artifact_ref,"artifact_digest":verification_receipt.artifact_digest,"verified_at":verification_receipt.verified_at.isoformat()},
+      "artifact": None if artifact is None else {"id":artifact.id,"artifact_ref":artifact.artifact_ref,"artifact_type":artifact.artifact_type,"media_type":artifact.media_type,"digest":artifact.digest},
     }
     return localize(payload, lang)
 
@@ -365,26 +388,174 @@ def agents(lang: str = Depends(get_lang)): return localize(AGENTS, lang)
 @app.get('/approvals')
 def approvals(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     rows = list(db.scalars(select(Approval).order_by(Approval.created_at.desc())))
-    result = [{"id":a.id,"case_id":a.case_id,"title":a.title,"approver_role":a.approver_role,"status":a.status,"risk":a.risk,"created_at":a.created_at.isoformat()} for a in rows]
+    result = [{"id":a.id,"case_id":a.case_id,"action_id":a.action_id,"title":a.title,"approver_role":a.approver_role,"status":a.status,"risk":a.risk,"created_at":a.created_at.isoformat()} for a in rows]
     return localize(result, lang)
 
 @app.post('/approvals/{approval_id}/approve')
-async def approve(approval_id: int, db: Session = Depends(get_db)):
+def approve(approval_id: int, db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
-    a.status='APPROVED'; c=db.get(Case,a.case_id); c.status='APPROVED_FOR_ACTION'
-    v=db.scalar(select(Verification).where(Verification.case_id==a.case_id))
-    if v:
-        v.status='PASS'
-        findings_en = ['Evidence-backed candidate action generated', 'Required human approval recorded', 'Trusted execution may proceed']
-        v.findings = [bi(text, await translate(text, 'zh')) for text in findings_en]
-    db.commit(); return {"status":"APPROVED"}
+    if a.status == "REJECTED":
+        raise HTTPException(409, "Rejected approval requires rework before it can be approved.")
+    a.status = "APPROVED"
+    a.decided_at = utc_now()
+    action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
+    case = db.get(Case, a.case_id)
+    approvals_for_case = list(db.scalars(select(Approval).where(Approval.case_id == a.case_id)))
+    if action and all(item.status == "APPROVED" for item in approvals_for_case):
+        action.status = "APPROVED"
+        action.approved_at = utc_now()
+        case.status = "APPROVED"
+    else:
+        case.status = "AWAITING_APPROVAL"
+    db.commit()
+    return {"status": "APPROVED", "case_status": case.status, "action_id": None if action is None else action.id, "action_status": None if action is None else action.status}
 
 @app.post('/approvals/{approval_id}/reject')
 def reject(approval_id: int, db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
-    a.status='REJECTED'; c=db.get(Case,a.case_id); c.status='REVISION_REQUIRED'; db.commit(); return {"status":"REJECTED"}
+    a.status = 'REJECTED'
+    a.decided_at = utc_now()
+    action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
+    c = db.get(Case, a.case_id)
+    c.status = 'REJECTED'
+    if action:
+        action.status = 'REJECTED'
+    db.commit()
+    return {"status": "REJECTED", "case_status": c.status, "action_id": None if action is None else action.id}
+
+class ExecutionRequest(BaseModel):
+    executor: str = Field(default="governed.document.generate", min_length=1, max_length=120)
+
+
+class VerificationRequest(BaseModel):
+    verifier: str = Field(default="independent.verifier", min_length=1, max_length=120)
+
+
+def _governed_error(exc: GovernedExecutionError) -> HTTPException:
+    return HTTPException(exc.status_code, detail={"code": exc.code, "message": exc.message})
+
+
+def _action_row(action: Action, db: Session) -> dict:
+    execution = db.scalar(select(ExecutionReceipt).where(ExecutionReceipt.action_id == action.id))
+    verification = db.scalar(select(VerificationReceipt).where(VerificationReceipt.action_id == action.id))
+    return {
+        "id": action.id,
+        "case_id": action.case_id,
+        "approval_id": action.approval_id,
+        "action_type": action.action_type,
+        "status": action.status,
+        "evidence_refs": action.evidence_refs,
+        "input_digest": action.input_digest,
+        "output_digest": action.output_digest,
+        "artifact_ref": action.artifact_ref,
+        "execution_receipt_id": None if execution is None else execution.id,
+        "verification_receipt_id": None if verification is None else verification.id,
+        "created_at": action.created_at.isoformat(),
+    }
+
+
+@app.get('/actions')
+def actions(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    return localize([_action_row(action, db) for action in db.scalars(select(Action).order_by(Action.created_at.desc()))], lang)
+
+
+@app.get('/actions/{action_id}')
+def action_detail(action_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    action = db.get(Action, action_id)
+    if not action:
+        raise HTTPException(404, "Action not found")
+    return localize(_action_row(action, db), lang)
+
+
+@app.post('/actions/{action_id}/execute')
+def execute(action_id: str, payload: ExecutionRequest | None = None, db: Session = Depends(get_db)):
+    try:
+        return execute_action(db, action_id, payload.executor if payload else "governed.document.generate")
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+
+
+@app.post('/cases/{case_id}/execute')
+def execute_case(case_id: str, payload: ExecutionRequest | None = None, db: Session = Depends(get_db)):
+    action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
+    if not action:
+        raise HTTPException(404, "No governed action exists for case")
+    try:
+        result = execute_action(db, action.id, payload.executor if payload else "governed.document.generate")
+        result["case_id"] = case_id
+        return result
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+
+
+@app.post('/actions/{action_id}/verify')
+def verify(action_id: str, payload: VerificationRequest | None = None, db: Session = Depends(get_db)):
+    try:
+        return verify_action(db, action_id, payload.verifier if payload else "independent.verifier")
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+
+
+@app.post('/cases/{case_id}/verify')
+def verify_case(case_id: str, payload: VerificationRequest | None = None, db: Session = Depends(get_db)):
+    action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
+    if not action:
+        raise HTTPException(404, "No governed action exists for case")
+    try:
+        return verify_action(db, action.id, payload.verifier if payload else "independent.verifier")
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+
+
+@app.post('/actions/{action_id}/close')
+def close(action_id: str, db: Session = Depends(get_db)):
+    try:
+        return close_action(db, action_id)
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+
+
+@app.get('/artifacts/{artifact_id}')
+def artifact(artifact_id: str, db: Session = Depends(get_db)):
+    artifact_row = db.get(Artifact, artifact_id)
+    if not artifact_row:
+        raise HTTPException(404, "Artifact not found")
+    return artifact_payload(artifact_row)
+
+
+@app.get('/execution-receipts/{receipt_id}')
+def execution_receipt(receipt_id: str, db: Session = Depends(get_db)):
+    receipt = db.get(ExecutionReceipt, receipt_id)
+    if not receipt:
+        raise HTTPException(404, "Execution receipt not found")
+    artifact_row = db.scalar(select(Artifact).where(Artifact.action_id == receipt.action_id))
+    return {
+        "id": receipt.id, "case_id": receipt.case_id, "action_id": receipt.action_id,
+        "approval_id": receipt.approval_id, "executor": receipt.executor,
+        "action_type": receipt.action_type, "started_at": receipt.started_at.isoformat(),
+        "completed_at": receipt.completed_at.isoformat() if receipt.completed_at else None,
+        "status": receipt.status, "evidence_refs": receipt.evidence_refs,
+        "input_digest": receipt.input_digest, "output_digest": receipt.output_digest,
+        "artifact_ref": receipt.artifact_ref,
+        "artifact": None if artifact_row is None else artifact_payload(artifact_row),
+    }
+
+
+@app.get('/verification-receipts/{receipt_id}')
+def verification_receipt(receipt_id: str, db: Session = Depends(get_db)):
+    receipt = db.get(VerificationReceipt, receipt_id)
+    if not receipt:
+        raise HTTPException(404, "Verification receipt not found")
+    return {
+        "id": receipt.id, "case_id": receipt.case_id, "action_id": receipt.action_id,
+        "execution_receipt_id": receipt.execution_receipt_id, "approval_id": receipt.approval_id,
+        "status": receipt.status, "findings": receipt.findings, "checks": receipt.checks,
+        "evidence_refs": receipt.evidence_refs, "artifact_ref": receipt.artifact_ref,
+        "artifact_digest": receipt.artifact_digest, "verified_at": receipt.verified_at.isoformat(),
+    }
+
 
 @app.get('/training')
 def training(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
