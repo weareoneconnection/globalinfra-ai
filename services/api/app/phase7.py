@@ -16,6 +16,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -136,7 +137,20 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
         project_routing_confidence=1.0, routing_status="ROUTED",
     )
     db.add_all([case, row])
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A service-worker retry and a foreground sync can race after the
+        # initial lookup. The unique client_id is the final idempotency gate;
+        # once the winning transaction commits, return that row instead of a
+        # transient 500 from the losing request.
+        db.rollback()
+        winner = db.scalar(select(FieldObservation).where(FieldObservation.client_id == payload.client_id))
+        if winner:
+            if winner.organization_id != principal.organization_id:
+                raise HTTPException(409, "Client identifier already belongs to another organization")
+            return winner, False
+        raise
     db.refresh(row)
     return row, True
 

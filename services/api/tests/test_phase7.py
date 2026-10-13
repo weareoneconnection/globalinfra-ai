@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from uuid import uuid4
 
 
 def test_phase7_capabilities_and_identity(client):
@@ -41,6 +43,28 @@ def test_field_sync_is_idempotent_and_creates_case(client):
 
     listing = client.get("/field/observations?project_id=1").json()
     assert any(item["client_id"] == payload["client_id"] for item in listing)
+
+
+def test_field_sync_is_idempotent_under_concurrent_retries(client):
+    client_id = f"mobile-race:{uuid4().hex}"
+    payload = {
+        "observations": [{
+            "client_id": client_id,
+            "project_id": 1,
+            "event_type": "inspection",
+            "severity": "MEDIUM",
+            "description": "Concurrent offline retry must converge on one observation.",
+            "captured_at": datetime.now(UTC).isoformat(),
+        }],
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: client.post("/field/sync", json=payload), range(2)))
+
+    assert [response.status_code for response in responses] == [200, 200]
+    results = [response.json()["results"][0] for response in responses]
+    assert len({result["id"] for result in results}) == 1
+    assert sum(result["created"] for result in results) == 1
 
 
 def test_field_sync_rejects_twin_from_other_project(client):
