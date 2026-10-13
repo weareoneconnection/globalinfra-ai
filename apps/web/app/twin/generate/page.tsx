@@ -1,0 +1,4 @@
+import Link from 'next/link';
+import { TwinGenerator } from '@/components/TwinGenerator';
+
+export default function GenerateTwinPage(){return <><div className="command-hero"><div><div className="eyebrow">PHASE 8.3 · ONE-CLICK PROJECT TWIN</div><h2 className="page-title">Project Twin Factory</h2><p className="page-subtitle">Turn a project identity and coordinates into a complete, traceable demonstration data plane.</p></div><Link className="button secondary" href="/twin">← Digital Twin</Link></div><TwinGenerator/><div className="generator-contract"><div><span>01</span><b>Identity</b><small>Project + stable Twin IDs</small></div><div><span>02</span><b>Geometry</b><small>IFC · GLTF · 3D Tiles</small></div><div><span>03</span><b>Geospatial</b><small>GeoJSON · WMS · CRS</small></div><div><span>04</span><b>Operations</b><small>IoT · lineage · citations</small></div></div></>}

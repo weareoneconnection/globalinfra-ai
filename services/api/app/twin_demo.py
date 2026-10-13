@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import Project, TwinObject, TwinSensor, TwinSource
+from .models import Project, TwinObject, TwinProfile, TwinSensor, TwinSource
 
 router = APIRouter(prefix="/twin/demo-pack", tags=["synthetic-digital-twin"])
 
@@ -48,7 +48,9 @@ LEGACY_SOURCE_IDS = {
 
 def _context(project_id: int, db: Session) -> tuple[Project, list[TwinObject], dict]:
     project = db.get(Project, project_id)
-    config = PACK_CONFIG.get(project_id)
+    profile = db.get(TwinProfile, project_id)
+    config = ({"slug": profile.slug, "center": profile.center, "kind": profile.kind, "version": profile.version}
+              if profile else PACK_CONFIG.get(project_id))
     if not project or not config:
         raise HTTPException(404, "Synthetic twin pack is not configured for this project")
     objects = list(db.scalars(select(TwinObject).where(TwinObject.project_id == project_id).order_by(TwinObject.id)))
@@ -167,7 +169,10 @@ def artifact_payloads(project: Project, objects: list[TwinObject], config: dict)
 
 def seed_synthetic_twin_sources(db: Session) -> None:
     """Ensure that every seeded project advertises the complete 6-format pack."""
-    for project_id, config in PACK_CONFIG.items():
+    configs = dict(PACK_CONFIG)
+    for profile in db.scalars(select(TwinProfile)).all():
+        configs[profile.project_id] = {"slug": profile.slug, "center": profile.center, "kind": profile.kind, "version": profile.version}
+    for project_id, config in configs.items():
         project = db.get(Project, project_id)
         if not project:
             continue

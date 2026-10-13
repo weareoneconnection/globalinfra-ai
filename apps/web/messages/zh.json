@@ -2,8 +2,8 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "项目智能",
-    "footerVersion": "V3.0 · 阶段 7 试点",
-    "footerSub": "现场 · 孪生 · 企业集成",
+    "footerVersion": "V4.0 · 阶段 8 孪生",
+    "footerSub": "WebGL · 4D/5D · 可信 AI",
     "groups": [
       {
         "label": "全局",
@@ -39,7 +39,7 @@
         "label": "平台",
         "items": [
           { "href": "/integrations", "label": "企业集成", "icon": "↔" },
-          { "href": "/platform", "label": "试点控制", "icon": "P7" },
+          { "href": "/platform", "label": "孪生控制", "icon": "P8" },
           { "href": "/agents", "label": "智能体组织", "icon": "AI" },
           { "href": "/architecture", "label": "架构", "icon": "⌘" }
         ]

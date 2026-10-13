@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
+import { Twin3DViewer } from './Twin3DViewer';
 
 export type TwinObject = { id:string; parent_id:string|null; object_type:string; name:string; lifecycle_stage:string; status:string; health_score:number; progress:number; geometry_ref:string|null; location:Record<string,string|number>; properties:Record<string,string|number> };
 export type TwinEvent = { id:string; twin_id:string; event_type:string; severity:string; title:string; domain:string; status:string; evidence_refs:string[] };
@@ -12,7 +13,7 @@ export type TwinAgent = { id:string; name:string; scope:string };
 
 type Labels = { tabs:string[]; selectAsset:string; health:string; progress:string; linkedEvents:string; noEvents:string; planned:string; actual:string; scheduleVariance:string; costExposure:string; readiness:string; documents:string; openPunch:string; telemetry:string; maintenance:string; warning:string; runScenario:string; running:string; approvalRequired:string; simulationComplete:string; simulationFailed:string; evidence:string; sceneHint:string; live:string };
 
-export function TwinWorkspace({ objects, events, controls, commissioning, operations, scenarios, agents, labels }: { objects:TwinObject[];events:TwinEvent[];controls:Control[];commissioning:Commissioning[];operations:Operations;scenarios:Scenario[];agents:TwinAgent[];labels:Labels }) {
+export function TwinWorkspace({ objects, events, controls, commissioning, operations, scenarios, agents, labels, gltfUrl }: { objects:TwinObject[];events:TwinEvent[];controls:Control[];commissioning:Commissioning[];operations:Operations;scenarios:Scenario[];agents:TwinAgent[];labels:Labels;gltfUrl:string }) {
   const [tab,setTab]=useState(0);
   const [selected,setSelected]=useState(objects.find(object=>object.id.includes('P47'))?.id||objects.find(object=>object.object_type!=='PROJECT')?.id||objects[0]?.id||'');
   const [running,setRunning]=useState('');
@@ -38,11 +39,7 @@ export function TwinWorkspace({ objects, events, controls, commissioning, operat
     {tab===0&&<div className="twin-spatial-grid">
       <div className="twin-scene card">
         <div className="scene-toolbar"><span><i className="live-dot"/>{labels.live} · IFC 4.3 / 3D Tiles</span><small>{labels.sceneHint}</small></div>
-        <div className="scene-sky"><div className="scene-grid"/>
-          <div className="rail-line"/><div className="station-block"><b>ST-04</b><span>HVAC</span></div>
-          {objects.filter(x=>x.object_type!=='PROJECT').slice(0,8).map((object,index)=><button key={object.id} onClick={()=>setSelected(object.id)} className={`twin-node n${index+1} ${selected===object.id?'selected':''} ${object.health_score<70?'risk':''}`} title={object.name}><span>{object.object_type}</span><b>{object.name}</b><i>{Math.round(object.health_score)}</i></button>)}
-          <div className="scene-axis">N ↑</div>
-        </div>
+        <Twin3DViewer url={gltfUrl} objects={objects} onSelect={setSelected}/>
         <div className="scene-legend"><span><i className="lg-ok"/>Normal</span><span><i className="lg-watch"/>Watch</span><span><i className="lg-risk"/>Risk / Hold</span></div>
       </div>
       {current&&<aside className="card twin-inspector"><div className="twin-id">{current.id}</div><h3>{current.name}</h3><div className="inspector-status"><span className={`badge ${current.health_score<70?'danger':current.health_score<85?'warn':'ok'}`}>{current.status}</span><span>{current.lifecycle_stage}</span></div>

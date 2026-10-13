@@ -7,8 +7,8 @@ def test_phase7_capabilities_and_identity(client):
     capabilities = client.get("/platform/capabilities")
     assert capabilities.status_code == 200
     body = capabilities.json()
-    assert body["stage"] == "PHASE_7_PRODUCTION_PILOT"
-    assert set(body["capabilities"]) == {"7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7"}
+    assert body["stage"] == "PHASE_8_OPERATIONAL_TWIN"
+    assert {"7.1", "7.7", "8.1", "8.7"}.issubset(body["capabilities"])
 
     identity = client.get("/identity/me").json()
     assert identity["organization_id"] == "globalinfra-demo"

@@ -440,3 +440,72 @@ class TwinScenario(Base):
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+# --- V4.0 / Phase 8: operational twin --------------------------------------
+
+class TwinProfile(Base):
+    __tablename__ = "twin_profiles"
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    slug: Mapped[str] = mapped_column(String(96), unique=True, index=True)
+    center: Mapped[list] = mapped_column(JSON)
+    version: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(32), default="OPERATIONAL")
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class TwinModelVersion(Base):
+    __tablename__ = "twin_model_versions"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    version: Mapped[str] = mapped_column(String(80), index=True)
+    format: Mapped[str] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    checksum: Mapped[str] = mapped_column(String(64))
+    uri: Mapped[str] = mapped_column(String(500))
+    object_count: Mapped[int] = mapped_column(Integer, default=0)
+    change_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class TwinConversionJob(Base):
+    __tablename__ = "twin_conversion_jobs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    input_format: Mapped[str] = mapped_column(String(24))
+    input_ref: Mapped[str] = mapped_column(String(500))
+    input_checksum: Mapped[str] = mapped_column(String(64))
+    output_formats: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    adapter: Mapped[str] = mapped_column(String(80))
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TwinTelemetryReading(Base):
+    __tablename__ = "twin_telemetry_readings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    sensor_id: Mapped[str] = mapped_column(ForeignKey("twin_sensors.id"), index=True)
+    twin_id: Mapped[str] = mapped_column(ForeignKey("twin_objects.id"), index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20))
+    quality: Mapped[str] = mapped_column(String(20), default="GOOD")
+    sampled_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class TwinCopilotRun(Base):
+    __tablename__ = "twin_copilot_runs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    query: Mapped[str] = mapped_column(Text)
+    intent: Mapped[str] = mapped_column(String(48))
+    answer: Mapped[str] = mapped_column(Text)
+    citations: Mapped[list] = mapped_column(JSON, default=list)
+    confidence: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(24), default="GROUNDED")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

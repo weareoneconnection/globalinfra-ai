@@ -19,14 +19,18 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       headers,
       body,
       cache: 'no-store',
-      signal: AbortSignal.timeout(30_000)
+      signal: AbortSignal.timeout(path.includes('telemetry') && path.includes('live') ? 300_000 : 30_000)
     });
-    const data = await res.arrayBuffer();
     const responseHeaders = new Headers();
     for (const name of ['content-type', 'content-language', 'content-disposition', 'x-data-provenance', 'retry-after']) {
       const value = res.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }
+    if (res.headers.get('content-type')?.includes('text/event-stream')) {
+      responseHeaders.set('cache-control', 'no-cache');
+      return new Response(res.body, { status: res.status, headers: responseHeaders });
+    }
+    const data = await res.arrayBuffer();
     return new Response(data, { status: res.status, headers: responseHeaders });
   } catch {
     return Response.json({ detail: 'API service is unavailable' }, { status: 502 });

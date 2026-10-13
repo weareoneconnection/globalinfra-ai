@@ -24,7 +24,8 @@ from .database import get_db
 from .i18n import bi
 from .models import (
     AIQualityRun, AuditEvent, Case, Connector, ConnectorSyncRun,
-    FieldObservation, Identity, Organization, Project, TwinObject, TwinSource, utc_now,
+    FieldObservation, Identity, Organization, Project, TwinModelVersion,
+    TwinObject, TwinSource, TwinTelemetryReading, utc_now,
 )
 from .security import Principal, get_principal, require_project, require_roles
 
@@ -471,14 +472,20 @@ def platform_capabilities(db: Session = Depends(get_db)):
         "twin_sources": db.scalar(select(func.count(TwinSource.id))) or 0,
         "connectors": db.scalar(select(func.count(Connector.id))) or 0,
         "ai_quality_runs": db.scalar(select(func.count(AIQualityRun.id))) or 0,
+        "model_versions": db.scalar(select(func.count(TwinModelVersion.id))) or 0,
+        "telemetry_readings": db.scalar(select(func.count(TwinTelemetryReading.id))) or 0,
     }
     return {
-        "version": "3.0.0", "stage": "PHASE_7_PRODUCTION_PILOT",
+        "version": "4.0.0", "stage": "PHASE_8_OPERATIONAL_TWIN",
         "capabilities": {
             "7.1": "trusted_execution", "7.2": "oidc_rbac_multitenancy_audit",
             "7.3": "offline_field_operations", "7.4": "real_twin_source_registry",
             "7.5": "enterprise_connector_plane", "7.6": "ai_quality_release_gate",
             "7.7": "observability_security_resilience",
+            "8.1": "webgl_object_level_twin", "8.2": "versioned_model_conversion",
+            "8.3": "one_click_project_twin", "8.4": "realtime_iot_timeseries",
+            "8.5": "4d_5d_visual_controls", "8.6": "evidence_grounded_twin_copilot",
+            "8.7": "competition_showcase_mode",
         },
         "counts": counts,
     }

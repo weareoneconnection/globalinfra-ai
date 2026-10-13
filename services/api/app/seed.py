@@ -4,12 +4,14 @@ from .models import AIQualityRun, Connector, Organization, Project, Case, Knowle
 from .i18n import bi
 from .twin_seed import ensure_demo_twin_coverage, seed_twin
 from .twin_demo import seed_synthetic_twin_sources
+from .phase8 import seed_phase8
 
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
         seed_twin(db)
         ensure_demo_twin_coverage(db)
         seed_phase7(db)
+        seed_phase8(db)
         seed_synthetic_twin_sources(db)
         return
     projects = [
@@ -110,6 +112,7 @@ def seed(db: Session):
     seed_twin(db)
     ensure_demo_twin_coverage(db)
     seed_phase7(db)
+    seed_phase8(db)
     seed_synthetic_twin_sources(db)
 
 

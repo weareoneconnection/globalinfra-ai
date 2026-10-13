@@ -1,10 +1,10 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V3.0
+# GlobalInfra AI V4.0
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V3.0 is an independent production-pilot platform for overseas transportation infrastructure projects. It is built on a two-axis model: the complete project lifecycle and eight connected intelligence domains. Every event is resolved through an evidence-backed, governed action loop.
+GlobalInfra AI V4.0 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions.
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 
@@ -178,6 +178,10 @@ The legacy `verification` object on a Case is analysis-quality scoring (`WARN`),
 ## V3.0 Phase 7 Production Pilot
 
 Phase 7 adds OIDC/RBAC identity boundaries, organization and project scope, mutation audit trails, an offline-first field PWA, real twin-source registration, six enterprise connector contracts, AI quality release gates, Prometheus-compatible metrics, rate limits and dedicated liveness/readiness probes. See [Phase 7 Production Pilot](docs/PHASE7_PRODUCTION_PILOT.md) for activation boundaries and the production checklist.
+
+## V4.0 Phase 8 Operational Twin
+
+Phase 8 adds a native WebGL GLTF workspace with Twin-ID picking, traceable model versions and conversion jobs, one-click six-format project twin generation, time-series ingestion and SSE streaming, interactive 4D progress and 5D health/cost coloring, an evidence-grounded Twin Copilot, and a timed competition showcase. See [Phase 8 Operational Twin](docs/PHASE8_OPERATIONAL_TWIN.md) for the capability matrix and honest integration boundaries.
 
 For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
 

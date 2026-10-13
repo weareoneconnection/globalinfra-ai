@@ -2,8 +2,8 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "PROJECT INTELLIGENCE",
-    "footerVersion": "V3.0 · Phase 7 Pilot",
-    "footerSub": "Field · Twin · Enterprise integrations",
+    "footerVersion": "V4.0 · Phase 8 Twin",
+    "footerSub": "WebGL · 4D/5D · Grounded AI",
     "groups": [
       {
         "label": "Global",
@@ -39,7 +39,7 @@
         "label": "Platform",
         "items": [
           { "href": "/integrations", "label": "Integrations", "icon": "↔" },
-          { "href": "/platform", "label": "Pilot Control", "icon": "P7" },
+          { "href": "/platform", "label": "Twin Control", "icon": "P8" },
           { "href": "/agents", "label": "Agent Organization", "icon": "AI" },
           { "href": "/architecture", "label": "Architecture", "icon": "⌘" }
         ]
