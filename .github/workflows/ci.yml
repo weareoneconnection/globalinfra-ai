@@ -60,7 +60,7 @@ jobs:
           curl -sf http://localhost:8001/health
           curl -sf http://localhost:8001/readyz | grep -q '"database":"ok"'
           curl -sf http://localhost:8001/metrics | grep -q 'globalinfra_http_requests_total'
-          curl -sf http://localhost:8001/platform/capabilities | grep -q 'PHASE_7_PRODUCTION_PILOT'
+          curl -sf http://localhost:8001/platform/capabilities | grep -q 'PHASE_8_OPERATIONAL_TWIN'
           curl -sf http://localhost:8001/projects | grep -q 'MY-RAIL-A'
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8001/cases/classify \
             -H 'Content-Type: application/json' \
@@ -85,10 +85,15 @@ jobs:
           # scenario execution must all survive the deployed service boundary.
           curl -sf 'http://localhost:8001/twin/summary?project_id=1' | grep -q 'PHASE_6'
           curl -sf 'http://localhost:8001/twin/scene?project_id=1' | grep -q 'TWIN-MYRAIL-V12-P47'
+          curl -sf 'http://localhost:8001/twin/model-versions?project_id=1' | grep -q '2026.10-A'
+          curl -sf 'http://localhost:8001/twin/telemetry/live/1?events=1' | grep -q 'event: telemetry'
+          curl -sf 'http://localhost:8001/twin/showcase/1' | grep -q 'Grounded Copilot'
           curl -sf -X POST 'http://localhost:8001/twin/scenarios/SCN-RECOVERY-V12/run' \
             -H 'Content-Type: application/json' -d '{"adjustment_percent":10}' | grep -q 'AWAITING_APPROVAL'
           curl -sf http://localhost:3000/ > /dev/null
           curl -sf http://localhost:3000/twin > /dev/null
+          curl -sf http://localhost:3000/twin/generate > /dev/null
+          curl -sf 'http://localhost:3000/showcase?project_id=1' > /dev/null
           curl -sf http://localhost:3000/field > /dev/null
           curl -sf http://localhost:3000/integrations > /dev/null
           curl -sf http://localhost:3000/platform > /dev/null
