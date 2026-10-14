@@ -147,7 +147,8 @@ def _plan_prompt(lang: str, project_codes: dict[str, int]) -> str:
         "appears in the message or the conversation, exactly as written.\n"
         "- project_progress: progress, schedule or status of projects. Set `project_code` when one project "
         f"is meant; known codes: {', '.join(project_codes) or 'none'}.\n"
-        "- pending_approvals: what is waiting for approval.\n"
+        "- pending_approvals: what is waiting for approval, and any request to approve, reject, execute or "
+        "close things (you cannot do those yourself; the list lets the user press the buttons).\n"
         "- answer_directly: ONLY greetings, questions about what you can do or how to use the assistant, "
         "thanks, or requests outside the platform's scope. Never answer engineering, legal, contract or "
         "project facts yourself: route those to a tool.\n"
@@ -156,8 +157,8 @@ def _plan_prompt(lang: str, project_codes: dict[str, int]) -> str:
         "search local regulations and the knowledge base with citations; report project progress; list "
         "pending approvals; and walk a work order through human approval, draft generation, independent "
         "verification and closure. Approvals and execution always need the user to press the buttons; "
-        "you never approve, send or execute anything yourself. For out-of-scope requests say briefly what "
-        "you can help with instead.\n"
+        "you never approve, send or execute anything yourself. Mention only the capabilities listed here; "
+        "never offer anything else. For out-of-scope requests say briefly what you can help with instead.\n"
         "For every other tool set `reply` to an empty string. Unused fields are empty strings."
     )
 
