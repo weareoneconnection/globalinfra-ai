@@ -1,9 +1,9 @@
-"""Text extraction for universal intake documents (M1 scope: PDF / DOCX / TXT).
+"""Safe text extraction for universal-intake PDF / DOCX / TXT documents.
 
-M1 deliberately covers text extraction only. Image OCR and voice ASR are
-explicitly out of scope and deferred to a later version -- an unsupported
-upload raises ``UnsupportedDocument`` so the API can return a clean 400 rather
-than silently producing an empty case.
+Image OCR and voice ASR are handled outside this parser. A valid PDF or DOCX
+without extractable text returns an empty string so the intake service can
+preserve it and issue an ``OCR_REQUIRED`` receipt without inventing a case.
+An unsupported or malformed upload raises ``UnsupportedDocument``.
 
 The PDF/DOCX parsers are imported lazily so the rest of the app (and the
 offline ``create_all``/eval paths) never depends on those libraries being
@@ -45,7 +45,7 @@ def detect_file_type(filename: str | None, content_type: str | None) -> str:
         return mapped
     raise UnsupportedDocument(
         f"Unsupported document type for '{filename}' (content-type {content_type!r}); "
-        f"M1 supports only {', '.join(SUPPORTED_TYPES)} text extraction."
+        f"Supported document types are {', '.join(SUPPORTED_TYPES)}."
     )
 
 
@@ -97,7 +97,7 @@ def extract_text(filename: str | None, content: bytes, content_type: str | None 
     """Extract plain text from an uploaded document.
 
     Returns ``(text, file_type)``. Raises ``UnsupportedDocument`` for a type
-    outside the M1 text-extraction scope.
+    outside the supported document scope.
     """
     file_type = detect_file_type(filename, content_type)
     if file_type == "txt":

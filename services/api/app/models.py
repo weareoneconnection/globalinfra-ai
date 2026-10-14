@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -228,8 +228,8 @@ class TrainingModule(Base):
 class IntakeSubmission(Base):
     """One universal-intake event: the raw text/document that was submitted,
     the deterministic language detection result and a link to the Case it
-    produced. ``input_hash`` lets a reviewer confirm the parsed text matches
-    the original submission without persisting the raw blob itself."""
+    produced. ``input_hash`` lets a reviewer confirm the parsed text or source
+    document matches the original submission."""
     __tablename__ = "intake_submissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Reference to the original input, not the input itself: "text:inline" for
@@ -242,9 +242,12 @@ class IntakeSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class SourceDocument(Base):
-    """A file attached to an intake submission (PDF / DOCX / TXT only in M1).
-    ``storage_ref`` is a content-addressed pointer (``sha256:...``) rather than
-    an inline blob, matching the demo posture of not persisting raw uploads."""
+    """A file attached to an intake submission (PDF / DOCX / TXT).
+
+    The original bytes are retained with a content-addressed reference so a
+    scanned document can enter the governed intake queue before OCR is
+    available.  No public download endpoint is exposed by this model.
+    """
     __tablename__ = "source_documents"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     intake_submission_id: Mapped[int] = mapped_column(ForeignKey("intake_submissions.id"), index=True)
@@ -252,6 +255,9 @@ class SourceDocument(Base):
     file_type: Mapped[str] = mapped_column(String(16))
     storage_ref: Mapped[str] = mapped_column(String(255))
     parse_status: Mapped[str] = mapped_column(String(16), default="PARSED")
+    content_type: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    byte_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 # --- V3.0 / Phase 7: production-pilot operating plane -----------------------

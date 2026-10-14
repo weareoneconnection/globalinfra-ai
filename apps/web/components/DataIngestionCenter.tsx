@@ -233,7 +233,8 @@ export function DataIngestionCenter({ projects, catalog, initialSummary }: Props
       <aside className="card ingestion-receipt-panel">
         <header><span className="section-kicker">03 · {t('receipt')}</span><h3>{t('validationLineage')}</h3></header>
         {receipt ? <div className="ingestion-receipt-live">
-          <div className="receipt-status"><i /><span>{receipt.status}</span><b>{receipt.id}</b></div>
+          <div className={`receipt-status ${receipt.status === 'OCR_REQUIRED' ? 'pending' : ''}`}><i /><span>{receipt.status}</span><b>{receipt.id}</b></div>
+          {receipt.status === 'OCR_REQUIRED' ? <p className="ingestion-notice">{t('ocrPending')}</p> : null}
           <dl>
             <div><dt>{t('receiptFields.target')}</dt><dd>{receipt.target_type}<small>{receipt.target_id}</small></dd></div>
             <div><dt>{t('receiptFields.records')}</dt><dd>{receipt.records_accepted}/{receipt.records_received}<small>{receipt.records_rejected} rejected</small></dd></div>
@@ -252,7 +253,7 @@ export function DataIngestionCenter({ projects, catalog, initialSummary }: Props
         {summary.recent.map(item => <article key={item.id}>
           <span className="feed-channel">{catalog.channels.find(candidate => candidate.id === item.channel)?.icon ?? 'DATA'}</span>
           <div><b>{catalog.channels.find(candidate => candidate.id === item.channel)?.name ?? item.channel}</b><small>{item.source_type} · {item.target_type} / {item.target_id}</small></div>
-          <span className={`badge ${item.records_rejected ? 'medium' : 'ok'}`}>{item.status}</span>
+          <span className={`badge ${item.records_rejected || item.status === 'OCR_REQUIRED' ? 'medium' : 'ok'}`}>{item.status}</span>
           <time>{new Date(item.created_at).toLocaleString(locale)}</time>
         </article>)}
       </div>

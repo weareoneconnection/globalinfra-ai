@@ -209,6 +209,43 @@ def test_intake_document_docx_creates_quality_case(client):
     assert [t["id"] for t in body["specialist_team"]] == SPECIALISTS_BY_CASE_TYPE["Quality"]
 
 
+def test_intake_document_image_only_pdf_is_preserved_and_queued_for_ocr(client):
+    from pypdf import PdfWriter
+
+    buf = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=200)
+    writer.write(buf)
+    content = buf.getvalue()
+
+    r = client.post(
+        "/intake/document?lang=en&data_classification=internal",
+        files={"file": ("scanned-letter.pdf", content, "application/pdf")},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["case_id"] is None
+    assert body["analysis"] is None
+    assert body["specialist_team"] == []
+    assert body["document"]["parse_status"] == "OCR_REQUIRED"
+    assert body["document"]["byte_size"] == len(content)
+    assert body["document"]["original_preserved"] is True
+    receipt = body["ingestion_receipt"]
+    assert receipt["status"] == "OCR_REQUIRED"
+    assert receipt["target_type"] == "SourceDocument"
+    assert receipt["validation_summary"]["ocr_required"] is True
+    assert receipt["lineage"]["raw_preserved"] is True
+
+    from app.database import SessionLocal
+    from app.models import SourceDocument
+
+    with SessionLocal() as db:
+        stored = db.get(SourceDocument, body["document"]["id"])
+        assert stored is not None
+        assert stored.original_content == content
+        assert stored.storage_ref == f"sha256:{receipt['checksum']}"
+
+
 def test_intake_document_rejects_unsupported_type(client):
     r = client.post("/intake/document", files={"file": ("photo.png", b"\x89PNG\r\n", "image/png")})
     assert r.status_code == 400
@@ -233,6 +270,11 @@ def test_intake_document_rejects_disguised_or_binary_content(client, filename, c
 
 def test_intake_document_rejects_empty_upload(client):
     r = client.post("/intake/document", files={"file": ("empty.txt", b"", "text/plain")})
+    assert r.status_code == 422
+
+
+def test_intake_document_rejects_whitespace_only_txt(client):
+    r = client.post("/intake/document", files={"file": ("blank.txt", b"  \n\t", "text/plain")})
     assert r.status_code == 422
 
 

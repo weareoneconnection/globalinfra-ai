@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Literal
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -157,8 +158,18 @@ def _case_title(text: str) -> str:
     first_line = next((line.strip() for line in text.splitlines() if line.strip()), text.strip())
     return (first_line[:117] + "…") if len(first_line) > 118 else (first_line or "Intake submission")
 
+
+@dataclass(frozen=True)
+class SourceUpload:
+    filename: str
+    file_type: str
+    storage_ref: str
+    content_type: str | None
+    content: bytes
+
+
 async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str,
-                           language_hint: str | None, source_file: tuple[str, str, str] | None,
+                           language_hint: str | None, source_file: SourceUpload | None,
                            model_route: str | None = None, data_classification: str = "internal",
                            organization_id: str = "globalinfra-demo",
                            project_id_override: int | None = None,
@@ -213,24 +224,30 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     )
     db.add(case)
 
+    input_hash = (
+        source_file.storage_ref.removeprefix("sha256:")
+        if source_file is not None
+        else hashlib.sha256(text.encode("utf-8")).hexdigest()
+    )
     submission = IntakeSubmission(
         raw_input_ref=raw_input_ref,
-        input_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        input_hash=input_hash,
         parsed_text=text, detected_language=detected_lang, case_id=case_id,
     )
     db.add(submission)
     db.flush()  # assign submission.id before linking a source document
 
     if source_file is not None:
-        filename, file_type, storage_ref = source_file
         db.add(SourceDocument(
-            intake_submission_id=submission.id, filename=filename,
-            file_type=file_type, storage_ref=storage_ref, parse_status="PARSED",
+            intake_submission_id=submission.id, filename=source_file.filename,
+            file_type=source_file.file_type, storage_ref=source_file.storage_ref,
+            parse_status="PARSED", content_type=source_file.content_type,
+            byte_size=len(source_file.content), original_content=source_file.content,
         ))
     receipt = record_ingestion_receipt(
         db, organization_id=organization_id, project_id=project_id,
         channel="document_correspondence" if source_file is not None else "event_work_order",
-        source_type=source_file[1] if source_file is not None else entry_type,
+        source_type=source_file.file_type if source_file is not None else entry_type,
         status="ACCEPTED", target_type="Case", target_id=case_id,
         checksum=submission.input_hash,
         validation_summary={
@@ -241,6 +258,8 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
         lineage={
             "raw_input_ref": raw_input_ref, "submission_id": submission.id,
             "data_classification": data_classification,
+            **({"raw_preserved": True, "storage_ref": source_file.storage_ref}
+               if source_file is not None else {}),
         },
     )
     db.commit()
@@ -268,6 +287,99 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
         },
     }
     return localize(payload, lang)
+
+
+def _queue_document_for_ocr(
+    db: Session, *, source_file: SourceUpload, lang: str,
+    data_classification: str, organization_id: str,
+    model_route: str | None,
+):
+    """Accept a valid image-only document without inventing extracted text.
+
+    The source remains a document, its original bytes and checksum are
+    preserved, and the standard receipt explicitly records that OCR is the
+    next processing step.  A Case is intentionally not created until text is
+    available for classification and evidence-grounded analysis.
+    """
+    reset_routing_trace()
+    checksum = source_file.storage_ref.removeprefix("sha256:")
+    submission = IntakeSubmission(
+        raw_input_ref=source_file.filename,
+        input_hash=checksum,
+        parsed_text="",
+        detected_language="und",
+        case_id=None,
+    )
+    db.add(submission)
+    db.flush()
+    document = SourceDocument(
+        intake_submission_id=submission.id,
+        filename=source_file.filename,
+        file_type=source_file.file_type,
+        storage_ref=source_file.storage_ref,
+        parse_status="OCR_REQUIRED",
+        content_type=source_file.content_type,
+        byte_size=len(source_file.content),
+        original_content=source_file.content,
+    )
+    db.add(document)
+    db.flush()
+    receipt = record_ingestion_receipt(
+        db,
+        organization_id=organization_id,
+        channel="document_correspondence",
+        source_type=source_file.file_type,
+        status="OCR_REQUIRED",
+        target_type="SourceDocument",
+        target_id=document.id,
+        checksum=checksum,
+        validation_summary={
+            "file_valid": True,
+            "text_extracted": False,
+            "ocr_required": True,
+            "file_type": source_file.file_type,
+            "byte_size": len(source_file.content),
+        },
+        lineage={
+            "raw_input_ref": source_file.filename,
+            "submission_id": submission.id,
+            "data_classification": data_classification,
+            "raw_preserved": True,
+            "storage_ref": source_file.storage_ref,
+        },
+    )
+    db.commit()
+    db.refresh(receipt)
+    return localize({
+        "submission_id": submission.id,
+        "case_id": None,
+        "ingestion_receipt": receipt_payload(receipt),
+        "document": {
+            "id": document.id,
+            "filename": document.filename,
+            "file_type": document.file_type,
+            "parse_status": document.parse_status,
+            "content_type": document.content_type,
+            "byte_size": document.byte_size,
+            "original_preserved": True,
+        },
+        "intake": {
+            "status": "OCR_REQUIRED",
+            "text_extracted": False,
+            "ocr_required": True,
+            "message": bi(
+                "The original document was accepted and preserved. OCR is required before classification and case creation.",
+                "原始文档已接收并留存；完成 OCR 后再进入分类与工单生成。",
+            ),
+        },
+        "specialist_team": [],
+        "analysis": None,
+        "model_routing": {
+            "requested": model_route or settings.llm_mode,
+            "data_classification": data_classification,
+            "trace": routing_trace(),
+        },
+    }, lang)
 
 @app.post('/intake/text')
 async def intake_text(
@@ -300,9 +412,12 @@ async def intake_document(
     lang: str = Depends(get_lang),
     principal: Principal = Depends(get_principal),
 ):
-    """Universal intake for an uploaded document (PDF / DOCX / TXT text
-    extraction only in M1 -- image OCR and voice ASR are deferred). Extracts
-    text, then runs the same intake pipeline as ``/intake/text``."""
+    """Universal intake for an uploaded PDF / DOCX / TXT document.
+
+    Text-bearing documents enter the analysis pipeline immediately. Valid
+    scanned/image-only files are preserved and receive an ``OCR_REQUIRED``
+    receipt instead of being rejected or misclassified.
+    """
     content = await file.read(settings.max_upload_bytes + 1)
     if len(content) > settings.max_upload_bytes:
         raise HTTPException(413, f"Upload exceeds the {settings.max_upload_bytes}-byte limit.")
@@ -313,9 +428,27 @@ async def intake_document(
     except UnsupportedDocument as exc:
         raise HTTPException(400, str(exc))
     storage_ref = f"sha256:{hashlib.sha256(content).hexdigest()}"
+    source_file = SourceUpload(
+        filename=file.filename or "upload",
+        file_type=file_type,
+        storage_ref=storage_ref,
+        content_type=file.content_type,
+        content=content,
+    )
+    if not text.strip():
+        if file_type == "txt":
+            raise HTTPException(422, "Uploaded TXT document does not contain text.")
+        return _queue_document_for_ocr(
+            db,
+            source_file=source_file,
+            lang=lang,
+            data_classification=data_classification,
+            organization_id=principal.organization_id,
+            model_route=model_route,
+        )
     return await _intake_pipeline(
         db, text, lang, raw_input_ref=file.filename or "upload",
-        language_hint=None, source_file=(file.filename or "upload", file_type, storage_ref),
+        language_hint=None, source_file=source_file,
         model_route=model_route, data_classification=data_classification,
         organization_id=principal.organization_id,
     )

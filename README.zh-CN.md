@@ -134,11 +134,11 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 两个接口：
 
 - `POST /intake/text` — 请求体 `{"text": "...", "language": "en|zh（可选）"}`。
-- `POST /intake/document` — multipart 上传 `file=@...`。M1 **仅做文字抽取**（PDF / DOCX / TXT），并校验文件签名/内容，默认大小上限为可配置的 10 MiB（`MAX_UPLOAD_BYTES`）。图片 OCR 与语音 ASR 明确不在 M1 范围（上传 `.png`/音频返回 `400`）。
+- `POST /intake/document` — multipart 上传 `file=@...`，支持 PDF / DOCX / TXT，并校验文件签名/内容，默认大小上限为可配置的 10 MiB（`MAX_UPLOAD_BYTES`）。含文字层的文件直接进入分类和分析；有效的扫描/纯图像 PDF 会保留原件与校验和，返回 `OCR_REQUIRED` 文档回执，不会在无证据时误建工单。独立图片 OCR 与语音 ASR 仍不在此接口范围（上传 `.png`/音频返回 `400`）。
 
 用于联网试点时，请启用 `REQUIRE_API_KEY=true`，在 API 服务配置强随机 `API_KEY`，并在 Web 服务端将同一值配置为 `API_SERVICE_KEY`。浏览器直连来源使用逗号分隔的 `CORS_ORIGINS`；两个密钥都不得通过 `NEXT_PUBLIC_*` 暴露。
 
-两者均返回 `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`，并按请求语言本地化（`?lang=`/`Accept-Language`，与其他接口一致）。新建工单 id 为 `CASE-INTAKE-<hash>`（绝不硬编码演示 id），并送入既有检索驱动分析工作流，因此响应中可直接看到工单 id 与已组建的专家团队。
+文本接入与含文字层的文档返回 `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`，并按请求语言本地化（`?lang=`/`Accept-Language`，与其他接口一致）。新建工单 id 为 `CASE-INTAKE-<hash>`（绝不硬编码演示 id），并送入既有检索驱动分析工作流。扫描文档则返回同一标准接入封装，其中 `case_id: null`、`analysis: null`，并给出 `OCR_REQUIRED` 的 `SourceDocument` 回执，直到获得可核验文本。
 
 **`IntakeResult`**（见 `services/api/app/intake.py`）字段：`primary_domain`、`professional_domain`、`case_type`、`case_type_label`、`classification_method`、`extraction_method`、`lifecycle_stage`、`risk`、`risk_label`、`country`、`country_label`、`language`、`issues[]`、`entities[]`、`deadline`、`recommended_agents[]`、`required_approvals[]`、`confidence`。
 
@@ -148,7 +148,7 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 - **结构化输出（M5）：** 两个 LLM 层不再"寄望模型吐出裸 `{...}` 再正则抠出"，而是通过 `response_format` 的 JSON-schema 显式请求 schema 合法的 JSON；schema 的枚举值由解析器所校验的**同一套**受约束词汇表构建（因此 schema 与解析器永不漂移）。这是**尽力而为的加固**：`llm.generate` 在明确指向 `response_format` 的那个 `400` 上丢弃该字段并重试一次（与既有的 reasoning 模型 `temperature` 处理完全一致），且回复**始终**再经该层自己的词汇/落地校验（这些校验比任何 schema 能表达的都更严）——因此网关不支持结构化输出、或模型无视该提示时，仍能优雅降级。离线（无 Key）时整条路径处于惰性，与 M1–M4 逐字节一致。
 - **富化层：** 其余字段由可审计的规则/启发式产出。`case_type_label`/`risk_label`/`issues` 为中英双语（与 `Case.type` 相同的 `{"en","zh"}` 模式）；`case_type` 的英文规范值用于通过 `workflow.SPECIALISTS_BY_CASE_TYPE` 路由专家团队。
 
-新增两张表（见下文**数据库迁移**）：`intake_submissions`（原始输入引用、输入哈希、解析文本、检测语言、创建时间、关联 `case_id`）与 `source_documents`（文件名、文件类型、存储引用、解析状态、关联 `intake_submission_id`）。
+两张表支撑该链路（见下文**数据库迁移**）：`intake_submissions`（原始输入引用、输入哈希、解析文本、检测语言、创建时间、关联 `case_id`）与 `source_documents`（文件名、文件类型、内容寻址引用、解析状态、经校验的原始字节、内容类型/大小、关联 `intake_submission_id`）。
 
 ## V2.1 可信执行闭环
 
@@ -215,6 +215,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 
 - `0001_baseline_schema`：将已有 V1.2 表结构纳入迁移基线。
 - `0002_intake_tables`：新增 `intake_submissions` 与 `source_documents`。
+- `0010_preserve_source_document_content`：留存经校验的原始文档字节与内容类型/大小，支持受控 OCR 交接。
 - `0003_digital_twin`：新增孪生对象图谱、状态历史、工程事件、4D/5D 关联、传感器、调试、维护与受管控场景。
 - `0004_trusted_execution_closure`：新增主张、受管控行动意图、执行/核验回执、内容寻址产物及待人工确认的工单路由字段。
 - `0005_phase7_production_pilot`：新增组织、身份、审计事件、现场观察、真实孪生数据源、连接器同步记录与 AI 质量发布门禁。

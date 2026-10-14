@@ -145,11 +145,11 @@ text / PDF / DOCX / TXT  →  IntakeResult  →  Case  →  analyze_case  →  s
 Two endpoints:
 
 - `POST /intake/text` — body `{"text": "...", "language": "en|zh (optional)"}`.
-- `POST /intake/document` — multipart `file=@...` upload. **Text extraction only** for PDF / DOCX / TXT, with signature/content validation and a configurable 10 MiB default limit (`MAX_UPLOAD_BYTES`). Image OCR and voice ASR are explicitly out of M1 scope (a `.png`/audio upload returns `400`).
+- `POST /intake/document` — multipart `file=@...` upload for PDF / DOCX / TXT, with signature/content validation and a configurable 10 MiB default limit (`MAX_UPLOAD_BYTES`). Text-bearing files enter classification and analysis immediately. Valid scanned/image-only PDFs are retained with their checksum and return an `OCR_REQUIRED` document receipt without creating an ungrounded Case. Image-file OCR and voice ASR remain outside this endpoint (a `.png`/audio upload returns `400`).
 
 For a networked pilot, enable `REQUIRE_API_KEY=true`, set a strong `API_KEY` on the API service, and set the same value as the Web service's server-only `API_SERVICE_KEY`. Configure browser origins with the comma-separated `CORS_ORIGINS`; never expose either key through a `NEXT_PUBLIC_*` variable.
 
-Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`, localized to the requested language (`?lang=`/`Accept-Language`, same negotiation as every other route). The created Case is **new** (id `CASE-INTAKE-<hash>`, never a hardcoded demo id) and is run through the existing retrieval-grounded analysis workflow, so the response shows the Case id and the specialist team that was assembled.
+Text intake and text-bearing documents return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: [...], analysis: {...} }`, localized to the requested language (`?lang=`/`Accept-Language`, same negotiation as every other route). The created Case is **new** (id `CASE-INTAKE-<hash>`, never a hardcoded demo id) and is run through the existing retrieval-grounded analysis workflow. A scanned document instead returns the same standard ingestion envelope with `case_id: null`, `analysis: null` and an `OCR_REQUIRED` `SourceDocument` receipt until text evidence exists.
 
 **`IntakeResult`** (see `services/api/app/intake.py`): `primary_domain`, `professional_domain`, `case_type`, `case_type_label`, `classification_method`, `extraction_method`, `lifecycle_stage`, `risk`, `risk_label`, `country`, `country_label`, `language`, `issues[]`, `entities[]`, `deadline`, `recommended_agents[]`, `required_approvals[]`, `confidence`.
 
@@ -159,7 +159,7 @@ Both return `{ submission_id, case_id, intake: <IntakeResult>, specialist_team: 
 - **Structured output (M5):** both LLM layers ask the endpoint for schema-valid JSON via a `response_format` JSON-schema whose enums are built from the **same** constrained vocabularies the parsers validate against (so schema and parser can never drift), instead of hoping the model returns a bare `{...}` to regex out. It is **best-effort hardening**: `llm.generate` drops the `response_format` field and retries once on the specific `400` that names it (exactly as it already does for `temperature` on reasoning-style models), and the reply is **always re-validated** by the layer's own vocabulary/grounding guards — which are stricter than any schema can express — so a gateway without structured-output support, or a model that ignores the hint, still degrades cleanly. Offline (no key) the whole path is inert and byte-for-byte identical to M1–M4.
 - **Enrichment:** every other field is derived by auditable rules/heuristics. `case_type_label`/`risk_label`/`issues` are bilingual EN/ZH (same `{"en","zh"}` pattern as `Case.type`); the canonical `case_type` English string is what routes the Case via `workflow.SPECIALISTS_BY_CASE_TYPE`.
 
-Two new tables back this (see **Database migrations** below): `intake_submissions` (raw input reference, input hash, parsed text, detected language, created-at, linked `case_id`) and `source_documents` (filename, file type, storage reference, parse status, linked `intake_submission_id`).
+Two tables back this (see **Database migrations** below): `intake_submissions` (raw input reference, input hash, parsed text, detected language, created-at, linked `case_id`) and `source_documents` (filename, file type, content-addressed reference, parse status, validated original bytes, content type/size, linked `intake_submission_id`).
 
 ## V2.1 Trusted Execution Closure
 
@@ -229,6 +229,7 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 
 - `0001_baseline_schema` captures the pre-existing V1.2 tables as the migration baseline.
 - `0002_intake_tables` adds `intake_submissions` and `source_documents`.
+- `0010_preserve_source_document_content` retains validated original document bytes plus content type/size for governed OCR handoff.
 - `0003_digital_twin` adds the Twin object graph, state history, engineering events, 4D/5D links, sensors, commissioning, maintenance and governed scenarios.
 - `0004_trusted_execution_closure` adds claims, governed action intents, execution/verification receipts, content-addressed artifacts, and unassigned-intake routing fields.
 - `0005_phase7_production_pilot` adds organizations, identities, audit events, field observations, real twin sources, connector sync runs and AI quality release gates.
