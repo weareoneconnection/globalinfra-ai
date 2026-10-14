@@ -628,7 +628,6 @@
     "draftBoundary": "Drafts are generated inside the platform only; no email or external letter is sent.",
     "openCase": "Open full work order",
     "knowledgeFound": "Found {count} relevant sources in the knowledge base:",
-    "knowledgeWeak": "Weakly related material ({count}, reference only, not evidence)",
     "knowledgeNone": "No sufficiently relevant evidence for \"{query}\" in the knowledge base. I will not invent an answer; try rephrasing, or report it as an incident for the specialists.",
     "relevance": "relevance {value}",
     "knowledgeBoundary": "Deterministic TF-IDF retrieval; specific legal obligations must be confirmed by the authority or legal team.",

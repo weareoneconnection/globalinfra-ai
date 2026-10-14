@@ -628,7 +628,6 @@
     "draftBoundary": "草稿只在系统内生成，不会自动发送邮件或对外函件。",
     "openCase": "打开完整工单",
     "knowledgeFound": "在知识库中找到 {count} 条相关依据：",
-    "knowledgeWeak": "相关度较低的资料（{count} 条，仅供参考，不能作为依据）",
     "knowledgeNone": "知识库里没有找到与「{query}」足够相关的依据。我不会凭空给出结论——可以换个说法，或把问题作为事件上报给专家处理。",
     "relevance": "相关度 {value}",
     "knowledgeBoundary": "检索为确定性 TF-IDF；具体法律义务须由主管部门或法务确认。",

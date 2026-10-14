@@ -40,6 +40,7 @@ const STORAGE_KEY = 'globalinfra-assistant-v1';
 const MIN_RELEVANCE = 0.05;
 const CONFIDENT_RELEVANCE = 0.22;
 
+const HELP_RE = /^(你好|您好|嗨|hi|hello|hey)[!！。,， ]*$|你能做什么|你会做什么|你会什么|你是谁|能帮我做什么|怎么用|使用说明|^帮助$|^help$|what can you do|who are you|how do i use/i;
 const INCIDENT_RE = /通知|整改|事故|隐患|损坏|破损|延误|索赔|违规|泄漏|坍塌|受伤|缺陷|notice|incident|damage|delay|claim|injur|defect|rectif|hazard|unsafe|leak/i;
 const APPROVAL_RE = /审批|待我|批准|approval|approve|sign[- ]?off/i;
 const PROGRESS_RE = /进度|进展|状态|概况|progress|status|schedule|overview/i;
@@ -47,6 +48,7 @@ const KNOWLEDGE_RE = /法规|法律|规定|规范|标准|条款|条例|要求|�
 
 function detectIntent(text: string, hasFile: boolean): Intent {
   if (hasFile) return 'incident';
+  if (text.length <= 30 && HELP_RE.test(text.trim())) return 'help';
   const incident = INCIDENT_RE.test(text);
   if (!incident && APPROVAL_RE.test(text) && text.length <= 40) return 'approvals';
   if (!incident && PROGRESS_RE.test(text) && text.length <= 60) return 'progress';
@@ -424,21 +426,17 @@ function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary;
 
 function KnowledgeReply({ query, hits }: { query: string; hits: KnowledgeHit[] }) {
   const t = useTranslations('Assistant');
+  // Below the confident threshold a hit is not evidence, so it is not shown.
   const strong = hits.filter(hit => hit.relevance >= CONFIDENT_RELEVANCE);
-  const weak = hits.filter(hit => hit.relevance < CONFIDENT_RELEVANCE);
-  const card = (hit: KnowledgeHit) => <div key={hit.id} className="assistant-card compact">
-    <div className="assistant-card-head"><b>{hit.title}</b><span className={`badge ${hit.relevance >= CONFIDENT_RELEVANCE ? 'ok' : 'medium'}`}>{t('relevance', { value: hit.relevance.toFixed(2) })}</span></div>
-    <p>{hit.summary}</p>
-    <p className="muted small"><code>{hit.source_ref}</code> · {hit.jurisdiction} · v{hit.version}</p>
-  </div>;
+  if (strong.length === 0) return <div className="assistant-text">{t('knowledgeNone', { query })}</div>;
   return <div>
-    <p className="assistant-text">{strong.length ? t('knowledgeFound', { count: strong.length }) : t('knowledgeNone', { query })}</p>
-    {strong.map(card)}
-    {weak.length > 0 && <details className="assistant-details">
-      <summary>{t('knowledgeWeak', { count: weak.length })}</summary>
-      {weak.map(card)}
-    </details>}
-    {strong.length > 0 && <p className="assistant-boundary small">{t('knowledgeBoundary')}</p>}
+    <p className="assistant-text">{t('knowledgeFound', { count: strong.length })}</p>
+    {strong.map(hit => <div key={hit.id} className="assistant-card compact">
+      <div className="assistant-card-head"><b>{hit.title}</b><span className="badge ok">{t('relevance', { value: hit.relevance.toFixed(2) })}</span></div>
+      <p>{hit.summary}</p>
+      <p className="muted small"><code>{hit.source_ref}</code> · {hit.jurisdiction} · v{hit.version}</p>
+    </div>)}
+    <p className="assistant-boundary small">{t('knowledgeBoundary')}</p>
   </div>;
 }
 
