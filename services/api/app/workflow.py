@@ -42,6 +42,7 @@ records, so the bilingual experience stays correct and fully deterministic
 offline without depending on a fixed per-string phrase table for text that
 was never known in advance.
 """
+import asyncio
 from time import perf_counter
 import uuid
 
@@ -240,16 +241,28 @@ async def analyze_case(
     cited_ids: list[str] = []
     confident_ids: set[str] = set()
 
-    for agent_id in specialist_ids:
-        t0 = perf_counter()
-        hits = [(score, doc) for score, doc in index.search(f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE)
-                if score >= MIN_RELEVANCE]
-        summary = await _specialist_summary(
-            agent_id, hits, llm_ready, model_route, data_classification
+    # Specialist findings are independent once retrieval has completed. Run
+    # their model calls concurrently so a three-discipline case pays for one
+    # model round-trip chain instead of three sequential chains.
+    specialist_inputs = [
+        (
+            agent_id,
+            [(score, doc) for score, doc in index.search(
+                f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE
+            ) if score >= MIN_RELEVANCE],
         )
+        for agent_id in specialist_ids
+    ]
+    started_at = {agent_id: perf_counter() for agent_id, _ in specialist_inputs}
+    summaries = await asyncio.gather(*[
+        _specialist_summary(agent_id, hits, llm_ready, model_route, data_classification)
+        for agent_id, hits in specialist_inputs
+    ])
+
+    for (agent_id, hits), summary in zip(specialist_inputs, summaries, strict=True):
         db.add(AgentRun(
             case_id=case_id, agent=AGENTS_BY_ID[agent_id]["name"], status="COMPLETED", summary=summary,
-            duration_ms=max(1, round((perf_counter() - t0) * 1000)),
+            duration_ms=max(1, round((perf_counter() - started_at[agent_id]) * 1000)),
         ))
         if hits:
             cited_ids.append(agent_id)
