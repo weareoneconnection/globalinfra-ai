@@ -11,7 +11,10 @@ export type AssistantProject = {
 };
 
 type Mode = 'auto' | 'incident' | 'knowledge' | 'progress' | 'approvals';
-type Intent = Exclude<Mode, 'auto'> | 'help';
+type Intent = Exclude<Mode, 'auto'> | 'help' | 'caseStatus';
+type Method = 'llm' | 'rules' | 'user';
+type Tool = 'report_incident' | 'search_knowledge' | 'case_status' | 'project_progress' | 'pending_approvals' | 'answer_directly';
+type Plan = { tool: Tool; method: Method; reply: string | null; case_id: string | null; project_id: number | null; query: string | null; hits: KnowledgeHit[] | null };
 
 type CaseSummary = {
   caseId: string; typeLabel: string; risk: string; riskLabel: string; country: string; stage: string;
@@ -24,7 +27,9 @@ type KnowledgeHit = { id: number; title: string; source_ref: string; jurisdictio
 type Reply =
   | { kind: 'case'; data: CaseSummary }
   | { kind: 'ocr'; message: string; filename: string }
-  | { kind: 'knowledge'; query: string; hits: KnowledgeHit[] }
+  | { kind: 'knowledge'; query: string; hits: KnowledgeHit[]; answer?: string | null }
+  | { kind: 'caseStatus'; caseId: string }
+  | { kind: 'answer'; text: string }
   | { kind: 'progress'; projectId: number | null }
   | { kind: 'approvals' }
   | { kind: 'help' }
@@ -32,12 +37,10 @@ type Reply =
 
 type Message =
   | { id: string; role: 'user'; text: string; fileName?: string }
-  | { id: string; role: 'assistant'; intent: Intent; reply: Reply | null };
+  | { id: string; role: 'assistant'; intent: Intent | null; method?: Method; reply: Reply | null };
 
 const STORAGE_KEY = 'globalinfra-assistant-v1';
-// Matches workflow.MIN_RELEVANCE / CONFIDENT_RELEVANCE so the assistant uses
-// the same "cite / flag as gap / refuse" boundaries as the specialist agents.
-const MIN_RELEVANCE = 0.05;
+// Matches workflow.CONFIDENT_RELEVANCE: below it a hit is not evidence.
 const CONFIDENT_RELEVANCE = 0.22;
 
 const HELP_RE = /^(你好|您好|嗨|hi|hello|hey)[!！。,， ]*$|你能做什么|你会做什么|你会什么|你是谁|能帮我做什么|怎么用|使用说明|^帮助$|^help$|what can you do|who are you|how do i use/i;
@@ -45,6 +48,32 @@ const INCIDENT_RE = /通知|整改|事故|隐患|损坏|破损|延误|索赔|违
 const APPROVAL_RE = /审批|待我|批准|approval|approve|sign[- ]?off/i;
 const PROGRESS_RE = /进度|进展|状态|概况|progress|status|schedule|overview/i;
 const KNOWLEDGE_RE = /法规|法律|规定|规范|标准|条款|条例|要求|依据|哪一条|regulation|law|clause|requirement|standard|permit/i;
+
+const INTENT_BY_TOOL: Record<Tool, Intent> = {
+  report_incident: 'incident', search_knowledge: 'knowledge', case_status: 'caseStatus',
+  project_progress: 'progress', pending_approvals: 'approvals', answer_directly: 'help',
+};
+const TOOL_BY_MODE: Partial<Record<Intent, Tool>> = {
+  incident: 'report_incident', knowledge: 'search_knowledge', progress: 'project_progress', approvals: 'pending_approvals',
+};
+
+// One line per turn, so the planner can resolve "that work order" etc.
+function historyLine(message: Message): string {
+  if (message.role === 'user') return message.fileName ? `[file] ${message.fileName} ${message.text}` : message.text;
+  const reply = message.reply;
+  if (!reply) return '';
+  switch (reply.kind) {
+    case 'case': return `Created work order ${reply.data.caseId} (${reply.data.typeLabel}, ${reply.data.risk}).`;
+    case 'caseStatus': return `Showed the status of work order ${reply.caseId}.`;
+    case 'knowledge': return reply.answer ?? `Listed ${reply.hits.length} knowledge sources: ${reply.hits.map(hit => hit.source_ref).join(', ') || 'none'}.`;
+    case 'progress': return 'Showed project progress.';
+    case 'approvals': return 'Listed pending approvals.';
+    case 'answer': return reply.text;
+    case 'help': return 'Explained what the assistant can do.';
+    case 'ocr': return `Received ${reply.filename}; OCR is required.`;
+    case 'error': return 'The request failed.';
+  }
+}
 
 function detectIntent(text: string, hasFile: boolean): Intent {
   if (hasFile) return 'incident';
@@ -108,20 +137,13 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   const effectiveRoute = restricted ? 'local' : route;
   const classification = restricted ? 'restricted' : 'internal';
 
-  async function resolve(intent: Intent, input: string, upload: File | null): Promise<Reply> {
+  const headers = { 'accept-language': locale };
+
+  async function runIntake(input: string, upload: File | null, plannedProject: number | null): Promise<Reply> {
     const lang = `lang=${locale}`;
-    const headers = { 'accept-language': locale };
-    if (intent === 'help') return { kind: 'help' };
-    if (intent === 'approvals') return { kind: 'approvals' };
-    if (intent === 'progress') return { kind: 'progress', projectId: projectId === 'auto' ? null : Number(projectId) };
-    if (intent === 'knowledge') {
-      const body = await readJson(await fetch(`/backend/knowledge/search?q=${encodeURIComponent(input)}&limit=5&${lang}`, { headers }));
-      const hits = (body.results as KnowledgeHit[]).filter(hit => hit.relevance >= MIN_RELEVANCE).slice(0, 3);
-      return { kind: 'knowledge', query: input, hits };
-    }
     // A project code the user typed explicitly counts as their confirmation.
     const named = projects.find(project => input.toUpperCase().includes(project.code.toUpperCase()));
-    const chosenProject = projectId === 'auto' ? named?.id ?? null : Number(projectId);
+    const chosenProject = projectId !== 'auto' ? Number(projectId) : plannedProject ?? named?.id ?? null;
     let body;
     if (upload) {
       const form = new FormData();
@@ -131,12 +153,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
       body = await readJson(await fetch(`/backend/intake/text?${lang}`, {
         method: 'POST',
         headers: { ...headers, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          text: input,
-          project_id: chosenProject,
-          model_route: effectiveRoute,
-          data_classification: classification,
-        }),
+        body: JSON.stringify({ text: input, project_id: chosenProject, model_route: effectiveRoute, data_classification: classification }),
       }));
     }
     if (!body.case_id) return { kind: 'ocr', message: body.intake?.message ?? '', filename: body.document?.filename ?? upload?.name ?? '' };
@@ -152,25 +169,74 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     };
   }
 
+  // Server-side planner (LLM when configured, deterministic rules otherwise).
+  async function plan(input: string, tool: Tool | undefined, history: Message[]): Promise<Plan> {
+    return readJson(await fetch(`/backend/assistant/chat?lang=${locale}`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: input,
+        history: history.map(m => ({ role: m.role, content: historyLine(m).slice(0, 1900) })).filter(turn => turn.content).slice(-8),
+        project_id: projectId === 'auto' ? null : Number(projectId),
+        model_route: effectiveRoute,
+        data_classification: classification,
+        tool,
+      }),
+    }));
+  }
+
+  // Used only when the planner endpoint itself is unreachable.
+  async function fallbackPlan(input: string, intent: Intent): Promise<Plan> {
+    const base: Plan = { tool: 'answer_directly', method: 'rules', reply: null, case_id: null, project_id: null, query: null, hits: null };
+    if (intent !== 'knowledge') return { ...base, tool: (Object.keys(INTENT_BY_TOOL) as Tool[]).find(tool => INTENT_BY_TOOL[tool] === intent) ?? 'answer_directly' };
+    const body = await readJson(await fetch(`/backend/knowledge/search?q=${encodeURIComponent(input)}&limit=5&lang=${locale}`, { headers }));
+    return { ...base, tool: 'search_knowledge', query: input, hits: body.results as KnowledgeHit[] };
+  }
+
+  function replyFor(planned: Plan, input: string): Reply | null {
+    switch (planned.tool) {
+      case 'search_knowledge': return { kind: 'knowledge', query: input, hits: planned.hits ?? [], answer: planned.reply };
+      case 'case_status': return planned.case_id ? { kind: 'caseStatus', caseId: planned.case_id } : { kind: 'help' };
+      case 'project_progress': return { kind: 'progress', projectId: planned.project_id };
+      case 'pending_approvals': return { kind: 'approvals' };
+      case 'answer_directly': return planned.reply ? { kind: 'answer', text: planned.reply } : { kind: 'help' };
+      case 'report_incident': return null;
+    }
+  }
+
   async function send(forced?: { intent: Intent; text: string }) {
     const input = (forced?.text ?? text).trim();
     const upload = forced ? null : file;
     if (busy || (!input && !upload)) return;
-    const intent = forced?.intent ?? (mode === 'auto' ? detectIntent(input, Boolean(upload)) : mode);
+    const chosen: Intent | undefined = forced?.intent ?? (mode === 'auto' ? undefined : mode);
+    const history = messages;
     const assistantId = newId();
+    const update = (patch: Partial<Extract<Message, { role: 'assistant' }>>) =>
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, ...patch } as Message : m));
     setMessages(prev => [
       ...prev,
       { id: newId(), role: 'user', text: input, fileName: upload?.name },
-      { id: assistantId, role: 'assistant', intent, reply: null },
+      { id: assistantId, role: 'assistant', intent: upload ? 'incident' : chosen ?? null, reply: null },
     ]);
     setText(''); setFile(null); setMode('auto'); setBusy(true);
-    let reply: Reply;
     try {
-      reply = await resolve(intent, input || upload?.name || '', upload);
+      if (upload) {
+        update({ method: 'user', reply: await runIntake(input || upload.name, upload, null) });
+      } else {
+        let planned: Plan;
+        try {
+          planned = await plan(input, chosen ? TOOL_BY_MODE[chosen] : undefined, history);
+        } catch {
+          planned = await fallbackPlan(input, chosen ?? detectIntent(input, false));
+        }
+        const intent = INTENT_BY_TOOL[planned.tool];
+        update({ intent, method: planned.method });
+        const reply = replyFor(planned, input) ?? await runIntake(input, null, planned.project_id);
+        update({ reply });
+      }
     } catch (error) {
-      reply = { kind: 'error', message: error instanceof Error ? error.message : t('failed') };
+      update({ reply: { kind: 'error', message: error instanceof Error ? error.message : t('failed') } });
     }
-    setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, reply } : m));
     setBusy(false);
   }
 
@@ -262,8 +328,11 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
         : <div key={message.id} className="assistant-msg bot">
           <div className="brand-mark assistant-avatar"><span>GI</span></div>
           <div className="assistant-reply">
-            <div className="assistant-intent">{t(`intents.${message.intent}`)}</div>
-            {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} /> : <Thinking intent={message.intent} />}
+            <div className="assistant-intent">
+              {message.intent ? t(`intents.${message.intent}`) : t('understanding')}
+              {message.intent && message.method && <span className={`assistant-method ${message.method}`}>{t(`methods.${message.method}`)}</span>}
+            </div>
+            {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} /> : <Thinking intent={message.intent ?? 'help'} />}
           </div>
         </div>)}
       <div ref={endRef} />
@@ -285,9 +354,11 @@ function Thinking({ intent }: { intent: Intent }) {
 function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects: AssistantProject[]; planningAgent: string }) {
   const t = useTranslations('Assistant');
   switch (reply.kind) {
-    case 'case': return <CaseReply summary={reply.data} projects={projects} planningAgent={planningAgent} />;
+    case 'case': return <CaseReply caseId={reply.data.caseId} summary={reply.data} projects={projects} planningAgent={planningAgent} />;
+    case 'caseStatus': return <CaseReply caseId={reply.caseId} projects={projects} planningAgent={planningAgent} />;
+    case 'answer': return <div className="assistant-text assistant-prose">{reply.text}</div>;
     case 'ocr': return <div className="assistant-card"><p><b>{reply.filename}</b></p><p className="muted">{reply.message}</p></div>;
-    case 'knowledge': return <KnowledgeReply query={reply.query} hits={reply.hits} />;
+    case 'knowledge': return <KnowledgeReply query={reply.query} hits={reply.hits} answer={reply.answer ?? null} />;
     case 'progress': return <ProgressReply projects={reply.projectId ? projects.filter(p => p.id === reply.projectId) : projects} />;
     case 'approvals': return <ApprovalsReply />;
     case 'help': return <div className="assistant-text">{t('help')}</div>;
@@ -297,6 +368,7 @@ function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects:
 
 type CaseDetail = {
   id: string; title: string; type: string; risk: string; status: string; deadline: string; project_name: string | null; routing_status: string;
+  detected_issues: string[];
   evidence: { id: number; title: string; source_ref: string; excerpt: string; confidence: number; verified: boolean }[];
   agent_runs: { id: number; agent: string; status: string; summary: string }[];
   action: { id: string; status: string } | null;
@@ -311,7 +383,7 @@ function planSteps(summary: string): string[] {
   return steps.length >= 2 ? steps : [];
 }
 
-function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary; projects: AssistantProject[]; planningAgent: string }) {
+function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: string; summary?: CaseSummary; projects: AssistantProject[]; planningAgent: string }) {
   const t = useTranslations('Assistant');
   const locale = useLocale();
   const [detail, setDetail] = useState<CaseDetail | null>(null);
@@ -322,15 +394,15 @@ function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary;
   const load = useCallback(async () => {
     try {
       const [caseBody, approvalBody] = await Promise.all([
-        readJson(await fetch(`/backend/cases/${summary.caseId}?lang=${locale}`)),
+        readJson(await fetch(`/backend/cases/${caseId}?lang=${locale}`)),
         readJson(await fetch(`/backend/approvals?lang=${locale}`)),
       ]);
       setDetail(caseBody);
-      setApprovals((approvalBody as ApprovalRow[]).filter(row => row.case_id === summary.caseId));
+      setApprovals((approvalBody as ApprovalRow[]).filter(row => row.case_id === caseId));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('failed'));
     }
-  }, [summary.caseId, locale, t]);
+  }, [caseId, locale, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -350,21 +422,29 @@ function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary;
   const steps = planRun ? planSteps(planRun.summary) : [];
   const status = detail?.action?.status ?? '';
   const checks = detail?.verification_receipt ? Object.values(detail.verification_receipt.checks) : [];
+  const statusLabel = (code: string) => t.has(`statuses.${code}`) ? t(`statuses.${code}`) : code;
+  const typeLabel = summary?.typeLabel ?? detail?.type ?? '';
+  const risk = summary?.risk ?? detail?.risk ?? '';
+  const deadline = summary?.deadline || detail?.deadline || '';
+  const issues = summary?.issues ?? detail?.detected_issues ?? [];
+  if (!summary && !detail) return error ? <div className="assistant-error" role="alert">{t('failed')} · {error}</div> : <Thinking intent="help" />;
 
   return <div className="assistant-case">
-    <p className="assistant-text">{t('caseIntro', { id: summary.caseId, type: summary.typeLabel, risk: summary.riskLabel })}</p>
+    <p className="assistant-text">{summary
+      ? t('caseIntro', { id: caseId, type: summary.typeLabel, risk: summary.riskLabel })
+      : t('caseStatusIntro', { id: caseId, status: statusLabel(detail?.action?.status ?? detail?.status ?? '') })}</p>
     <div className="assistant-card">
       <div className="assistant-card-head">
-        <RiskBadge risk={summary.risk} />
-        <b>{summary.typeLabel}</b>
-        <span className="muted">{[detail?.project_name, summary.country, summary.stage].filter(Boolean).join(' · ')}</span>
+        {risk && <RiskBadge risk={risk} />}
+        <b>{typeLabel}</b>
+        <span className="muted">{[detail?.project_name, summary?.country, summary?.stage].filter(Boolean).join(' · ')}</span>
       </div>
       <div className="assistant-facts">
-        <div><span>{t('deadline')}</span><b>{summary.deadline || '—'}</b></div>
-        <div><span>{t('team')}</span><b>{summary.team.join('、') || '—'}</b></div>
-        <div><span>{t('method')}</span><b>{summary.method === 'llm' ? t('methodLlm') : t('methodRules')}</b></div>
+        <div><span>{t('deadline')}</span><b>{deadline || '—'}</b></div>
+        {summary && <div><span>{t('team')}</span><b>{summary.team.join('、') || '—'}</b></div>}
+        {summary && <div><span>{t('method')}</span><b>{summary.method === 'llm' ? t('methodLlm') : t('methodRules')}</b></div>}
       </div>
-      {summary.issues.length > 0 && <div className="assistant-issues">{summary.issues.map(issue => <span key={issue}>{issue}</span>)}</div>}
+      {issues.length > 0 && <div className="assistant-issues">{issues.map(issue => <span key={issue}>{issue}</span>)}</div>}
       {!detail && !error && <Thinking intent="help" />}
       {detail && <>
         <div className="assistant-section-label">{t('plan')}</div>
@@ -388,7 +468,7 @@ function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary;
       <p className="muted">{t('confirmHint')}</p>
       <div className="assistant-actions">
         {projects.map(project => <button key={project.id} className="button secondary" disabled={!!busy}
-          onClick={() => post(`p${project.id}`, `/cases/${summary.caseId}/confirm-project?model_route=${summary.route ?? 'auto'}&data_classification=${summary.classification ?? 'internal'}`, { project_id: project.id })}>
+          onClick={() => post(`p${project.id}`, `/cases/${caseId}/confirm-project?model_route=${summary?.route ?? 'auto'}&data_classification=${summary?.classification ?? 'internal'}`, { project_id: project.id })}>
           {busy === `p${project.id}` ? t('working') : `${project.code} · ${project.country_name}`}
         </button>)}
       </div>
@@ -420,17 +500,19 @@ function CaseReply({ summary, projects, planningAgent }: { summary: CaseSummary;
       <p className="assistant-boundary small">{t('draftBoundary')}</p>
     </div>}
     {error && <div className="assistant-error" role="alert">{t('failed')} · {error}</div>}
-    <Link className="assistant-link" href={`/cases/${summary.caseId}`}>{t('openCase')} →</Link>
+    <Link className="assistant-link" href={`/cases/${caseId}`}>{t('openCase')} →</Link>
   </div>;
 }
 
-function KnowledgeReply({ query, hits }: { query: string; hits: KnowledgeHit[] }) {
+function KnowledgeReply({ query, hits, answer }: { query: string; hits: KnowledgeHit[]; answer: string | null }) {
   const t = useTranslations('Assistant');
   // Below the confident threshold a hit is not evidence, so it is not shown.
   const strong = hits.filter(hit => hit.relevance >= CONFIDENT_RELEVANCE);
   if (strong.length === 0) return <div className="assistant-text">{t('knowledgeNone', { query })}</div>;
   return <div>
-    <p className="assistant-text">{t('knowledgeFound', { count: strong.length })}</p>
+    {answer
+      ? <><div className="assistant-text assistant-prose">{answer}</div><p className="assistant-section-label">{t('knowledgeSources', { count: strong.length })}</p></>
+      : <p className="assistant-text">{t('knowledgeFound', { count: strong.length })}</p>}
     {strong.map(hit => <div key={hit.id} className="assistant-card compact">
       <div className="assistant-card-head"><b>{hit.title}</b><span className="badge ok">{t('relevance', { value: hit.relevance.toFixed(2) })}</span></div>
       <p>{hit.summary}</p>

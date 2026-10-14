@@ -587,7 +587,7 @@
       "knowledge": "识别为：法规与知识查询",
       "progress": "识别为：项目进展",
       "approvals": "识别为：待审批事项",
-      "help": "我能做什么"
+      "help": "我能做什么", "caseStatus": "识别为：查询已有工单"
     },
     "chips": {
       "report": "上报现场问题",
@@ -639,6 +639,11 @@
     "confirmTitle": "请确认项目归属",
     "confirmBadge": "待确认",
     "confirmHint": "没能从内容中确定是哪个项目。系统不会替你猜——选择项目后，专家会重新分析并生成审批事项。",
+    "understanding": "正在理解你的需求…",
+    "methods": {"llm": "大模型理解", "rules": "规则识别", "user": "按你的选择"},
+    "caseStatusIntro": "工单 {id} 的当前状态：{status}。",
+    "knowledgeSources": "引用来源（{count} 条）",
+    "statuses": {"NEEDS_PROJECT_CONFIRMATION": "待确认项目归属", "AWAITING_APPROVAL": "等待人工审批", "APPROVED": "已批准，可生成回复草稿", "EXECUTED": "草稿已生成，等待独立核验", "EXECUTION_FAILED": "草稿生成失败，可重试", "VERIFIED": "已核验，可关闭", "VERIFICATION_FAILED": "核验未通过", "CLOSED": "已关闭", "REJECTED": "已驳回，需返工"},
     "approvalsNone": "目前没有待审批事项。"
   }
 }

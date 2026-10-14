@@ -587,7 +587,7 @@
       "knowledge": "Detected: regulation & knowledge query",
       "progress": "Detected: project progress",
       "approvals": "Detected: pending approvals",
-      "help": "What I can do"
+      "help": "What I can do", "caseStatus": "Detected: existing work order"
     },
     "chips": {
       "report": "Report a site issue",
@@ -639,6 +639,11 @@
     "confirmTitle": "Confirm the project",
     "confirmBadge": "Needs confirmation",
     "confirmHint": "The project could not be determined from the content, and the system will not guess. Pick a project and the specialists will re-run the analysis and create the approval items.",
+    "understanding": "Understanding your request…",
+    "methods": {"llm": "LLM", "rules": "rules", "user": "your choice"},
+    "caseStatusIntro": "Current status of work order {id}: {status}.",
+    "knowledgeSources": "Sources cited ({count})",
+    "statuses": {"NEEDS_PROJECT_CONFIRMATION": "waiting for project confirmation", "AWAITING_APPROVAL": "awaiting human approval", "APPROVED": "approved, ready to generate the reply draft", "EXECUTED": "draft generated, awaiting independent verification", "EXECUTION_FAILED": "draft generation failed, can be retried", "VERIFIED": "verified, ready to close", "VERIFICATION_FAILED": "verification failed", "CLOSED": "closed", "REJECTED": "rejected, rework required"},
     "approvalsNone": "Nothing is awaiting approval."
   }
 }

@@ -39,6 +39,7 @@ from .phase8 import router as phase8_router
 from .country_knowledge import router as country_knowledge_router
 from .competition import router as competition_router
 from .ingestion import receipt_payload, record_ingestion_receipt, router as ingestion_router
+from .assistant import router as assistant_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,6 +68,7 @@ app.include_router(phase7_router)
 app.include_router(country_knowledge_router)
 app.include_router(competition_router)
 app.include_router(ingestion_router)
+app.include_router(assistant_router)
 
 @app.get('/health')
 def health(): return {"status":"ok","service":"globalinfra-api","version":"4.3.0","product_version":"V4.3","architecture":"unified-ingestion-control-plane"}

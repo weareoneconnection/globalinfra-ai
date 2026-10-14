@@ -205,6 +205,9 @@ body{overflow-x:hidden}.content,.command-hero>div:first-child{min-width:0}@media
 .assistant-reply{flex:1;min-width:0}
 .assistant-intent{font-size:11px;color:var(--cyan);letter-spacing:.04em;margin:5px 0 8px}
 .assistant-text{margin:0 0 10px;line-height:1.7}
+.assistant-prose{white-space:pre-wrap;overflow-wrap:anywhere}
+.assistant-method{margin-left:8px;padding:1px 7px;border-radius:999px;border:1px solid var(--line2);color:var(--muted);font-size:10px}
+.assistant-method.llm{border-color:rgba(187,140,255,.4);color:#d9c2ff;background:rgba(187,140,255,.08)}
 .assistant-thinking{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;padding:6px 0}
 .assistant-thinking small{color:#6f8893}
 .assistant-dots{display:inline-flex;gap:4px}

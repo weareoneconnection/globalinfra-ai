@@ -218,7 +218,7 @@ The web app now opens on the **Assistant** (`/`); the former Command Center move
 - **Project progress / my approvals**: progress, schedule variance, next gate and pending approvals.
 - **Sensitive data**: the "Sensitive" toggle submits with the `restricted` classification and forces the local model.
 
-Intent detection is a deterministic client-side keyword rule, and every reply states what it detected. Conversations are kept only in the current browser tab (`sessionStorage`).
+**Chat agent (`POST /assistant/chat`)**: with a model configured, the model reads the message plus the last 8 turns and picks exactly one tool (report incident, search regulations, existing work order, project progress, pending approvals, answer directly). The tool name is a JSON-schema enum, and work-order ids and project codes must exist in the database; anything else falls back to the deterministic keyword planner, which is also the only planner when no model is configured, so offline and CI behaviour stays deterministic. Regulation answers are composed **only from the retrieved sources** and must cite them as `[source ref]`; an answer that cites nothing, or cites a source that was not retrieved, is discarded in favour of the plain source list. Retrieval runs on both the user's own words and the model's rewritten query, so a rewrite can add hits but never lose them. Approval, execution, verification and closure are not tools, so the model cannot perform them, and a message with incident signals is never brushed off with a chat reply. Every reply is labelled LLM / rules / your choice. Conversations are kept only in the current browser tab (`sessionStorage`).
 
 ## V4.3 Phase 10.1 Unified Data Ingestion
 
