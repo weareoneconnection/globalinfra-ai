@@ -1,10 +1,10 @@
 > **Language / 语言**: [English](README.md) · 简体中文
 
-# GlobalInfra AI V4.2
+# GlobalInfra AI V4.3
 
 **全球交通基础设施智能与可信执行平台**
 
-GlobalInfra AI V4.2 是一个面向海外基础设施项目的运营级数字孪生与可信执行平台。它把完整项目生命周期和八大智能领域连接到实时几何、进度、成本、遥测与证据化决策，并将整条链路固化为可复现的参赛黄金主线与评测证据。
+GlobalInfra AI V4.3 是一个面向海外基础设施项目的运营级数字孪生与可信执行平台。它把完整项目生命周期和八大智能领域连接到实时几何、进度、成本、遥测与证据化决策，并将整条链路固化为可复现的参赛黄金主线、评测证据与六入口统一数据接入控制面。
 
 > 范围说明：本仓库是一个全新的独立代码库。它不依赖、不导入、不调用、也不暴露 TheOne 或任何 TheOne 品牌的运行时。
 
@@ -193,6 +193,12 @@ V2.1 将候选决策演示升级为受管控的执行生命周期。分析阶段
 
 仓库内的 IFC/glTF/3D Tiles 引用、BMS/SCADA 读数和场景均为合成集成样例。生产部署可通过模型转换、项目管理系统、对象存储和遥测适配器替换数据源，同时保持 Twin ID 与 API 契约不变。
 
+## V4.3 阶段 10.1 统一数据接入中心
+
+`/data-ingestion` 工作台不再假定所有输入都是事件，而是明确分为六条通道：事件与工单、文档与函件、项目主数据、企业系统连接器、BIM/GIS/数字孪生模型、IoT/遥测数据。每条通道都写入自己的原生领域对象，同时生成租户隔离的 `IngestionReceipt`，记录校验结果、接受/拒绝数量、统一映射版本、目标对象、校验和与来源血缘。只有具备可执行意义的领域变化才触发事件。
+
+主要接口：`GET /ingestion/catalog`、`/ingestion/summary`、`/ingestion/receipts`；`POST /ingestion/project-master`。现有现场、文本/文档、连接器、孪生源、模型转换、项目工厂与遥测接口均返回同一标准接入回执。
+
 ## 数据库迁移（Alembic）
 
 V1.3 引入 Alembic，V2.0 将其扩展到全生命周期数字孪生，V2.1 再加入可信执行闭环。离线/测试路径保持不变：`app.main.lifespan` 仍调用 `Base.metadata.create_all` + `seed()`，本地开发、CI 与评测无需迁移步骤。Alembic 是真实（Postgres）部署的受管路径。
@@ -212,6 +218,10 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0003_digital_twin`：新增孪生对象图谱、状态历史、工程事件、4D/5D 关联、传感器、调试、维护与受管控场景。
 - `0004_trusted_execution_closure`：新增主张、受管控行动意图、执行/核验回执、内容寻址产物及待人工确认的工单路由字段。
 - `0005_phase7_production_pilot`：新增组织、身份、审计事件、现场观察、真实孪生数据源、连接器同步记录与 AI 质量发布门禁。
+- `0006_phase8_operational_twin`：新增运营级孪生模型、转换任务与遥测历史。
+- `0007_country_knowledge`：新增受管控国家包与知识生命周期字段。
+- `0008_approval_decision_audit`：新增明确的审批决策人和决策时间审计字段。
+- `0009_unified_ingestion_control_plane`：为六类接入通道新增租户隔离的校验与血缘回执。
 
 数据库 URL 由 `migrations/env.py` 从应用设置（`DATABASE_URL`/`.env`）读取，不写入 `alembic.ini`。
 
@@ -235,6 +245,7 @@ docs                      架构、安全、治理与演示文档
 - 八大智能领域，关联 24 个专业学科
 - 用数字主线关系取代部门数据孤岛
 - 以工单为驱动，而非以聊天为先
+- 数据保持领域原生，仅可执行变化触发事件
 - 先有证据，后有结论
 - 确定性工作流 + 智能体推理步骤
 - 高风险对外行动需人工审批

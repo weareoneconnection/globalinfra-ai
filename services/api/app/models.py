@@ -357,6 +357,33 @@ class ConnectorSyncRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class IngestionReceipt(Base):
+    """Immutable control-plane receipt for one data-ingestion operation.
+
+    The receipt records validation and lineage without forcing documents,
+    telemetry, master data or models into an event-shaped payload.  Domain
+    objects stay in their native tables; actionable changes may emit events
+    later through the workflow layer.
+    """
+    __tablename__ = "ingestion_receipts"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(48), index=True)
+    source_type: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    records_received: Mapped[int] = mapped_column(Integer, default=1)
+    records_accepted: Mapped[int] = mapped_column(Integer, default=1)
+    records_rejected: Mapped[int] = mapped_column(Integer, default=0)
+    target_type: Mapped[str] = mapped_column(String(64))
+    target_id: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mapping_version: Mapped[str] = mapped_column(String(64), default="globalinfra.canonical.v1")
+    validation_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    lineage: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
 class AIQualityRun(Base):
     __tablename__ = "ai_quality_runs"
     id: Mapped[str] = mapped_column(String(96), primary_key=True)

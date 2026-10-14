@@ -24,10 +24,11 @@ from .database import get_db
 from .i18n import bi
 from .models import (
     AIQualityRun, AuditEvent, Case, Connector, ConnectorSyncRun,
-    FieldObservation, Identity, Organization, Project, TwinModelVersion,
+    FieldObservation, Identity, IngestionReceipt, Organization, Project, TwinModelVersion,
     TwinObject, TwinSource, TwinTelemetryReading, utc_now,
 )
 from .security import Principal, get_principal, require_project, require_roles
+from .ingestion import receipt_payload, record_ingestion_receipt
 
 router = APIRouter(tags=["Phase 7 production pilot"])
 
@@ -102,12 +103,20 @@ class FieldSyncIn(BaseModel):
     observations: list[FieldObservationIn] = Field(min_length=1, max_length=100)
 
 
-def _create_field_observation(payload: FieldObservationIn, db: Session, principal: Principal) -> tuple[FieldObservation, bool]:
+def _field_receipt(db: Session, row: FieldObservation) -> IngestionReceipt | None:
+    return db.scalar(
+        select(IngestionReceipt)
+        .where(IngestionReceipt.channel == "event_work_order", IngestionReceipt.target_id == row.id)
+        .order_by(IngestionReceipt.created_at.desc())
+    )
+
+
+def _create_field_observation(payload: FieldObservationIn, db: Session, principal: Principal) -> tuple[FieldObservation, bool, IngestionReceipt | None]:
     existing = db.scalar(select(FieldObservation).where(FieldObservation.client_id == payload.client_id))
     if existing:
         if existing.organization_id != principal.organization_id:
             raise HTTPException(409, "Client identifier already belongs to another organization")
-        return existing, False
+        return existing, False, _field_receipt(db, existing)
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(404, "Project not found")
@@ -138,6 +147,21 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
         project_routing_confidence=1.0, routing_status="ROUTED",
     )
     db.add_all([case, row])
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=payload.project_id,
+        channel="event_work_order", source_type="mobile_field",
+        status="SYNCED" if media_ready else "MEDIA_PENDING",
+        target_type="FieldObservation", target_id=observation_id,
+        checksum=hashlib.sha256(f"{payload.client_id}:{payload.description}".encode()).hexdigest(),
+        validation_summary={
+            "schema": "valid", "twin_linked": bool(payload.twin_id),
+            "media_ready": media_ready, "severity": payload.severity,
+        },
+        lineage={
+            "client_id": payload.client_id, "reporter_id": principal.subject,
+            "case_id": case_id, "captured_at": _naive_utc(payload.captured_at).isoformat(),
+        },
+    )
     try:
         db.commit()
     except IntegrityError:
@@ -150,10 +174,11 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
         if winner:
             if winner.organization_id != principal.organization_id:
                 raise HTTPException(409, "Client identifier already belongs to another organization")
-            return winner, False
+            return winner, False, _field_receipt(db, winner)
         raise
     db.refresh(row)
-    return row, True
+    db.refresh(receipt)
+    return row, True, receipt
 
 
 @router.get("/identity/me")
@@ -204,8 +229,9 @@ def create_field_observation(
     principal: Principal = Depends(require_roles("field_user", "engineer", "project_manager")),
     db: Session = Depends(get_db),
 ):
-    row, created = _create_field_observation(payload, db, principal)
-    return {**_field_row(row), "created": created}
+    row, created, receipt = _create_field_observation(payload, db, principal)
+    return {**_field_row(row), "created": created,
+            "ingestion_receipt": receipt_payload(receipt) if receipt else None}
 
 
 @router.post("/field/sync")
@@ -216,8 +242,10 @@ def sync_field_observations(
 ):
     results = []
     for observation in payload.observations:
-        row, created = _create_field_observation(observation, db, principal)
-        results.append({"client_id": row.client_id, "id": row.id, "case_id": row.case_id, "status": row.sync_status, "created": created})
+        row, created, receipt = _create_field_observation(observation, db, principal)
+        results.append({"client_id": row.client_id, "id": row.id, "case_id": row.case_id,
+                        "status": row.sync_status, "created": created,
+                        "ingestion_receipt": receipt_payload(receipt) if receipt else None})
     return {"accepted": len(results), "results": results, "server_time": utc_now().isoformat()}
 
 
@@ -289,8 +317,16 @@ def register_twin_source(
         coordinate_reference_system=payload.coordinate_reference_system,
         status="REGISTERED", checksum=payload.checksum, metadata_json=payload.metadata,
     )
-    db.add(row); db.commit(); db.refresh(row)
-    return _twin_source_row(row)
+    db.add(row)
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=payload.project_id,
+        channel="twin_model", source_type=payload.source_type, status="REGISTERED",
+        target_type="TwinSource", target_id=row.id, checksum=payload.checksum,
+        validation_summary={"schema": "valid", "crs_supplied": bool(payload.coordinate_reference_system)},
+        lineage={"uri": payload.uri, "version": payload.version, "submitted_by": principal.subject},
+    )
+    db.commit(); db.refresh(row); db.refresh(receipt)
+    return {**_twin_source_row(row), "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.get("/twin/sources")
@@ -315,8 +351,16 @@ def sync_twin_source(
         raise HTTPException(404, "Twin source not found")
     require_project(principal, row.project_id)
     row.status, row.last_synced_at = "SYNCHRONIZED", utc_now()
-    db.commit()
-    return {**_twin_source_row(row), "contract": "Twin ID + version + checksum preserved"}
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=row.project_id,
+        channel="twin_model", source_type=row.source_type, status="SYNCHRONIZED",
+        target_type="TwinSource", target_id=row.id, checksum=row.checksum,
+        validation_summary={"identity_preserved": True, "version_preserved": True},
+        lineage={"uri": row.uri, "version": row.version, "operation": "synchronize"},
+    )
+    db.commit(); db.refresh(receipt)
+    return {**_twin_source_row(row), "contract": "Twin ID + version + checksum preserved",
+            "ingestion_receipt": receipt_payload(receipt)}
 
 
 class ConnectorIn(BaseModel):
@@ -371,8 +415,16 @@ def create_connector(
         project_id=payload.project_id, connector_type=payload.connector_type,
         name=payload.name, status="CONFIGURED", config=payload.config,
     )
-    db.add(row); db.commit(); db.refresh(row)
-    return _connector_row(row)
+    db.add(row)
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=payload.project_id,
+        channel="enterprise_connector", source_type=payload.connector_type,
+        status="CONFIGURED", target_type="Connector", target_id=row.id,
+        validation_summary={"schema": "valid", "secrets_persisted": False},
+        lineage={"configured_by": principal.subject, "endpoint_alias": payload.config.get("endpoint_alias")},
+    )
+    db.commit(); db.refresh(row); db.refresh(receipt)
+    return {**_connector_row(row), "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.get("/integrations/connectors")
@@ -381,7 +433,7 @@ def connectors(principal: Principal = Depends(get_principal), db: Session = Depe
     return [_connector_row(row) for row in rows if row.project_id is None or principal.can_access_project(row.project_id)]
 
 
-def _sync_connector(row: Connector, payload: SyncPayload, db: Session) -> ConnectorSyncRun:
+def _sync_connector(row: Connector, payload: SyncPayload, db: Session) -> tuple[ConnectorSyncRun, IngestionReceipt]:
     rejected = sum(1 for record in payload.records if not isinstance(record.get("external_id"), str))
     accepted = len(payload.records) - rejected
     run = ConnectorSyncRun(
@@ -393,8 +445,21 @@ def _sync_connector(row: Connector, payload: SyncPayload, db: Session) -> Connec
         completed_at=utc_now(),
     )
     row.status, row.last_sync_at = "ONLINE", utc_now()
-    db.add(run); db.commit(); db.refresh(run)
-    return run
+    db.add(run)
+    receipt = record_ingestion_receipt(
+        db, organization_id=row.organization_id, project_id=row.project_id,
+        channel="enterprise_connector", source_type=row.connector_type,
+        status=run.status, target_type="ConnectorSyncRun", target_id=run.id,
+        records_received=len(payload.records), records_accepted=accepted,
+        records_rejected=rejected,
+        validation_summary={
+            "canonical_contract": ["external_id", "object_type", "updated_at", "payload"],
+            "schema": "valid" if rejected == 0 else "partial",
+        },
+        lineage={"connector_id": row.id, "cursor": payload.cursor},
+    )
+    db.commit(); db.refresh(run); db.refresh(receipt)
+    return run, receipt
 
 
 @router.post("/integrations/connectors/{connector_id}/sync")
@@ -407,8 +472,11 @@ def sync_connector(
     if not row or row.organization_id != principal.organization_id:
         raise HTTPException(404, "Connector not found")
     if row.project_id: require_project(principal, row.project_id)
-    run = _sync_connector(row, payload, db)
-    return {"id": run.id, "connector_id": run.connector_id, "status": run.status, "records_read": run.records_read, "records_written": run.records_written, "records_rejected": run.records_rejected, "detail": run.detail}
+    run, receipt = _sync_connector(row, payload, db)
+    return {"id": run.id, "connector_id": run.connector_id, "status": run.status,
+            "records_read": run.records_read, "records_written": run.records_written,
+            "records_rejected": run.records_rejected, "detail": run.detail,
+            "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.post("/integrations/webhooks/{connector_id}")
@@ -428,8 +496,9 @@ async def connector_webhook(connector_id: str, request: Request, db: Session = D
         payload = SyncPayload.model_validate(data)
     except Exception as exc:
         raise HTTPException(422, "Invalid connector payload") from exc
-    run = _sync_connector(row, payload, db)
-    return {"status": run.status, "sync_run_id": run.id}
+    run, receipt = _sync_connector(row, payload, db)
+    return {"status": run.status, "sync_run_id": run.id,
+            "ingestion_receipt": receipt_payload(receipt)}
 
 
 class AIQualityIn(BaseModel):
@@ -474,9 +543,10 @@ def platform_capabilities(db: Session = Depends(get_db)):
         "ai_quality_runs": db.scalar(select(func.count(AIQualityRun.id))) or 0,
         "model_versions": db.scalar(select(func.count(TwinModelVersion.id))) or 0,
         "telemetry_readings": db.scalar(select(func.count(TwinTelemetryReading.id))) or 0,
+        "ingestion_receipts": db.scalar(select(func.count(IngestionReceipt.id))) or 0,
     }
     return {
-        "version": "4.0.0", "stage": "PHASE_8_OPERATIONAL_TWIN",
+        "version": "4.3.0", "stage": "PHASE_10_1_UNIFIED_INGESTION",
         "capabilities": {
             "7.1": "trusted_execution", "7.2": "oidc_rbac_multitenancy_audit",
             "7.3": "offline_field_operations", "7.4": "real_twin_source_registry",
@@ -486,6 +556,8 @@ def platform_capabilities(db: Session = Depends(get_db)):
             "8.3": "one_click_project_twin", "8.4": "realtime_iot_timeseries",
             "8.5": "4d_5d_visual_controls", "8.6": "evidence_grounded_twin_copilot",
             "8.7": "competition_showcase_mode",
+            "9.1": "competition_golden_thread_and_eval_evidence",
+            "10.1": "six_channel_unified_data_ingestion",
         },
         "counts": counts,
     }

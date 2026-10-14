@@ -1,10 +1,10 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V4.2
+# GlobalInfra AI V4.3
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V4.2 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions, with a reproducible competition golden thread and measured evaluation evidence.
+GlobalInfra AI V4.3 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions, with a reproducible competition golden thread, measured evaluation evidence and a six-channel unified data-ingestion control plane.
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 
@@ -206,6 +206,12 @@ Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/t
 
 The generated IFC/glTF/3D Tiles/GeoJSON/WMS artifacts, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
 
+## V4.3 Phase 10.1 Unified Data Ingestion
+
+The `/data-ingestion` workspace replaces the assumption that every input is an event with six explicit channels: events/work orders, documents/correspondence, project master data, enterprise connectors, BIM/GIS/digital-twin models, and IoT/telemetry. Each channel writes its native domain object and a tenant-scoped `IngestionReceipt` containing validation results, accepted/rejected counts, the canonical mapping version, target identity, checksum and source lineage. Events are emitted only when a domain change is actionable.
+
+Primary APIs: `GET /ingestion/catalog`, `/ingestion/summary`, `/ingestion/receipts`; `POST /ingestion/project-master`. Existing field, intake, connector, twin-source, model-conversion, project-factory and telemetry endpoints now return the same standard ingestion receipt.
+
 ## Database migrations (Alembic)
 
 V1.3 introduced Alembic, V2.0 extended it for the full-lifecycle twin, and V2.1 adds the trusted execution closure. The offline/test path is unchanged: `app.main.lifespan` still calls `Base.metadata.create_all` + `seed()`, so local dev, CI and the eval harness need no migration step. Alembic is the managed path for real (Postgres) deployments.
@@ -226,6 +232,10 @@ DATABASE_URL=postgresql+psycopg://... alembic upgrade head
 - `0003_digital_twin` adds the Twin object graph, state history, engineering events, 4D/5D links, sensors, commissioning, maintenance and governed scenarios.
 - `0004_trusted_execution_closure` adds claims, governed action intents, execution/verification receipts, content-addressed artifacts, and unassigned-intake routing fields.
 - `0005_phase7_production_pilot` adds organizations, identities, audit events, field observations, real twin sources, connector sync runs and AI quality release gates.
+- `0006_phase8_operational_twin` adds operational twin models, conversions and telemetry history.
+- `0007_country_knowledge` adds governed country packs and knowledge lifecycle fields.
+- `0008_approval_decision_audit` adds explicit approval decision attribution and timestamps.
+- `0009_unified_ingestion_control_plane` adds tenant-scoped validation and lineage receipts across all six ingestion channels.
 
 The database URL is read from app settings (`DATABASE_URL`/`.env`) by `migrations/env.py`, not committed in `alembic.ini`.
 
@@ -249,6 +259,7 @@ docs                      Architecture, security, governance and demo docs
 - Eight intelligence domains with 24 connected professional disciplines
 - Digital-thread relationships instead of departmental data silos
 - Case-driven, not chat-first
+- Domain-native data, with events emitted only for actionable change
 - Evidence before conclusions
 - Deterministic workflow + agentic reasoning steps
 - Human approval for high-risk external actions

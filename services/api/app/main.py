@@ -25,7 +25,7 @@ from .intake import build_intake_result, detect_language, LANGUAGE_DISPLAY
 from .llm_classify import classify_text_llm
 from .llm_extract import extract_fields_llm
 from .documents import extract_text, UnsupportedDocument
-from .security import Principal, api_key_gate, require_roles
+from .security import Principal, api_key_gate, get_principal, require_project, require_roles
 from .config import settings
 from .operations import metrics_response, production_controls
 from .phase7 import router as phase7_router
@@ -37,6 +37,7 @@ from .twin_demo import router as twin_demo_router
 from .phase8 import router as phase8_router
 from .country_knowledge import router as country_knowledge_router
 from .competition import router as competition_router
+from .ingestion import receipt_payload, record_ingestion_receipt, router as ingestion_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,7 +47,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="4.1.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="4.3.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -64,9 +65,10 @@ app.include_router(phase8_router)
 app.include_router(phase7_router)
 app.include_router(country_knowledge_router)
 app.include_router(competition_router)
+app.include_router(ingestion_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"4.2.0","product_version":"V4.2","architecture":"competition-evidence-plane"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"4.3.0","product_version":"V4.3","architecture":"unified-ingestion-control-plane"}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}
@@ -134,6 +136,8 @@ def classify_endpoint(payload: ClassifyRequest):
 class IntakeTextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500_000)
     language: str | None = None  # optional hint; auto-detected when omitted
+    project_id: int | None = Field(default=None, gt=0)
+    entry_type: Literal["text", "work_order"] = "text"
     model_route: Literal["local", "openai", "auto"] | None = None
     data_classification: Literal["public", "internal", "restricted"] = "internal"
 
@@ -155,7 +159,10 @@ def _case_title(text: str) -> str:
 
 async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str,
                            language_hint: str | None, source_file: tuple[str, str, str] | None,
-                           model_route: str | None = None, data_classification: str = "internal"):
+                           model_route: str | None = None, data_classification: str = "internal",
+                           organization_id: str = "globalinfra-demo",
+                           project_id_override: int | None = None,
+                           entry_type: str = "text"):
     """Shared core for both intake endpoints: classify (Layer 1) + enrich,
     create a Case, persist the intake submission (and optional source
     document), then run the real analysis workflow. Returns the localized
@@ -181,13 +188,19 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     )
     result = build_intake_result(text, language_hint, classification=classification, extraction=extraction)
     detected_lang = result["language"]
-    project_id, project_routing_confidence = _select_project_id(db, result["country"])
+    if project_id_override is not None:
+        project_id, project_routing_confidence = project_id_override, 1.0
+        project_routing_source = "USER_CONFIRMED"
+    else:
+        project_id, project_routing_confidence = _select_project_id(db, result["country"])
+        project_routing_source = "COUNTRY_AUTO_ROUTE" if project_id is not None else "NEEDS_CONFIRMATION"
     case_id = f"CASE-INTAKE-{uuid.uuid4().hex[:8].upper()}"
     title = _case_title(text)
 
     routing_status = "ROUTED" if project_id is not None else "NEEDS_PROJECT_CONFIRMATION"
     result["project_routing_status"] = routing_status
     result["project_routing_confidence"] = project_routing_confidence
+    result["project_routing_source"] = project_routing_source
     case = Case(
         id=case_id, project_id=project_id,
         title=bi(title), description=bi(text[:600] + ("…" if len(text) > 600 else "")),
@@ -214,7 +227,24 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
             intake_submission_id=submission.id, filename=filename,
             file_type=file_type, storage_ref=storage_ref, parse_status="PARSED",
         ))
+    receipt = record_ingestion_receipt(
+        db, organization_id=organization_id, project_id=project_id,
+        channel="document_correspondence" if source_file is not None else "event_work_order",
+        source_type=source_file[1] if source_file is not None else entry_type,
+        status="ACCEPTED", target_type="Case", target_id=case_id,
+        checksum=submission.input_hash,
+        validation_summary={
+            "language": detected_lang, "case_type": result["case_type"],
+            "risk": result["risk"], "project_routing_status": routing_status,
+            "project_routing_source": project_routing_source,
+        },
+        lineage={
+            "raw_input_ref": raw_input_ref, "submission_id": submission.id,
+            "data_classification": data_classification,
+        },
+    )
     db.commit()
+    db.refresh(receipt)
 
     try:
         analysis = await analyze_case(db, case_id, model_route, data_classification)
@@ -224,6 +254,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     payload = {
         "submission_id": submission.id,
         "case_id": case_id,
+        "ingestion_receipt": receipt_payload(receipt),
         "intake": result,
         "specialist_team": [
             {"id": agent_id, "name": AGENTS_BY_ID[agent_id]["name"]}
@@ -239,15 +270,25 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     return localize(payload, lang)
 
 @app.post('/intake/text')
-async def intake_text(payload: IntakeTextRequest, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+async def intake_text(
+    payload: IntakeTextRequest, db: Session = Depends(get_db),
+    lang: str = Depends(get_lang), principal: Principal = Depends(get_principal),
+):
     """Universal intake for free-text field observations / owner notices /
     letters. Classifies deterministically (Layer 1), creates a Case, and runs
     the real retrieval-grounded analysis workflow, returning the Case id and
     the specialist team that was selected for it."""
+    if payload.project_id is not None:
+        require_project(principal, payload.project_id)
+        if not db.get(Project, payload.project_id):
+            raise HTTPException(404, "Project not found")
     return await _intake_pipeline(
-        db, payload.text, lang, raw_input_ref="text:inline",
+        db, payload.text, lang,
+        raw_input_ref="work_order:manual" if payload.entry_type == "work_order" else "text:inline",
         language_hint=payload.language, source_file=None,
         model_route=payload.model_route, data_classification=payload.data_classification,
+        organization_id=principal.organization_id,
+        project_id_override=payload.project_id, entry_type=payload.entry_type,
     )
 
 @app.post('/intake/document')
@@ -257,6 +298,7 @@ async def intake_document(
     data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
+    principal: Principal = Depends(get_principal),
 ):
     """Universal intake for an uploaded document (PDF / DOCX / TXT text
     extraction only in M1 -- image OCR and voice ASR are deferred). Extracts
@@ -275,6 +317,7 @@ async def intake_document(
         db, text, lang, raw_input_ref=file.filename or "upload",
         language_hint=None, source_file=(file.filename or "upload", file_type, storage_ref),
         model_route=model_route, data_classification=data_classification,
+        organization_id=principal.organization_id,
     )
 
 @app.get('/dashboard/summary')

@@ -21,6 +21,7 @@ from .models import (Project, TwinConversionJob, TwinCopilotRun, TwinEvent,
                      TwinSensor, TwinSource, TwinTelemetryReading, utc_now)
 from .twin_demo import seed_synthetic_twin_sources
 from .security import Principal, require_project, require_roles
+from .ingestion import receipt_payload, record_ingestion_receipt
 
 router = APIRouter(prefix="/twin", tags=["phase-8-operational-twin"])
 
@@ -68,8 +69,20 @@ def convert_model(payload: ConversionIn, principal: Principal = Depends(require_
     version = TwinModelVersion(id=f"MV-{uuid4().hex[:12].upper()}", project_id=project.id, version=f"REV-{utc_now().strftime('%Y%m%d%H%M%S')}", format="MULTI", status="READY", checksum=digest,
         uri=f"/backend/twin/demo-pack/{project.id}/model.gltf", object_count=db.scalar(select(func.count(TwinObject.id)).where(TwinObject.project_id == project.id)) or 0,
         change_summary={"added": 0, "modified": 1, "removed": 0, "source": payload.input_ref})
-    db.add_all([job, version]); db.commit()
-    return {"id": job.id, "status": job.status, "progress": 100, "model_version": _version(version), "boundary": "Reference adapter executed; configure an external IFC conversion worker for customer models."}
+    db.add_all([job, version])
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=project.id,
+        channel="twin_model", source_type=payload.input_format.upper(), status="CONVERTED",
+        target_type="TwinConversionJob", target_id=job.id, checksum=digest,
+        validation_summary={"schema": "valid", "output_formats": payload.output_formats},
+        lineage={"input_ref": payload.input_ref, "model_version_id": version.id,
+                 "adapter": job.adapter, "provenance": "REFERENCE_ADAPTER"},
+    )
+    db.commit(); db.refresh(receipt)
+    return {"id": job.id, "status": job.status, "progress": 100,
+            "model_version": _version(version),
+            "boundary": "Reference adapter executed; configure an external IFC conversion worker for customer models.",
+            "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.get("/model-diff")
@@ -109,12 +122,25 @@ def generate_project(payload: ProjectGeneratorIn, principal: Principal = Depends
     ]
     db.add_all(objects); db.flush()
     sensor = TwinSensor(id=f"SNS-{payload.code}-ENV", twin_id=objects[-1].id, sensor_type="ENVIRONMENT", unit="°C", status="ONLINE", threshold_warning=35, threshold_critical=42, latest_value=24.6, sampled_at=utc_now())
-    db.add(sensor); db.commit()
+    db.add(sensor)
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=project.id,
+        channel="project_master", source_type="twin_project_factory", status="ACCEPTED",
+        target_type="Project", target_id=project.id,
+        validation_summary={"schema": "valid", "twin_objects_created": 3, "source_count": 6},
+        lineage={"submitted_by": principal.subject, "provenance": "SYNTHETIC_DEMO",
+                 "generator": "phase8_project_factory"},
+    )
+    db.commit()
     seed_synthetic_twin_sources(db); seed_phase8(db)
     for source in db.scalars(select(TwinSource).where(TwinSource.project_id == project.id)).all():
         source.organization_id = principal.organization_id
     db.commit()
-    return {"project_id": project.id, "code": project.code, "twin_root": root, "objects": 3, "sources": 6, "model_version": version, "url": f"/twin?project_id={project.id}"}
+    db.refresh(receipt)
+    return {"project_id": project.id, "code": project.code, "twin_root": root,
+            "objects": 3, "sources": 6, "model_version": version,
+            "url": f"/twin?project_id={project.id}",
+            "ingestion_receipt": receipt_payload(receipt)}
 
 
 class TelemetryIn(BaseModel):
@@ -136,8 +162,22 @@ def ingest_telemetry(payload: TelemetryIn, principal: Principal = Depends(requir
         raise HTTPException(409, "Sensor is outside project scope")
     sensor.latest_value = payload.value; sensor.sampled_at = payload.sampled_at or utc_now()
     row = TwinTelemetryReading(project_id=payload.project_id, sensor_id=sensor.id, twin_id=sensor.twin_id, value=payload.value, unit=sensor.unit, quality=payload.quality, sampled_at=sensor.sampled_at)
-    db.add(row); db.commit(); db.refresh(row)
-    return {"reading_id": row.id, "status": "ACCEPTED", "sensor_id": sensor.id, "twin_id": sensor.twin_id}
+    db.add(row); db.flush()
+    checksum = hashlib.sha256(
+        f"{sensor.id}:{payload.value}:{sensor.sampled_at.isoformat()}".encode()
+    ).hexdigest()
+    receipt = record_ingestion_receipt(
+        db, organization_id=principal.organization_id, project_id=payload.project_id,
+        channel="iot_telemetry", source_type="sensor", status="ACCEPTED",
+        target_type="TwinTelemetryReading", target_id=row.id, checksum=checksum,
+        validation_summary={"schema": "valid", "quality": payload.quality,
+                            "sensor_in_project": True},
+        lineage={"sensor_id": sensor.id, "twin_id": sensor.twin_id,
+                 "sampled_at": sensor.sampled_at.isoformat()},
+    )
+    db.commit(); db.refresh(row); db.refresh(receipt)
+    return {"reading_id": row.id, "status": "ACCEPTED", "sensor_id": sensor.id,
+            "twin_id": sensor.twin_id, "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.get("/telemetry/history")
