@@ -63,7 +63,7 @@ jobs:
           curl -sf http://localhost:8001/health
           curl -sf http://localhost:8001/readyz | grep -q '"database":"ok"'
           curl -sf http://localhost:8001/metrics | grep -q 'globalinfra_http_requests_total'
-          curl -sf http://localhost:8001/platform/capabilities | grep -q 'PHASE_8_OPERATIONAL_TWIN'
+          curl -sf http://localhost:8001/platform/capabilities | grep -q 'PHASE_10_1_UNIFIED_INGESTION'
           curl -sf http://localhost:8001/projects | grep -q 'MY-RAIL-A'
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8001/cases/classify \
             -H 'Content-Type: application/json' \
