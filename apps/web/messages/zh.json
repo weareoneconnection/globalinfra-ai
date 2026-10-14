@@ -2,13 +2,14 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "项目智能",
-    "footerVersion": "V4.0 · 阶段 8 孪生",
-    "footerSub": "WebGL · 4D/5D · 可信 AI",
+    "footerVersion": "V4.2 · 阶段 9.1",
+    "footerSub": "黄金主线 · 评测证据",
     "groups": [
       {
         "label": "全局",
         "items": [
           { "href": "/", "label": "指挥中心", "icon": "⌂" },
+          { "href": "/competition", "label": "参赛证据", "icon": "9.1" },
           { "href": "/projects", "label": "项目组合", "icon": "◫" },
           { "href": "/twin", "label": "数字孪生", "icon": "DT" }
         ]
@@ -381,6 +382,38 @@
     "passed": "发布门禁已打开",
     "blocked": "发布门禁已关闭",
     "noRuns": "尚未记录 AI 质量评测"
+  },
+  "Competition": {
+    "eyebrow": "阶段 9.1 · AI 出海参赛证据",
+    "title": "一条黄金主线，回答评委的全部关键问题。",
+    "subtitle": "从马来西亚现场事件到国家包、知识证据、数字孪生、多智能体、人工审批、执行与独立核验；每一步都有可复现的系统回执。",
+    "verifiedCases": "条可复现评测用例",
+    "goldenKicker": "参赛黄金主线",
+    "closedLoop": "闭环已核验",
+    "ready": "一键运行就绪",
+    "runGolden": "确认人工审批并运行闭环",
+    "running": "正在运行真实链路…",
+    "replay": "读取已核验闭环",
+    "runFailed": "黄金主线运行失败",
+    "evalKicker": "实测证据",
+    "evalTitle": "30 条 AI 出海评测集",
+    "casesPassed": "用例通过",
+    "openEvidence": "打开完整 JSON 证据",
+    "scoreKicker": "评审映射",
+    "scoreTitle": "100 分评分证据就位",
+    "open180": "打开 180 秒演示",
+    "openCountry": "打开国家包",
+    "openKnowledge": "打开知识库",
+    "metrics": {
+      "country_accuracy": "国家识别准确率",
+      "lifecycle_accuracy": "生命周期识别准确率",
+      "risk_accuracy": "风险识别准确率",
+      "top3_evidence_recall": "Top-3 证据召回率",
+      "citation_completeness": "引用完整率",
+      "unsupported_query_abstention": "无证据拒答率",
+      "schema_validity": "结构化输出有效率",
+      "deterministic_fallback_success": "离线降级成功率"
+    }
   },
   "Components": {
     "saving": "保存中…",

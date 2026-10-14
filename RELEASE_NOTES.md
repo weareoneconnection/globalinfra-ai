@@ -2,6 +2,13 @@
 
 # GlobalInfra AI V1.0 Release Notes
 
+## V4.2 / Phase 9.1
+
+- Added `/competition`, a seven-step Malaysia rail golden thread for the AI-outbound track.
+- Reused the real analysis, approval, execution and independent-verification contracts; the content-addressed output remains a draft and is never sent externally.
+- Added a versioned 30-case AI-outbound suite, eight measured quality signals, public evaluation APIs and a CI gate.
+- Connected country packs and evidence to Twin ID, 4D/5D impact and six IFC/GLTF/3D Tiles/GeoJSON/WMS/IoT interfaces.
+
 This release establishes a standalone competition-ready and globally extensible foundation.
 
 ## Implemented

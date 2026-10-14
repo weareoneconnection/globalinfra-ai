@@ -21,6 +21,7 @@ jobs:
       - run: python -m pytest services/api/tests -q
       - run: python evals/run_eval.py
       - run: python evals/run_intake_eval.py
+      - run: python evals/run_competition_eval.py
       # Alembic migrations must apply cleanly to a bare database and produce the
       # same schema the app's create_all path does (V1.3 M1 introduced them).
       - name: Alembic upgrade on a bare database
@@ -88,12 +89,15 @@ jobs:
           curl -sf 'http://localhost:8001/twin/model-versions?project_id=1' | grep -q '2026.10-A'
           curl -sf 'http://localhost:8001/twin/telemetry/live/1?events=1' | grep -q 'event: telemetry'
           curl -sf 'http://localhost:8001/twin/showcase/1' | grep -q 'Grounded Copilot'
+          curl -sf 'http://localhost:8001/competition/evaluation' | grep -q 'AI_OUTBOUND_COMPETITION_EVIDENCE'
+          curl -sf 'http://localhost:8001/competition/golden-thread' | grep -q 'CASE-GOLDEN-MY-001'
           curl -sf -X POST 'http://localhost:8001/twin/scenarios/SCN-RECOVERY-V12/run' \
             -H 'Content-Type: application/json' -d '{"adjustment_percent":10}' | grep -q 'AWAITING_APPROVAL'
           curl -sf http://localhost:3000/ > /dev/null
           curl -sf http://localhost:3000/twin > /dev/null
           curl -sf http://localhost:3000/twin/generate > /dev/null
           curl -sf 'http://localhost:3000/showcase?project_id=1' > /dev/null
+          curl -sf http://localhost:3000/competition > /dev/null
           curl -sf http://localhost:3000/field > /dev/null
           curl -sf http://localhost:3000/integrations > /dev/null
           curl -sf http://localhost:3000/platform > /dev/null

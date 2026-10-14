@@ -2,13 +2,14 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "PROJECT INTELLIGENCE",
-    "footerVersion": "V4.0 · Phase 8 Twin",
-    "footerSub": "WebGL · 4D/5D · Grounded AI",
+    "footerVersion": "V4.2 · Phase 9.1",
+    "footerSub": "Golden thread · Eval proof",
     "groups": [
       {
         "label": "Global",
         "items": [
           { "href": "/", "label": "Command Center", "icon": "⌂" },
+          { "href": "/competition", "label": "Competition", "icon": "9.1" },
           { "href": "/projects", "label": "Portfolio", "icon": "◫" },
           { "href": "/twin", "label": "Digital Twin", "icon": "DT" }
         ]
@@ -381,6 +382,38 @@
     "passed": "Release gate open",
     "blocked": "Release gate closed",
     "noRuns": "No AI quality run has been recorded"
+  },
+  "Competition": {
+    "eyebrow": "PHASE 9.1 · AI OUTBOUND EVIDENCE",
+    "title": "One golden thread answers every critical jury question.",
+    "subtitle": "From a Malaysia field event to country pack, knowledge evidence, digital twin, multi-agent reasoning, human approval, execution and independent verification — every step produces reproducible proof.",
+    "verifiedCases": "reproducible evaluation cases",
+    "goldenKicker": "COMPETITION GOLDEN THREAD",
+    "closedLoop": "LOOP VERIFIED",
+    "ready": "ONE-CLICK READY",
+    "runGolden": "Confirm approval & run closure",
+    "running": "Running the real chain…",
+    "replay": "Read verified closure",
+    "runFailed": "Golden thread failed",
+    "evalKicker": "MEASURED EVIDENCE",
+    "evalTitle": "30-case AI outbound suite",
+    "casesPassed": "cases passed",
+    "openEvidence": "Open complete JSON evidence",
+    "scoreKicker": "JUDGING MAP",
+    "scoreTitle": "100-point evidence coverage",
+    "open180": "Open 180s showcase",
+    "openCountry": "Open country packs",
+    "openKnowledge": "Open knowledge",
+    "metrics": {
+      "country_accuracy": "Country accuracy",
+      "lifecycle_accuracy": "Lifecycle accuracy",
+      "risk_accuracy": "Risk accuracy",
+      "top3_evidence_recall": "Top-3 evidence recall",
+      "citation_completeness": "Citation completeness",
+      "unsupported_query_abstention": "No-evidence abstention",
+      "schema_validity": "Schema validity",
+      "deterministic_fallback_success": "Offline fallback success"
+    }
   },
   "Components": {
     "saving": "Saving…",

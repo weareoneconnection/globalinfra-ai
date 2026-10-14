@@ -3,6 +3,9 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
+# Phase 9.1 reproducible evaluation cases are loaded by the public evidence
+# endpoint at runtime, so the versioned JSONL suite ships with the API image.
+COPY evals ./evals
 # Alembic config + migrations ship in the image so a deployment can run
 # `alembic upgrade head` against a managed database (Postgres). The default
 # CMD still boots via create_all for the zero-config demo/offline path.

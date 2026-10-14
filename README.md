@@ -1,10 +1,10 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V4.0
+# GlobalInfra AI V4.2
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V4.0 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions.
+GlobalInfra AI V4.2 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions, with a reproducible competition golden thread and measured evaluation evidence.
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 
@@ -184,6 +184,10 @@ Phase 7 adds OIDC/RBAC identity boundaries, organization and project scope, muta
 Phase 8 adds a native WebGL GLTF workspace with Twin-ID picking, traceable model versions and conversion jobs, one-click six-format project twin generation, time-series ingestion and SSE streaming, interactive 4D progress and 5D health/cost coloring, an evidence-grounded Twin Copilot, and a timed competition showcase. See [Phase 8 Operational Twin](docs/PHASE8_OPERATIONAL_TWIN.md) for the capability matrix and honest integration boundaries.
 
 For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
+
+## V4.2 Phase 9.1 Competition Golden Thread
+
+`/competition` now composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. A versioned 30-case suite supplies live metrics and a CI release gate; none of the displayed evaluation figures are hard-coded. See [Phase 9.1 Competition Golden Thread](docs/PHASE9_COMPETITION_GOLDEN_THREAD.md).
 
 ## V2.0 Phase 6 Digital Twin
 
