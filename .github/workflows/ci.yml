@@ -28,7 +28,9 @@ jobs:
         working-directory: services/api
         env:
           DATABASE_URL: sqlite:////tmp/ci_migrations.db
-        run: python -m alembic upgrade head
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
