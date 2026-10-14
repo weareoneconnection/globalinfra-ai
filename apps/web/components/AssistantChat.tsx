@@ -148,7 +148,9 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     if (upload) {
       const form = new FormData();
       form.append('file', upload);
-      body = await readJson(await fetch(`/backend/intake/document?${lang}&model_route=${effectiveRoute}&data_classification=${classification}`, { method: 'POST', headers, body: form }));
+      // The user's words travel as a note (lineage), never as document text.
+      const note = input && input !== upload.name ? `&note=${encodeURIComponent(input.slice(0, 1000))}` : '';
+      body = await readJson(await fetch(`/backend/intake/document?${lang}&model_route=${effectiveRoute}&data_classification=${classification}${note}`, { method: 'POST', headers, body: form }));
     } else {
       body = await readJson(await fetch(`/backend/intake/text?${lang}`, {
         method: 'POST',
@@ -374,6 +376,7 @@ type CaseDetail = {
   action: { id: string; status: string } | null;
   execution_receipt: { id: string; status: string; output_digest: string } | null;
   verification_receipt: { id: string; status: string; checks: Record<string, boolean> } | null;
+  artifact: { id: string } | null;
 };
 type ApprovalRow = { id: number; case_id: string; title: string; approver_role: string; status: string; risk: string };
 
@@ -449,13 +452,20 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
       {detail && <>
         <div className="assistant-section-label">{t('plan')}</div>
         {steps.length ? <ol className="assistant-plan">{steps.map(step => <li key={step}>{step}</li>)}</ol> : <p className="muted">{planRun?.summary ?? '—'}</p>}
-        <details className="assistant-details">
-          <summary>{t('evidence', { count: detail.evidence.length })}</summary>
-          {detail.evidence.length === 0 ? <p className="muted">{t('noEvidence')}</p> : detail.evidence.map(item => <div key={item.id} className="assistant-evidence">
-            <div><b>{item.title}</b><code>{item.source_ref}</code><span className="badge info">{Math.round(item.confidence * 100)}%</span></div>
-            <p>{item.excerpt}</p>
-          </div>)}
-        </details>
+        {(() => {
+          // Only verified evidence (above the confident relevance threshold)
+          // is shown as a basis; the rest is folded and carries no score.
+          const strong = detail.evidence.filter(item => item.verified);
+          const weak = detail.evidence.filter(item => !item.verified);
+          return <details className="assistant-details">
+            <summary>{t('evidence', { count: strong.length })}</summary>
+            {strong.length === 0 ? <p className="muted">{t('noEvidence')}</p> : strong.map(item => <div key={item.id} className="assistant-evidence">
+              <div><b>{item.title}</b><code>{item.source_ref}</code><span className="badge info">{Math.round(item.confidence * 100)}%</span></div>
+              <p>{item.excerpt}</p>
+            </div>)}
+            {weak.length > 0 && <p className="muted small">{t('weakEvidence', { refs: weak.map(item => item.source_ref).join('、') })}</p>}
+          </details>;
+        })()}
         <details className="assistant-details">
           <summary>{t('process', { count: detail.agent_runs.length })}</summary>
           <ul className="assistant-runs">{detail.agent_runs.map(run => <li key={run.id}><span className={run.status === 'COMPLETED' ? 'ok' : ''}>{run.status === 'COMPLETED' ? '✓' : '•'}</span><div><b>{run.agent}</b><p>{run.summary}</p></div></li>)}</ul>
@@ -475,7 +485,7 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
     </div>}
 
     {detail && detail.routing_status !== 'NEEDS_PROJECT_CONFIRMATION' && <div className="assistant-card governance">
-      <div className="assistant-card-head"><b>{t('governanceTitle')}</b><span className="badge info">{status || detail.status}</span></div>
+      <div className="assistant-card-head"><b>{t('governanceTitle')}</b><span className="badge info">{statusLabel(status || detail.status)}</span></div>
       <p className="muted">{t('governanceHint')}</p>
       <div className="assistant-approvals">
         {approvals.map(row => <div key={row.id} className="assistant-approval">
@@ -494,6 +504,7 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
         {status === 'VERIFIED' && <button className="button" disabled={!!busy} onClick={() => post('close', `/actions/${detail.action!.id}/close`)}>{busy === 'close' ? t('working') : t('close')}</button>}
       </div>}
       {detail.execution_receipt && <p className="assistant-receipt">✓ {t('executed', { digest: detail.execution_receipt.output_digest?.slice(0, 12) ?? '' })}</p>}
+      {detail.artifact && <DraftView artifactId={detail.artifact.id} />}
       {detail.verification_receipt && <p className="assistant-receipt">✓ {t('verified', { passed: checks.filter(Boolean).length, total: checks.length })}</p>}
       {status === 'CLOSED' && <p className="assistant-receipt">✓ {t('closed')}</p>}
       {status === 'REJECTED' && <p className="assistant-error">{t('rejectedHint')}</p>}
@@ -579,4 +590,31 @@ function ApprovalsReply() {
     </div>)}
     {error && <div className="assistant-error" role="alert">{error}</div>}
   </div>;
+}
+
+type DraftDocument = { body: Record<string, string>; composition?: string };
+
+function DraftView({ artifactId }: { artifactId: string }) {
+  const t = useTranslations('Assistant');
+  const locale = useLocale();
+  const [draft, setDraft] = useState<DraftDocument | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch(`/backend/artifacts/${artifactId}`)
+      .then(readJson)
+      .then(body => { if (alive) setDraft(JSON.parse(body.content) as DraftDocument); })
+      .catch(() => { /* the receipt line above still proves the draft exists */ });
+    return () => { alive = false; };
+  }, [artifactId]);
+  if (!draft) return null;
+  const text = draft.body[locale] ?? draft.body.en ?? '';
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); setCopied(true); } catch { /* clipboard unavailable */ }
+  }
+  return <details className="assistant-details assistant-draft" open>
+    <summary>{t('draftTitle')} · {draft.composition === 'llm' ? t('draftLlm') : t('draftTemplate')}</summary>
+    <pre>{text}</pre>
+    <button type="button" className="button secondary" onClick={copy}>{copied ? t('copied') : t('copy')}</button>
+  </details>;
 }

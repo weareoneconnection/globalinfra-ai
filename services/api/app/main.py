@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import re
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from .security import Principal, api_key_gate, get_principal, require_project, r
 from .config import settings
 from .operations import metrics_response, production_controls
 from .phase7 import router as phase7_router
+from .reply_draft import compose_reply
 from .governed_execution import (
     GovernedExecutionError, artifact_payload, close_action, execute_action, verify_action,
 )
@@ -156,8 +158,21 @@ def _select_project_id(db: Session, country_code: str | None) -> tuple[int | Non
             return pid, 0.95
     return None, 0.0
 
+_SUBJECT_RE = re.compile(r"^(?:subject|re|主题|事由|标题)\s*[:：]\s*(.+)$", re.IGNORECASE)
+
+
 def _case_title(text: str) -> str:
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), text.strip())
+    """A letter's subject line, else its first line with real words in it.
+
+    Extracted documents often start with page numbers or reference codes, so
+    the literal first line is a poor title (e.g. "8").
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    subject = next((m.group(1).strip() for line in lines if (m := _SUBJECT_RE.match(line))), None)
+    first_line = subject or next(
+        (line for line in lines if len(re.sub(r"[\W\d_]+", "", line)) >= 4),
+        lines[0] if lines else text.strip(),
+    )
     return (first_line[:117] + "…") if len(first_line) > 118 else (first_line or "Intake submission")
 
 
@@ -175,6 +190,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
                            model_route: str | None = None, data_classification: str = "internal",
                            organization_id: str = "globalinfra-demo",
                            project_id_override: int | None = None,
+                           user_note: str | None = None,
                            entry_type: str = "text"):
     """Shared core for both intake endpoints: classify (Layer 1) + enrich,
     create a Case, persist the intake submission (and optional source
@@ -262,6 +278,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
             "data_classification": data_classification,
             **({"raw_preserved": True, "storage_ref": source_file.storage_ref}
                if source_file is not None else {}),
+            **({"user_note": user_note.strip()} if user_note and user_note.strip() else {}),
         },
     )
     db.commit()
@@ -410,6 +427,7 @@ async def intake_document(
     file: UploadFile = File(...),
     model_route: Literal["local", "openai", "auto"] | None = Query(default=None),
     data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
+    note: str | None = Query(default=None, max_length=1000, description="The user's request about the document, e.g. 'how should we reply?'; recorded as lineage, never as document text."),
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
     principal: Principal = Depends(get_principal),
@@ -452,7 +470,7 @@ async def intake_document(
         db, text, lang, raw_input_ref=file.filename or "upload",
         language_hint=None, source_file=source_file,
         model_route=model_route, data_classification=data_classification,
-        organization_id=principal.organization_id,
+        organization_id=principal.organization_id, user_note=note,
     )
 
 @app.get('/dashboard/summary')
@@ -663,6 +681,14 @@ def reject(approval_id: int, principal: Principal = Depends(require_roles("appro
     db.commit()
     return {"status": "REJECTED", "case_status": c.status, "action_id": None if action is None else action.id}
 
+async def _composed_reply(db: Session, action_id: str) -> dict | None:
+    """Model-written reply for an approved, not-yet-executed draft action."""
+    action = db.get(Action, action_id)
+    if action is None or action.status not in {"APPROVED", "EXECUTION_FAILED"}:
+        return None
+    return await compose_reply(db, action)
+
+
 class ExecutionRequest(BaseModel):
     executor: str = Field(default="governed.document.generate", min_length=1, max_length=120)
 
@@ -708,19 +734,19 @@ def action_detail(action_id: str, db: Session = Depends(get_db), lang: str = Dep
 
 
 @app.post('/actions/{action_id}/execute')
-def execute(
+async def execute(
     action_id: str, payload: ExecutionRequest | None = None,
     principal: Principal = Depends(require_roles("engineer", "project_manager")),
     db: Session = Depends(get_db),
 ):
     try:
-        return execute_action(db, action_id, payload.executor if payload else principal.subject)
+        return execute_action(db, action_id, payload.executor if payload else principal.subject, await _composed_reply(db, action_id))
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
 
 @app.post('/cases/{case_id}/execute')
-def execute_case(
+async def execute_case(
     case_id: str, payload: ExecutionRequest | None = None,
     principal: Principal = Depends(require_roles("engineer", "project_manager")),
     db: Session = Depends(get_db),
@@ -729,7 +755,7 @@ def execute_case(
     if not action:
         raise HTTPException(404, "No governed action exists for case")
     try:
-        result = execute_action(db, action.id, payload.executor if payload else principal.subject)
+        result = execute_action(db, action.id, payload.executor if payload else principal.subject, await _composed_reply(db, action.id))
         result["case_id"] = case_id
         return result
     except GovernedExecutionError as exc:

@@ -125,6 +125,55 @@ OFFICIAL_KNOWLEDGE = [
 ]
 
 
+# Synthetic project-level contract procedures (not official sources). They give
+# variation / change-request correspondence something relevant to cite instead
+# of the nearest unrelated record.
+PROJECT_PROCEDURES = [
+    (
+        "CTR-A / Clause 13", "Contract", "CONTRACT_CLAUSE", ["construction", "commissioning"], ["variation", "change order", "instruction"],
+        "Synthetic Contract Conditions - Variations", "模拟合同条件 - 变更",
+        "Synthetic clause: variations are valid only when instructed in writing; requests must be substantiated before valuation.",
+        "模拟条款：变更须有书面指令方为有效；变更申请须先提交证明材料方可计价。",
+        "A variation is valid only when instructed in writing by the Contractor's Representative. A subcontractor request for a variation "
+        "must state the instruction reference, the changed scope with drawings and quantities, a rate build-up based on the Bill of Quantities "
+        "and any time impact, and must be submitted within 28 days of the event. A request without a written instruction is registered as a "
+        "claim for evaluation and is not an accepted variation; no cost or time is agreed until valuation is complete.",
+        "变更须经承包商代表书面指令方为有效。分包商提出变更申请时，须说明指令编号、变更范围（附图纸与工程量）、以工程量清单为基础的单价分析及工期影响，"
+        "并须在事件发生后 28 天内提交。没有书面指令的申请将登记为待评估的索赔，不视为已接受的变更；计价完成前不确认任何费用或工期。",
+    ),
+    (
+        "PROC-VO-02", "Project Procedure", "PROCEDURE", ["construction", "commissioning"], ["variation", "valuation", "correspondence"],
+        "Synthetic Variation Order Procedure", "模拟变更令处理程序",
+        "Synthetic procedure for registering, reviewing, valuing and answering variation requests.",
+        "关于变更申请登记、审查、计价与答复的模拟程序。",
+        "On receipt of a variation request: register it, acknowledge receipt in writing within 7 days without accepting entitlement, check "
+        "whether a written instruction or design change exists, obtain an engineering review of the technical necessity, have the quantity "
+        "surveyor value it against contract rates, and obtain project manager approval before any acknowledgement of cost or time. The "
+        "acknowledgement letter should list missing substantiation and reserve the contractor's rights.",
+        "收到变更申请后：登记；在 7 天内书面确认收悉，但不承认任何权利主张；核查是否存在书面指令或设计变更；由工程部门审查技术必要性；"
+        "由造价人员按合同单价计价；在确认任何费用或工期前须经项目经理批准。确认函应列明缺失的证明材料，并保留承包商的合同权利。",
+    ),
+]
+
+
+def _seed_project_procedures(db: Session) -> None:
+    for ref, category, document_type, stages, tags, title_en, title_zh, summary_en, summary_zh, content_en, content_zh in PROJECT_PROCEDURES:
+        content = bi(content_en, content_zh)
+        values = dict(
+            title=bi(title_en, title_zh), category=bi(category, {"Contract": "合同", "Project Procedure": "项目程序"}[category]),
+            jurisdiction=bi("Project", "项目"), language=bi("English", "英语"), source_ref=ref, content=content,
+            summary=bi(summary_en, summary_zh), country_code=None, document_type=document_type, authority=None, version="1.0",
+            status="CURRENT", effective_date=None, review_due=None, source_url=None, content_hash=_digest(content, ref, "1.0"),
+            tags=tags, lifecycle_stages=stages, confidentiality="PUBLIC", updated_at=datetime(2026, 10, 15),
+        )
+        document = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.source_ref == ref))
+        if document is None:
+            db.add(KnowledgeDocument(**values))
+        else:
+            for key, value in values.items():
+                setattr(document, key, value)
+
+
 def _digest(content: dict, source_ref: str, version: str) -> str:
     payload = json.dumps([content, source_ref, version], ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()
@@ -175,6 +224,7 @@ def seed_country_knowledge(db: Session) -> None:
         else:
             for key, value in values.items():
                 setattr(document, key, value)
+    _seed_project_procedures(db)
     db.commit()
 
 

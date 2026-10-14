@@ -644,6 +644,12 @@
     "caseStatusIntro": "工单 {id} 的当前状态：{status}。",
     "knowledgeSources": "引用来源（{count} 条）",
     "statuses": {"NEEDS_PROJECT_CONFIRMATION": "待确认项目归属", "AWAITING_APPROVAL": "等待人工审批", "APPROVED": "已批准，可生成回复草稿", "EXECUTED": "草稿已生成，等待独立核验", "EXECUTION_FAILED": "草稿生成失败，可重试", "VERIFIED": "已核验，可关闭", "VERIFICATION_FAILED": "核验未通过", "CLOSED": "已关闭", "REJECTED": "已驳回，需返工"},
+    "weakEvidence": "另有弱相关资料（{refs}）未作为依据。",
+    "draftTitle": "回复草稿（未发送）",
+    "draftLlm": "大模型起草，引用已校验",
+    "draftTemplate": "模板生成",
+    "copy": "复制草稿",
+    "copied": "已复制",
     "approvalsNone": "目前没有待审批事项。"
   }
 }

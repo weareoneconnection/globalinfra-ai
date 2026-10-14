@@ -22,6 +22,9 @@ if TEST_DB_PATH.exists():
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 os.environ.setdefault("LLM_MODE", "mock")
 os.environ.setdefault("REQUIRE_API_KEY", "false")
+# The whole suite shares one TestClient host; keep the per-minute limiter out
+# of the way (its behaviour is tested explicitly in test_phase7.py).
+os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100000")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

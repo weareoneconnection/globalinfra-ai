@@ -76,7 +76,7 @@ DEFAULT_SPECIALISTS = ["contract", "engineering"]
 # `/agents` endpoint shows to users, so it is kept here rather than in
 # agents.py.
 FOCUS_TERMS: dict[str, str] = {
-    "contract": "contract clause responsibility matrix scope exclusion temporary works 合同 条款 责任 矩阵 范围 除外 临时工程",
+    "contract": "contract clause responsibility matrix scope exclusion temporary works variation instruction 合同 条款 责任 矩阵 范围 除外 临时工程 变更 指令",
     "engineering": "engineering technical evidence crack location width chronology causation structural 工程 技术 证据 裂缝 位置 宽度 时序 成因",
     "interface": "interface civil mep rail systems external boundary coordination earthwork 接口 土建 机电 轨道 系统 边界 协调 土方",
     "hse": "safety environment hazard control fall protection working at height ppe 安全 环境 危险源 管控 坠落 防护 高处作业",

@@ -87,7 +87,7 @@ async def production_controls(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or uuid4().hex
     request.state.request_id = request_id
     if request.url.path not in {"/health", "/livez", "/readyz", "/metrics"} and _over_limit(request):
-        response = JSONResponse(429, {"detail": "Rate limit exceeded", "request_id": request_id})
+        response = JSONResponse({"detail": "Rate limit exceeded", "request_id": request_id}, status_code=429)
         response.headers["Retry-After"] = "60"
         response.headers["X-Request-ID"] = request_id
         return response

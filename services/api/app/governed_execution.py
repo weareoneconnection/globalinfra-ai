@@ -85,18 +85,41 @@ def _input_digest(case: Case, action: Action, evidence: list[dict]) -> str:
     })
 
 
-def _draft_output(case: Case, action: Action, evidence: list[dict]) -> dict:
+def _draft_output(case: Case, action: Action, evidence: list[dict], composed: dict | None = None) -> dict:
+    """Build the draft document. ``composed`` is a validated model-written
+    ``{"en", "zh"}`` letter (see ``reply_draft``); without it the fixed
+    template is used."""
     refs = [item["source_ref"] for item in evidence]
     refs_en = ", ".join(refs)
     refs_zh = "、".join(refs)
-    title_en = f"Owner response draft — {_text(case.title, 'en')}"
-    title_zh = f"业主回复草案——{_text(case.title, 'zh')}"
+    title_en = f"Response draft — {_text(case.title, 'en')}"
+    title_zh = f"回复草案——{_text(case.title, 'zh')}"
+    if composed:
+        body_en = f"DRAFT — NOT SENT\n\n{composed['en']}\n\nEvidence references: {refs_en}"
+        body_zh = f"草案——未发送\n\n{composed['zh']}\n\n证据引用：{refs_zh}"
+    else:
+        body_en, body_zh = _template_body(case, refs_en, refs_zh)
+    return {
+        "contract_version": DOCUMENT_CONTRACT_VERSION,
+        "document_type": "owner-response-draft",
+        "case_id": case.id,
+        "action_id": action.id,
+        "title": {"en": title_en, "zh": title_zh},
+        "body": {"en": body_en, "zh": body_zh},
+        "composition": "llm" if composed else "template",
+        "evidence_refs": refs,
+        "delivery_status": "DRAFT_ONLY_NOT_SENT",
+        "external_delivery_performed": False,
+    }
+
+
+def _template_body(case: Case, refs_en: str, refs_zh: str) -> tuple[str, str]:
     body_en = (
         "DRAFT — NOT SENT\n\n"
         f"Subject: Response regarding {_text(case.title, 'en')}\n\n"
-        "Dear Owner,\n\n"
+        "Dear Sir/Madam,\n\n"
         "We acknowledge the matter described in the Case and are coordinating the "
-        "appropriate project review. This governed draft is prepared for owner review "
+        "appropriate project review. This governed draft is prepared for internal review "
         "and requires no external delivery in this release.\n\n"
         f"Case description: {_text(case.description, 'en')}\n\n"
         f"Evidence references: {refs_en}\n\n"
@@ -105,24 +128,14 @@ def _draft_output(case: Case, action: Action, evidence: list[dict]) -> dict:
     body_zh = (
         "草案——未发送\n\n"
         f"主题：关于{_text(case.title, 'zh')}的回复\n\n"
-        "尊敬的业主：\n\n"
-        "我们已记录 Case 中描述的事项，并正在协调适当的项目审查。本受管控草案仅供业主审阅，"
+        "敬启者：\n\n"
+        "我们已记录工单中描述的事项，并正在协调适当的项目审查。本受管控草案仅供内部审阅，"
         "本版本不会对外发送。\n\n"
         f"工单描述：{_text(case.description, 'zh')}\n\n"
         f"证据引用：{refs_zh}\n\n"
         "此致\n项目团队（仅为草案）"
     )
-    return {
-        "contract_version": DOCUMENT_CONTRACT_VERSION,
-        "document_type": "owner-response-draft",
-        "case_id": case.id,
-        "action_id": action.id,
-        "title": {"en": title_en, "zh": title_zh},
-        "body": {"en": body_en, "zh": body_zh},
-        "evidence_refs": refs,
-        "delivery_status": "DRAFT_ONLY_NOT_SENT",
-        "external_delivery_performed": False,
-    }
+    return body_en, body_zh
 
 
 def _receipt_payload(receipt: ExecutionReceipt, artifact: Artifact | None) -> dict:
@@ -150,7 +163,8 @@ def _receipt_payload(receipt: ExecutionReceipt, artifact: Artifact | None) -> di
     }
 
 
-def execute_action(db: Session, action_id: str, executor: str = "governed.document.generate") -> dict:
+def execute_action(db: Session, action_id: str, executor: str = "governed.document.generate",
+                   composed_body: dict | None = None) -> dict:
     action = db.get(Action, action_id)
     if not action:
         raise GovernedExecutionError("ACTION_NOT_FOUND", "Action not found", 404)
@@ -194,7 +208,7 @@ def execute_action(db: Session, action_id: str, executor: str = "governed.docume
     db.flush()
 
     try:
-        output = _draft_output(case, action, evidence)
+        output = _draft_output(case, action, evidence, composed_body)
         content = json.dumps(output, ensure_ascii=False, sort_keys=True, indent=2)
         output_digest = _content_digest(content)
         artifact_id = f"ART-{output_digest.upper()}"

@@ -244,6 +244,8 @@ a.assistant-card:hover{border-color:var(--line2)}
 .assistant-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .assistant-approval .assistant-actions{margin:0}
 .assistant-actions .button{flex:none;width:auto;margin:0}
+.assistant-draft pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.7;font-family:inherit;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;max-height:420px;overflow:auto}
+.assistant-draft .button{width:auto;flex:none;margin:0}
 .assistant-receipt{color:var(--green);margin:8px 0 0;font-size:13px}
 .assistant-error{color:#ff9e9e;font-size:13px;margin:8px 0}
 .assistant-link{display:inline-block;color:var(--cyan);font-size:13px;margin-top:2px}

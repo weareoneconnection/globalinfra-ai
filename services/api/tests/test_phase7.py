@@ -180,3 +180,15 @@ def test_mutation_writes_audit_event(client):
     assert response.status_code == 200
     events = client.get("/audit/events").json()
     assert any(event["action"].startswith("POST /identity/register") for event in events)
+
+
+def test_rate_limit_returns_429(client, monkeypatch):
+    from collections import defaultdict, deque
+    from app import operations
+    from app.config import settings
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 1)
+    monkeypatch.setattr(operations, "_rate_windows", defaultdict(deque))
+    assert client.get("/projects").status_code == 200
+    limited = client.get("/projects")
+    assert limited.status_code == 429
+    assert limited.json()["detail"] == "Rate limit exceeded" and limited.headers["Retry-After"] == "60"

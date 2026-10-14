@@ -95,6 +95,8 @@ ISSUE_SIGNALS: list[tuple[tuple[str, ...], dict]] = [
     (("method statement", "施工方案"), bi("Method statement review", "施工方案审查")),
     (("permit", "local law", "local compliance", "regulation", "合规", "许可", "当地法规"),
      bi("Local compliance / permit", "当地合规 / 许可")),
+    (("variation order", "variation request", "request for variation", "change order", "变更令", "变更申请", "签证"),
+     bi("Variation / change request", "变更 / 签证申请")),
     (("owner notice", "employer notice", "通知函", "通知"), bi("Owner notice", "业主通知")),
     (("delay", "extension of time", "eot", "延误", "工期"), bi("Schedule / delay impact", "进度 / 延误影响")),
     (("ncr", "non-conformance", "不符合"), bi("Non-conformance (NCR)", "不符合项（NCR）")),

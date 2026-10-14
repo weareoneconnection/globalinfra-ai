@@ -644,6 +644,12 @@
     "caseStatusIntro": "Current status of work order {id}: {status}.",
     "knowledgeSources": "Sources cited ({count})",
     "statuses": {"NEEDS_PROJECT_CONFIRMATION": "waiting for project confirmation", "AWAITING_APPROVAL": "awaiting human approval", "APPROVED": "approved, ready to generate the reply draft", "EXECUTED": "draft generated, awaiting independent verification", "EXECUTION_FAILED": "draft generation failed, can be retried", "VERIFIED": "verified, ready to close", "VERIFICATION_FAILED": "verification failed", "CLOSED": "closed", "REJECTED": "rejected, rework required"},
+    "weakEvidence": "Weakly related material ({refs}) is not used as evidence.",
+    "draftTitle": "Reply draft (not sent)",
+    "draftLlm": "drafted by the LLM, citations checked",
+    "draftTemplate": "template",
+    "copy": "Copy draft",
+    "copied": "Copied",
     "approvalsNone": "Nothing is awaiting approval."
   }
 }
