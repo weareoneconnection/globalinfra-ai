@@ -96,6 +96,7 @@ jobs:
           curl -sf -X POST 'http://localhost:8001/twin/scenarios/SCN-RECOVERY-V12/run' \
             -H 'Content-Type: application/json' -d '{"adjustment_percent":10}' | grep -q 'AWAITING_APPROVAL'
           curl -sf http://localhost:3000/ > /dev/null
+          curl -sf http://localhost:3000/overview > /dev/null
           curl -sf http://localhost:3000/twin > /dev/null
           curl -sf http://localhost:3000/twin/generate > /dev/null
           curl -sf 'http://localhost:3000/showcase?project_id=1' > /dev/null

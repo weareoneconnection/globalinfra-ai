@@ -128,6 +128,28 @@ def test_intake_text_hse_routes_to_hse_team(client):
     assert any("HSE" in run["agent"] for run in detail["agent_runs"])
 
 
+def test_unrouted_intake_reaches_approval_gate_after_project_confirmation(client):
+    text = "P47 pier: workers at height without edge protection, rectify within 48 hours."
+    body = client.post("/intake/text", json={"text": text}).json()
+    case_id = body["case_id"]
+    assert body["intake"]["project_routing_status"] == "NEEDS_PROJECT_CONFIRMATION"
+    assert client.get(f"/cases/{case_id}").json()["action"] is None
+
+    r = client.post(f"/cases/{case_id}/confirm-project", json={"project_id": 1})
+    assert r.status_code == 200
+    assert r.json()["status"] == "AWAITING_APPROVAL"
+    detail = client.get(f"/cases/{case_id}").json()
+    assert detail["routing_status"] == "ROUTED"
+    assert detail["action"]["status"] == "AWAITING_APPROVAL"
+    assert any(a["case_id"] == case_id for a in client.get("/approvals").json())
+
+    # Confirmation is a one-time human step, and the project must exist.
+    assert client.post(f"/cases/{case_id}/confirm-project", json={"project_id": 1}).status_code == 409
+    other = client.post("/intake/text", json={"text": text}).json()["case_id"]
+    assert client.post(f"/cases/{other}/confirm-project", json={"project_id": 9999}).status_code == 404
+    assert client.post("/cases/CASE-MISSING/confirm-project", json={"project_id": 1}).status_code == 404
+
+
 def test_intake_text_is_bilingual_via_lang_param(client):
     en = client.post("/intake/text?lang=en", json={"text": NEW_OWNER_LETTER}).json()
     zh = client.post("/intake/text?lang=zh", json={"text": NEW_OWNER_LETTER}).json()

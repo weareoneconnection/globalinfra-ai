@@ -10,6 +10,7 @@ GlobalInfra AI V4.3 is an operational digital-twin and trusted-execution platfor
 
 ## What is runnable in V1.1
 
+- Conversational Assistant entry point (default home)
 - Global Command Center dashboard
 - Lifecycle-aware project portfolio and project workspace
 - Eight intelligence domains covering 24 engineering disciplines
@@ -205,6 +206,19 @@ The six delivered phases are:
 Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/twin/controls`, `/twin/commissioning`, `/twin/operations`, `/twin/scenarios`, `/twin/agents`; `POST /twin/scenarios/{scenario_id}/run`.
 
 The generated IFC/glTF/3D Tiles/GeoJSON/WMS artifacts, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
+
+## V4.3 Assistant (conversational entry point)
+
+The web app now opens on the **Assistant** (`/`); the former Command Center moved to `/overview` and every other page is unchanged. The assistant is a conversational entry point to the same governed capabilities, not a new reasoning engine:
+
+- **Report an incident / handle an owner letter**: text or PDF/DOCX/TXT goes through `/intake/text` or `/intake/document`, creates a work order and runs the specialist analysis, shown in the chat as a verdict card, response plan, evidence and process trace.
+- **Project confirmation**: a work order whose project cannot be identified stays `NEEDS_PROJECT_CONFIRMATION`. The user picks the project in the chat, and the new `POST /cases/{id}/confirm-project` re-runs the analysis before any governed action or approval is created; the system never guesses. A project code typed explicitly in the message (e.g. `MY-RAIL-A`) counts as confirmation.
+- **Approval and trusted execution**: approve, generate the draft (`DRAFT_ONLY_NOT_SENT`), verify independently and close from the chat cards, using the existing endpoints and role checks.
+- **Regulation questions**: deterministic TF-IDF retrieval via `/knowledge/search` with the workflow's relevance thresholds. Below the threshold the assistant declines; weakly related material is folded away and never presented as evidence.
+- **Project progress / my approvals**: progress, schedule variance, next gate and pending approvals.
+- **Sensitive data**: the "Sensitive" toggle submits with the `restricted` classification and forces the local model.
+
+Intent detection is a deterministic client-side keyword rule, and every reply states what it detected. Conversations are kept only in the current browser tab (`sessionStorage`).
 
 ## V4.3 Phase 10.1 Unified Data Ingestion
 

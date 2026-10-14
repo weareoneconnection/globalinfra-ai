@@ -569,6 +569,41 @@ async def analyze(
     }
     return localize(result, lang)
 
+class ConfirmProjectRequest(BaseModel):
+    project_id: int = Field(gt=0)
+
+@app.post('/cases/{case_id}/confirm-project')
+async def confirm_project(
+    case_id: str,
+    payload: ConfirmProjectRequest,
+    model_route: Literal["local", "openai", "auto"] | None = Query(default=None),
+    data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
+    principal: Principal = Depends(require_roles("project_manager", "engineer")),
+    db: Session = Depends(get_db),
+    lang: str = Depends(get_lang),
+):
+    """Human confirmation of an unrouted intake's project, then re-analysis.
+
+    Intake never guesses a project (see ``_select_project_id``); this is the
+    explicit step that lets an unrouted case reach the governed action and
+    approval gates.
+    """
+    case = db.get(Case, case_id)
+    if not case: raise HTTPException(404, 'Case not found')
+    if case.routing_status != "NEEDS_PROJECT_CONFIRMATION":
+        raise HTTPException(409, "Case project is already confirmed.")
+    require_project(principal, payload.project_id)
+    if not db.get(Project, payload.project_id): raise HTTPException(404, "Project not found")
+    case.project_id = payload.project_id
+    case.project_routing_confidence = 1.0
+    db.commit()
+    reset_routing_trace()
+    try: result = await analyze_case(db, case_id, model_route, data_classification)
+    except LLMError as exc: raise HTTPException(502, str(exc))
+    result["project_id"] = payload.project_id
+    result["confirmed_by"] = principal.subject
+    return localize(result, lang)
+
 @app.get('/knowledge')
 def knowledge(query: str = Query(default=''), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     stmt = select(KnowledgeDocument)
