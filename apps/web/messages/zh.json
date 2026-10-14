@@ -650,6 +650,22 @@
     "draftTemplate": "模板生成",
     "copy": "复制草稿",
     "copied": "已复制",
+    "sourceMore": "展开详情 ▾",
+    "sourceLess": "收起 ▴",
+    "sourceContent": "条文 / 内容",
+    "sourceAuthority": "发布机构",
+    "sourceType": "类别",
+    "sourceVersion": "版本 / 状态",
+    "sourceEffective": "生效日期",
+    "sourceReview": "下次复核",
+    "sourceStages": "适用阶段",
+    "sourceTags": "标签",
+    "sourceHash": "内容哈希",
+    "sourceOpen": "打开官方来源",
+    "sourceInternal": "项目内部模拟资料，无外部链接。",
+    "stages": {"market-entry": "市场进入", "tender": "投标", "planning": "规划", "design": "设计", "procurement": "采购", "mobilization": "进场动员", "construction": "施工", "commissioning": "调试", "handover": "移交", "operations": "运维"},
+    "docTypes": {"LAW_INDEX": "法律来源索引", "REGULATION_INDEX": "法规来源索引", "CODE_INDEX": "规范来源索引", "PORTAL_INDEX": "官方门户", "GUIDANCE": "指引", "CONTRACT_CLAUSE": "合同条款", "PROCEDURE": "程序文件"},
+    "docStatuses": {"CURRENT": "现行", "SUPERSEDED": "已被取代", "DRAFT": "草稿"},
     "approvalsNone": "目前没有待审批事项。"
   }
 }

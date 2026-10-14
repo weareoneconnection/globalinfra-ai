@@ -650,6 +650,22 @@
     "draftTemplate": "template",
     "copy": "Copy draft",
     "copied": "Copied",
+    "sourceMore": "Show details ▾",
+    "sourceLess": "Hide ▴",
+    "sourceContent": "Text / content",
+    "sourceAuthority": "Authority",
+    "sourceType": "Category",
+    "sourceVersion": "Version / status",
+    "sourceEffective": "Effective",
+    "sourceReview": "Next review",
+    "sourceStages": "Lifecycle stages",
+    "sourceTags": "Tags",
+    "sourceHash": "Content hash",
+    "sourceOpen": "Open official source",
+    "sourceInternal": "Internal synthetic project record; no external link.",
+    "stages": {"market-entry": "Market entry", "tender": "Tender", "planning": "Planning", "design": "Design", "procurement": "Procurement", "mobilization": "Mobilization", "construction": "Construction", "commissioning": "Commissioning", "handover": "Handover", "operations": "Operations"},
+    "docTypes": {"LAW_INDEX": "Law source index", "REGULATION_INDEX": "Regulation source index", "CODE_INDEX": "Code source index", "PORTAL_INDEX": "Official portal", "GUIDANCE": "Guidance", "CONTRACT_CLAUSE": "Contract clause", "PROCEDURE": "Procedure"},
+    "docStatuses": {"CURRENT": "current", "SUPERSEDED": "superseded", "DRAFT": "draft"},
     "approvalsNone": "Nothing is awaiting approval."
   }
 }

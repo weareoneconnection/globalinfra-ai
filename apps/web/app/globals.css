@@ -246,6 +246,19 @@ a.assistant-card:hover{border-color:var(--line2)}
 .assistant-actions .button{flex:none;width:auto;margin:0}
 .assistant-draft pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.7;font-family:inherit;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;max-height:420px;overflow:auto}
 .assistant-draft .button{width:auto;flex:none;margin:0}
+.assistant-source{padding:0}
+.assistant-source.open{border-color:rgba(98,220,250,.35)}
+.assistant-source-toggle{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;padding:14px 16px;cursor:pointer;border-radius:14px}
+.assistant-source-toggle:hover{background:rgba(98,220,250,.04)}
+.assistant-source-more{color:var(--cyan);margin-left:6px}
+.assistant-source-detail{border-top:1px solid var(--line);padding:4px 16px 14px}
+.assistant-source-detail .assistant-prose{margin:4px 0 10px;line-height:1.7}
+.assistant-meta{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0 0 12px;font-size:12px}
+.assistant-meta dt{color:var(--muted)}
+.assistant-meta dd{margin:0;overflow-wrap:anywhere}
+.assistant-source-link{display:inline-block;width:auto;flex:none;margin:0}
+.assistant-cite{display:inline;border:1px solid rgba(98,220,250,.35);background:rgba(98,220,250,.08);color:#c7f5ff;border-radius:6px;padding:0 6px;margin:0 2px;font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer}
+.assistant-cite:hover{background:rgba(98,220,250,.18)}
 .assistant-receipt{color:var(--green);margin:8px 0 0;font-size:13px}
 .assistant-error{color:#ff9e9e;font-size:13px;margin:8px 0}
 .assistant-link{display:inline-block;color:var(--cyan);font-size:13px;margin-top:2px}

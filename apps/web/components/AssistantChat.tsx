@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { RiskBadge } from './RiskBadge';
 
@@ -517,19 +517,75 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
 
 function KnowledgeReply({ query, hits, answer }: { query: string; hits: KnowledgeHit[]; answer: string | null }) {
   const t = useTranslations('Assistant');
+  const anchor = useId();
+  const [open, setOpen] = useState<number | null>(null);
   // Below the confident threshold a hit is not evidence, so it is not shown.
   const strong = hits.filter(hit => hit.relevance >= CONFIDENT_RELEVANCE);
   if (strong.length === 0) return <div className="assistant-text">{t('knowledgeNone', { query })}</div>;
+  const byRef = new Map(strong.map(hit => [hit.source_ref, hit]));
+  function reveal(hit: KnowledgeHit) {
+    setOpen(hit.id);
+    document.getElementById(`${anchor}-${hit.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // Turn "[REF]" citations into buttons that open the matching source card.
+  const answerParts = answer?.split(/(\[[^\[\]]+\])/g).map((part, index) => {
+    const hit = byRef.get(part.slice(1, -1).trim());
+    return hit && part.startsWith('[')
+      ? <button key={index} type="button" className="assistant-cite" onClick={() => reveal(hit)}>{hit.source_ref}</button>
+      : part;
+  });
   return <div>
     {answer
-      ? <><div className="assistant-text assistant-prose">{answer}</div><p className="assistant-section-label">{t('knowledgeSources', { count: strong.length })}</p></>
+      ? <><div className="assistant-text assistant-prose">{answerParts}</div><p className="assistant-section-label">{t('knowledgeSources', { count: strong.length })}</p></>
       : <p className="assistant-text">{t('knowledgeFound', { count: strong.length })}</p>}
-    {strong.map(hit => <div key={hit.id} className="assistant-card compact">
+    {strong.map(hit => <KnowledgeCard key={hit.id} hit={hit} domId={`${anchor}-${hit.id}`} open={open === hit.id} onToggle={() => setOpen(open === hit.id ? null : hit.id)} />)}
+    <p className="assistant-boundary small">{t('knowledgeBoundary')}</p>
+  </div>;
+}
+
+type KnowledgeDetail = {
+  content: string; authority: string | null; document_type: string; version: string; status: string;
+  effective_date: string | null; review_due: string | null; source_url: string | null; content_hash: string;
+  tags: string[]; lifecycle_stages: string[]; category: string;
+};
+
+function KnowledgeCard({ hit, domId, open, onToggle }: { hit: KnowledgeHit; domId: string; open: boolean; onToggle: () => void }) {
+  const t = useTranslations('Assistant');
+  const locale = useLocale();
+  const [detail, setDetail] = useState<KnowledgeDetail | null>(null);
+  const [error, setError] = useState(false);
+  const label = (group: string, code: string) => t.has(`${group}.${code}`) ? t(`${group}.${code}`) : code;
+  useEffect(() => {
+    if (!open || detail) return;
+    fetch(`/backend/knowledge/${hit.id}?lang=${locale}`).then(readJson).then(setDetail).catch(() => setError(true));
+  }, [open, detail, hit.id, locale]);
+  return <div id={domId} className={`assistant-card compact assistant-source ${open ? 'open' : ''}`}>
+    <button type="button" className="assistant-source-toggle" onClick={onToggle} aria-expanded={open}>
       <div className="assistant-card-head"><b>{hit.title}</b><span className="badge ok">{t('relevance', { value: hit.relevance.toFixed(2) })}</span></div>
       <p>{hit.summary}</p>
-      <p className="muted small"><code>{hit.source_ref}</code> · {hit.jurisdiction} · v{hit.version}</p>
-    </div>)}
-    <p className="assistant-boundary small">{t('knowledgeBoundary')}</p>
+      <p className="muted small"><code>{hit.source_ref}</code> · {hit.jurisdiction} · v{hit.version} <span className="assistant-source-more">{open ? t('sourceLess') : t('sourceMore')}</span></p>
+    </button>
+    {open && <div className="assistant-source-detail">
+      {error && <p className="assistant-error">{t('failed')}</p>}
+      {!detail && !error && <Thinking intent="help" />}
+      {detail && <>
+        <div className="assistant-section-label">{t('sourceContent')}</div>
+        <p className="assistant-prose">{detail.content}</p>
+        <dl className="assistant-meta">
+          {detail.authority && <><dt>{t('sourceAuthority')}</dt><dd>{detail.authority}</dd></>}
+          <dt>{t('sourceType')}</dt><dd>{detail.category} · {label('docTypes', detail.document_type)}</dd>
+          <dt>{t('sourceVersion')}</dt><dd>{detail.version} · {label('docStatuses', detail.status)}</dd>
+          {detail.effective_date && <><dt>{t('sourceEffective')}</dt><dd>{detail.effective_date}</dd></>}
+          {detail.review_due && <><dt>{t('sourceReview')}</dt><dd>{detail.review_due}</dd></>}
+          {detail.lifecycle_stages.length > 0 && <><dt>{t('sourceStages')}</dt><dd>{detail.lifecycle_stages.map(stage => t.has(`stages.${stage}`) ? t(`stages.${stage}`) : stage).join(' / ')}</dd></>}
+          {detail.tags.length > 0 && <><dt>{t('sourceTags')}</dt><dd>{detail.tags.join('、')}</dd></>}
+          <dt>{t('sourceHash')}</dt><dd><code title={detail.content_hash}>{detail.content_hash.slice(0, 16)}…</code></dd>
+        </dl>
+        {detail.source_url
+          ? <a className="button assistant-source-link" href={detail.source_url} target="_blank" rel="noopener noreferrer">{t('sourceOpen')} ↗</a>
+          : <p className="muted small">{t('sourceInternal')}</p>}
+      </>}
+    </div>}
   </div>;
 }
 
