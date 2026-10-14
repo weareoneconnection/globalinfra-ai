@@ -666,6 +666,7 @@
     "stages": {"market-entry": "Market entry", "tender": "Tender", "planning": "Planning", "design": "Design", "procurement": "Procurement", "mobilization": "Mobilization", "construction": "Construction", "commissioning": "Commissioning", "handover": "Handover", "operations": "Operations"},
     "docTypes": {"LAW_INDEX": "Law source index", "REGULATION_INDEX": "Regulation source index", "CODE_INDEX": "Code source index", "PORTAL_INDEX": "Official portal", "GUIDANCE": "Guidance", "CONTRACT_CLAUSE": "Contract clause", "PROCEDURE": "Procedure"},
     "docStatuses": {"CURRENT": "current", "SUPERSEDED": "superseded", "DRAFT": "draft"},
+    "sourcesUncited": "Other retrieved sources ({count}, not cited in the answer)",
     "approvalsNone": "Nothing is awaiting approval."
   }
 }

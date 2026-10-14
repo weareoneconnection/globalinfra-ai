@@ -666,6 +666,7 @@
     "stages": {"market-entry": "市场进入", "tender": "投标", "planning": "规划", "design": "设计", "procurement": "采购", "mobilization": "进场动员", "construction": "施工", "commissioning": "调试", "handover": "移交", "operations": "运维"},
     "docTypes": {"LAW_INDEX": "法律来源索引", "REGULATION_INDEX": "法规来源索引", "CODE_INDEX": "规范来源索引", "PORTAL_INDEX": "官方门户", "GUIDANCE": "指引", "CONTRACT_CLAUSE": "合同条款", "PROCEDURE": "程序文件"},
     "docStatuses": {"CURRENT": "现行", "SUPERSEDED": "已被取代", "DRAFT": "草稿"},
+    "sourcesUncited": "其他检索结果（{count} 条，回答未引用）",
     "approvalsNone": "目前没有待审批事项。"
   }
 }

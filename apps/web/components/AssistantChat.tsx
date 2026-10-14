@@ -523,6 +523,10 @@ function KnowledgeReply({ query, hits, answer }: { query: string; hits: Knowledg
   const strong = hits.filter(hit => hit.relevance >= CONFIDENT_RELEVANCE);
   if (strong.length === 0) return <div className="assistant-text">{t('knowledgeNone', { query })}</div>;
   const byRef = new Map(strong.map(hit => [hit.source_ref, hit]));
+  // With a model answer, "sources cited" lists only what the answer cites.
+  const cited = answer ? strong.filter(hit => answer.includes(`[${hit.source_ref}]`)) : strong;
+  const uncited = strong.filter(hit => !cited.includes(hit));
+  const card = (hit: KnowledgeHit) => <KnowledgeCard key={hit.id} hit={hit} domId={`${anchor}-${hit.id}`} open={open === hit.id} onToggle={() => setOpen(open === hit.id ? null : hit.id)} />;
   function reveal(hit: KnowledgeHit) {
     setOpen(hit.id);
     document.getElementById(`${anchor}-${hit.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -536,9 +540,13 @@ function KnowledgeReply({ query, hits, answer }: { query: string; hits: Knowledg
   });
   return <div>
     {answer
-      ? <><div className="assistant-text assistant-prose">{answerParts}</div><p className="assistant-section-label">{t('knowledgeSources', { count: strong.length })}</p></>
+      ? <><div className="assistant-text assistant-prose">{answerParts}</div><p className="assistant-section-label">{t('knowledgeSources', { count: cited.length })}</p></>
       : <p className="assistant-text">{t('knowledgeFound', { count: strong.length })}</p>}
-    {strong.map(hit => <KnowledgeCard key={hit.id} hit={hit} domId={`${anchor}-${hit.id}`} open={open === hit.id} onToggle={() => setOpen(open === hit.id ? null : hit.id)} />)}
+    {cited.map(card)}
+    {uncited.length > 0 && <details className="assistant-details" open={uncited.some(hit => hit.id === open)}>
+      <summary>{t('sourcesUncited', { count: uncited.length })}</summary>
+      {uncited.map(card)}
+    </details>}
     <p className="assistant-boundary small">{t('knowledgeBoundary')}</p>
   </div>;
 }
