@@ -1,0 +1,8 @@
+sources:
+  - id: AE-DCD-FIRE
+    authority: Dubai Civil Defence
+    url: https://www.dcd.gov.ae/portal/en/item/82-uaeslscp.jsp
+  - id: AE-MOHRE-OHS
+    authority: Ministry of Human Resources and Emiratisation
+    url: https://www.mohre.gov.ae/
+review_required: true

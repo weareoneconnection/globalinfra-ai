@@ -1,0 +1,8 @@
+sources:
+  - id: SA-SBC-LAW
+    authority: Saudi Building Code Center
+    url: https://sbc.gov.sa/en/Main/Pages/
+  - id: SA-BALADY-LICENSE
+    authority: Balady
+    url: https://smart-guide.balady.gov.sa/
+review_required: true

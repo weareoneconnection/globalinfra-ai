@@ -1,12 +1,19 @@
 country: AE
 name: United Arab Emirates
-version: 0.1.0
+version: 2026.10.1
+status: reviewed-demo
 region: MEA
 languages: [en, ar]
 locales:
   rtl: [ar]
 timezone: Asia/Dubai
 units: metric
+currency: AED
 data_policy:
   preferred_region: mea
 supported_domains: [rail, airport, port, highway]
+authorities: [MOHRE, Civil-Defence, competent-emirate-authority]
+permit_catalog: [building-permit, fire-life-safety, OHS, utility-stakeholder-NOC]
+review:
+  authority_confirmation_required: true
+  legal_advice: false

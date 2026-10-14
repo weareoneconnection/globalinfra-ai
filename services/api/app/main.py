@@ -35,6 +35,7 @@ from .governed_execution import (
 from .twin import router as twin_router
 from .twin_demo import router as twin_demo_router
 from .phase8 import router as phase8_router
+from .country_knowledge import router as country_knowledge_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,7 +45,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="4.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -60,9 +61,10 @@ app.include_router(twin_router)
 app.include_router(twin_demo_router)
 app.include_router(phase8_router)
 app.include_router(phase7_router)
+app.include_router(country_knowledge_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"4.0.0","product_version":"V4.0","architecture":"phase-8-operational-twin"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"4.1.0","product_version":"V4.1","architecture":"country-aware-knowledge-fabric"}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}

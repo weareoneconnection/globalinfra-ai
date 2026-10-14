@@ -1,0 +1,11 @@
+sources:
+  - id: MY-CIDB-CONTRACTOR
+    authority: CIDB Malaysia
+    url: https://www.cidb.gov.my/eng/contractor-registration/
+  - id: MY-CIDB-PERSONNEL
+    authority: CIDB Malaysia
+    url: https://www.cidb.gov.my/eng/construction-personnel-registration/
+  - id: MY-DOSH-OSHA
+    authority: DOSH Malaysia
+    url: https://dosh.gov.my/
+review_required: true

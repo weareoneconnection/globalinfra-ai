@@ -1,4 +1,6 @@
 policies:
+  legal_interpretation:
+    approval: qualified_local_review
   external_correspondence:
     approval: project_manager
   contractual_position:

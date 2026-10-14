@@ -1,0 +1,10 @@
+policies:
+  legal_interpretation:
+    approval: qualified_local_review
+  code_compliance:
+    approval: engineer_and_authority
+    evidence_required: true
+  occupancy_or_operation:
+    approval: human_mandatory
+  external_correspondence:
+    approval: project_manager

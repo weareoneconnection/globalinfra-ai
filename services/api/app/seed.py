@@ -5,6 +5,7 @@ from .i18n import bi
 from .twin_seed import ensure_demo_twin_coverage, seed_twin
 from .twin_demo import seed_synthetic_twin_sources
 from .phase8 import seed_phase8
+from .country_knowledge import seed_country_knowledge
 
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
@@ -13,6 +14,7 @@ def seed(db: Session):
         seed_phase7(db)
         seed_phase8(db)
         seed_synthetic_twin_sources(db)
+        seed_country_knowledge(db)
         return
     projects = [
         Project(id=1, code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
@@ -114,6 +116,7 @@ def seed(db: Session):
     seed_phase7(db)
     seed_phase8(db)
     seed_synthetic_twin_sources(db)
+    seed_country_knowledge(db)
 
 
 def seed_phase7(db: Session):

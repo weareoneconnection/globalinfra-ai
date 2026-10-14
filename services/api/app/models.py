@@ -171,6 +171,45 @@ class KnowledgeDocument(Base):
     source_ref: Mapped[str] = mapped_column(String(160))
     content: Mapped[dict] = mapped_column(JSON)
     summary: Mapped[dict] = mapped_column(JSON)
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    document_type: Mapped[str] = mapped_column(String(40), default="GUIDANCE", index=True)
+    authority: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    version: Mapped[str] = mapped_column(String(64), default="1.0")
+    status: Mapped[str] = mapped_column(String(32), default="CURRENT", index=True)
+    effective_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    review_due: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    lifecycle_stages: Mapped[list] = mapped_column(JSON, default=list)
+    confidentiality: Mapped[str] = mapped_column(String(24), default="PUBLIC")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class CountryPack(Base):
+    """Versioned jurisdiction configuration plus curated source registry."""
+    __tablename__ = "country_packs"
+    code: Mapped[str] = mapped_column(String(8), primary_key=True)
+    name: Mapped[dict] = mapped_column(JSON)
+    region: Mapped[str] = mapped_column(String(32), index=True)
+    version: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(24), default="REVIEWED", index=True)
+    languages: Mapped[list] = mapped_column(JSON, default=list)
+    default_locale: Mapped[str] = mapped_column(String(20))
+    timezone: Mapped[str] = mapped_column(String(64))
+    currency: Mapped[str] = mapped_column(String(8))
+    units: Mapped[str] = mapped_column(String(20), default="metric")
+    supported_domains: Mapped[list] = mapped_column(JSON, default=list)
+    authorities: Mapped[list] = mapped_column(JSON, default=list)
+    permit_catalog: Mapped[list] = mapped_column(JSON, default=list)
+    compliance_topics: Mapped[list] = mapped_column(JSON, default=list)
+    glossary: Mapped[dict] = mapped_column(JSON, default=dict)
+    data_policy: Mapped[dict] = mapped_column(JSON, default=dict)
+    approval_policy: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_registry: Mapped[list] = mapped_column(JSON, default=list)
+    disclaimer: Mapped[dict] = mapped_column(JSON)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class TrainingModule(Base):
     __tablename__ = "training_modules"

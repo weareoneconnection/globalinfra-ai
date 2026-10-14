@@ -19,7 +19,8 @@
           { "href": "/field", "label": "Field Operations", "icon": "FO" },
           { "href": "/cases", "label": "Cases", "icon": "◎" },
           { "href": "/approvals", "label": "Approvals", "icon": "✓" },
-          { "href": "/knowledge", "label": "Knowledge", "icon": "◇" }
+          { "href": "/knowledge", "label": "Knowledge", "icon": "◇" },
+          { "href": "/country-packs", "label": "Country Packs", "icon": "CP" }
         ]
       },
       {
@@ -199,12 +200,20 @@
   },
   "Knowledge": {
     "eyebrow": "Knowledge fabric",
-    "title": "Evidence & Knowledge",
-    "subtitle": "Project documents, contracts, standards, regulations and lessons learned become queryable, version-aware evidence.",
+    "title": "Governed Evidence & Knowledge Fabric",
+    "subtitle": "Country regulations, engineering standards, contract clauses and project memory become jurisdiction-, version-, hash- and source-aware evidence.",
+    "traceability": "evidence source traceability",
     "searchPlaceholder": "Search contracts, standards, site records…",
     "graphEyebrow": "Evidence graph",
     "graphTitle": "Claim → Source → Version → Jurisdiction",
-    "graphBody": "Decision\n ├─ Contract Clause C-14.2\n ├─ Responsibility Matrix RM-03\n ├─ Site Instruction SI-028\n ├─ Meeting Minutes MM-182\n └─ Photo IMG-229\n\nEach edge carries confidence, version, jurisdiction and content hash."
+    "graphBody": "Decision\n ├─ Contract Clause C-14.2\n ├─ Responsibility Matrix RM-03\n ├─ Site Instruction SI-028\n ├─ Meeting Minutes MM-182\n └─ Photo IMG-229\n\nEach edge carries confidence, version, jurisdiction and content hash.",
+    "labels": {
+      "search": "Search contracts, regulations, standards, lessons…", "searchButton": "Search evidence", "allCountries": "All country packs", "allStages": "All lifecycle stages", "results": "Citable evidence", "officialSource": "Official source index", "projectEvidence": "Project evidence", "version": "Version", "reviewDue": "Review due", "openSource": "Open official source", "citation": "Citation receipt", "empty": "No evidence matches the current filters.", "method": "Deterministic semantic retrieval", "authorityReview": "Material applicability requires authority or qualified local review", "documents": "Knowledge objects", "countries": "Countries / jurisdictions", "current": "Current versions", "sourced": "Source-linked", "categories": "categories", "knowledgeGraph": "Evidence graph", "graphFlow": "Country packs and project documents jointly ground claims, analysis, actions and verification.", "syntheticNotice": "Competition project data is synthetic; official links are source locators only."
+    }
+  },
+  "CountryPacks": {
+    "eyebrow": "GLOBAL DELIVERY OPERATING SYSTEM", "title": "Country Packs & Jurisdiction Control", "subtitle": "Assemble local language, terminology, authorities, permit gates, data policy and approval boundaries into a versioned, traceable delivery baseline.", "activePacks": "active country packs", "permitGates": "permit / compliance gates",
+    "labels": {"portfolio":"Country-pack portfolio","coverage":"pack completeness","projects":"Bound projects","documents":"Jurisdiction knowledge","languages":"Languages","permitMatrix":"Permit & compliance matrix","authorities":"Authorities","glossary":"Terminology lock","dataPolicy":"Data policy","approvalPolicy":"Approval policy","official":"Official source registry","stageGate":"Lifecycle-controlled entry gates","evidence":"Minimum evidence pack","openKnowledge":"Open country knowledge","loading":"Loading country pack…","legalBoundary":"Legal and authority boundary","noProject":"No project bound yet"}
   },
   "Projects": {
     "eyebrow": "Global portfolio · 3 active programs",

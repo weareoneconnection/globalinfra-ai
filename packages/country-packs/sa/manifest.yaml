@@ -1,6 +1,7 @@
 country: SA
 name: Saudi Arabia
-version: 0.1.0
+version: 2026.10.1
+status: reviewed-demo
 region: MEA
 languages: [en, ar]
 locales:
@@ -8,6 +9,12 @@ locales:
   rtl: [ar]
 timezone: Asia/Riyadh
 units: metric
+currency: SAR
 data_policy:
   preferred_region: mea
 supported_domains: [rail, highway, airport]
+authorities: [Saudi-Building-Code-Center, Balady, MHRSD]
+permit_catalog: [construction-license, SBC-compliance, completion-occupancy, workforce-OSH]
+review:
+  authority_confirmation_required: true
+  legal_advice: false

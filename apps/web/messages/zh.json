@@ -19,7 +19,8 @@
           { "href": "/field", "label": "现场作业", "icon": "FO" },
           { "href": "/cases", "label": "工单", "icon": "◎" },
           { "href": "/approvals", "label": "审批", "icon": "✓" },
-          { "href": "/knowledge", "label": "知识库", "icon": "◇" }
+          { "href": "/knowledge", "label": "知识库", "icon": "◇" },
+          { "href": "/country-packs", "label": "国家包", "icon": "CP" }
         ]
       },
       {
@@ -199,12 +200,20 @@
   },
   "Knowledge": {
     "eyebrow": "知识网络",
-    "title": "证据与知识",
-    "subtitle": "项目文档、合同、标准、法规与经验教训都将转化为可查询、具备版本意识的证据。",
+    "title": "可治理的证据与知识网络",
+    "subtitle": "跨国家法规索引、工程标准、合同条款和项目记忆，以司法辖区、版本、内容哈希和官方来源形成可引用证据。",
+    "traceability": "证据来源可追溯",
     "searchPlaceholder": "搜索合同、标准、现场记录…",
     "graphEyebrow": "证据关系图",
     "graphTitle": "主张 → 来源 → 版本 → 司法辖区",
-    "graphBody": "决策\n ├─ 合同条款 C-14.2\n ├─ 责任矩阵 RM-03\n ├─ 现场指令 SI-028\n ├─ 会议纪要 MM-182\n └─ 照片 IMG-229\n\n每条关系边都带有置信度、版本、司法辖区及内容哈希信息。"
+    "graphBody": "决策\n ├─ 合同条款 C-14.2\n ├─ 责任矩阵 RM-03\n ├─ 现场指令 SI-028\n ├─ 会议纪要 MM-182\n └─ 照片 IMG-229\n\n每条关系边都带有置信度、版本、司法辖区及内容哈希信息。",
+    "labels": {
+      "search": "搜索合同、法规、标准、经验教训…", "searchButton": "检索证据", "allCountries": "全部国家包", "allStages": "全生命周期", "results": "可引用证据", "officialSource": "官方来源索引", "projectEvidence": "项目证据", "version": "版本", "reviewDue": "复核到期", "openSource": "打开官方来源", "citation": "引用回执", "empty": "当前条件下没有证据。", "method": "确定性语义检索", "authorityReview": "重要适用性须由主管机关或当地专业人员复核", "documents": "知识对象", "countries": "国家 / 司法辖区", "current": "现行版本", "sourced": "已绑定来源", "categories": "分类", "knowledgeGraph": "证据图谱", "graphFlow": "国家包和项目文档共同支撑主张、分析、行动与核验。", "syntheticNotice": "竞赛项目数据为合成数据；官方链接仅用于来源定位。"
+    }
+  },
+  "CountryPacks": {
+    "eyebrow": "全球交付操作系统", "title": "国家包与属地合规", "subtitle": "将当地语言、术语、主管机关、许可关口、数据策略和审批边界组装成可版本化、可追溯的交付基线。", "activePacks": "活跃国家包", "permitGates": "个许可 / 合规关口",
+    "labels": {"portfolio":"国家包组合","coverage":"包完整度","projects":"绑定项目","documents":"属地知识","languages":"语言","permitMatrix":"许可与合规矩阵","authorities":"主管机关","glossary":"锁定术语","dataPolicy":"数据策略","approvalPolicy":"审批策略","official":"官方来源注册表","stageGate":"按生命周期管控准入","evidence":"最小证据包","openKnowledge":"查看本国知识","loading":"正在加载国家包…","legalBoundary":"法律与主管机关边界","noProject":"尚无项目绑定"}
   },
   "Projects": {
     "eyebrow": "全球项目组合 · 3 个在建项目",

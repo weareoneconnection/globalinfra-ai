@@ -1,0 +1,10 @@
+policies:
+  legal_interpretation:
+    approval: qualified_local_review
+  fire_life_safety:
+    approval: competent_authority
+    evidence_required: true
+  critical_hse_action:
+    approval: human_mandatory
+  external_correspondence:
+    approval: project_manager

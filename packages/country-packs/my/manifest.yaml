@@ -1,6 +1,7 @@
 country: MY
 name: Malaysia
-version: 1.0.0
+version: 2026.10.1
+status: reviewed-demo
 region: APAC
 languages:
   - en
@@ -10,6 +11,7 @@ locales:
   default: en-MY
 timezone: Asia/Kuala_Lumpur
 units: metric
+currency: MYR
 data_policy:
   preferred_region: apac
   external_model_default: review-required
@@ -18,3 +20,8 @@ supported_domains:
   - highway
   - bridge
   - port
+authorities: [DOSH, CIDB, local-authority-OSC]
+permit_catalog: [contractor-registration, personnel-registration, osh-applicability, local-approvals]
+review:
+  authority_confirmation_required: true
+  legal_advice: false

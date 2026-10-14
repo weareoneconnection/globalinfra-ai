@@ -1,10 +1,17 @@
 country: ID
 name: Indonesia
-version: 0.1.0
+version: 2026.10.1
+status: reviewed-demo
 region: APAC
 languages: [en, id]
 timezone: Asia/Jakarta
 units: metric
+currency: IDR
 data_policy:
   preferred_region: apac
 supported_domains: [highway, rail, port]
+authorities: [PUPR, OSS-RBA, regional-government]
+permit_catalog: [NIB-risk-licensing, PBG, SLF, construction-safety]
+review:
+  authority_confirmation_required: true
+  legal_advice: false

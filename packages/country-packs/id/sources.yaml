@@ -1,0 +1,8 @@
+sources:
+  - id: ID-OSS-RBA
+    authority: OSS Indonesia
+    url: https://oss.go.id/
+  - id: ID-PBG-SLF
+    authority: Ministry of Public Works / regional authority
+    url: https://pu.go.id/
+review_required: true

@@ -1,0 +1,10 @@
+policies:
+  legal_interpretation:
+    approval: qualified_local_review
+  licensing_position:
+    approval: project_manager
+    evidence_required: true
+  occupancy_or_operation:
+    approval: human_mandatory
+  external_correspondence:
+    approval: project_manager
