@@ -10,7 +10,9 @@ function timeoutFor(path: string[]): number {
     route === 'intake/text' ||
     route === 'intake/document' ||
     route === 'i18n/translate' ||
-    /^cases\/[^/]+\/analyze$/.test(route)
+    route === 'assistant/chat' ||
+    /^cases\/[^/]+\/(analyze|confirm-project|execute)$/.test(route) ||
+    /^actions\/[^/]+\/execute$/.test(route)
   ) {
     const configured = Number(process.env.API_LONG_REQUEST_TIMEOUT_MS);
     return Number.isFinite(configured) && configured >= DEFAULT_TIMEOUT_MS
