@@ -151,3 +151,11 @@ def test_similar_actions_from_several_agents_become_one_plan_step():
     assert len(actions) == 2
     assert actions[0]["owner_role"]["en"] == "Contract Manager / Quantity Surveyor"
     assert actions[0]["source"] == "finding:contract+cost"
+
+
+def test_merged_owner_roles_are_listed_once():
+    from app.agent_org.coordination import _unique_owners
+    from app.i18n import bi
+    owners = _unique_owners([bi("Contract Administrator", "合同管理员"), bi("Commercial Manager", "商务经理"),
+                             bi("contract administrator", "合同管理员")])
+    assert [o["zh"] for o in owners] == ["合同管理员", "商务经理"]

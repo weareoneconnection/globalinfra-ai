@@ -103,6 +103,18 @@ def _tokens(text: str) -> set[str]:
     return set(tokenize(text))
 
 
+def _unique_owners(owners: list[dict]) -> list[dict]:
+    """Owner roles, each once (compared case-insensitively in either language)."""
+    seen, unique = set(), []
+    for owner in owners:
+        key_en, key_zh = owner["en"].strip().lower(), owner["zh"].strip()
+        if key_en in seen or key_zh in seen:
+            continue
+        seen.update({key_en, key_zh})
+        unique.append(owner)
+    return unique
+
+
 def raw_actions(team: list[str], findings: dict[str, dict]) -> list[dict]:
     return [
         {"agent_id": agent_id, "text": action["text"], "owner_role": action["owner_role"],
@@ -169,7 +181,7 @@ async def consolidate(actions: list[dict], questions: list[dict], budget, route,
     merged_actions = []
     for group in action_groups:
         members = [actions[i] for i in group["ids"]]
-        owners = list({m["owner_role"]["en"]: m["owner_role"] for m in members}.values())
+        owners = _unique_owners([m["owner_role"] for m in members])
         merged_actions.append({"text": group["text"], "owners": owners, "agents": [m["agent_id"] for m in members],
                                "refs": list(dict.fromkeys(r for m in members for r in m["refs"]))})
     merged_questions = []
@@ -190,8 +202,7 @@ def merge_actions(actions: list[dict]) -> list[dict]:
             merged.append({"text": action["text"], "owners": [action["owner_role"]], "agents": [action["agent_id"]],
                            "refs": list(action["refs"]), "tokens": tokens})
         else:
-            if action["owner_role"]["en"] not in [o["en"] for o in target["owners"]]:
-                target["owners"].append(action["owner_role"])
+            target["owners"] = _unique_owners(target["owners"] + [action["owner_role"]])
             target["agents"].append(action["agent_id"])
             target["refs"] = list(dict.fromkeys(target["refs"] + action["refs"]))
     return merged
