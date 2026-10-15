@@ -129,3 +129,40 @@ def test_failed_follow_up_never_falls_back_to_rules(monkeypatch):
     assert adopted == []
     contract = db.scalar(select(AgentTrace).where(AgentTrace.case_id == "CASE-2026-0182", AgentTrace.agent_id == "contract", AgentTrace.round == 1))
     assert contract.output["status"] == "GAP"
+
+
+def test_supported_finding_keeps_its_question_and_gaps_get_no_follow_up(monkeypatch):
+    db = _db()
+
+    def finding_for(system, user):
+        if "Contract Agent" in system:
+            return {"status": "SUPPORTED", "claim_en": "Variations need a written instruction.", "claim_zh": "变更须有书面指令。",
+                    "evidence_refs": ["CTR-A / Clause C-14.2"], "confidence": 0.8, "gaps": [],
+                    "actions": [{"text_en": "Request the instruction", "text_zh": "索取指令", "owner_en": "Contract Manager", "owner_zh": "合同经理"}],
+                    "question_en": "Which written instruction applies?", "question_zh": "适用哪份书面指令？"}
+        return {"status": "GAP", "claim_en": "No source.", "claim_zh": "无依据。", "evidence_refs": [], "confidence": 0.2,
+                "gaps": [], "actions": [], "question_en": "", "question_zh": ""}
+
+    seen = _live(monkeypatch, finding_for)
+    asyncio.run(workflow.analyze_case(db, "CASE-2026-0182"))
+    contract = db.scalar(select(AgentTrace).where(AgentTrace.case_id == "CASE-2026-0182", AgentTrace.agent_id == "contract", AgentTrace.round == 1))
+    assert contract.output["status"] == "SUPPORTED" and contract.output["questions"]
+    assert not any("Coordinator follow-up" in prompt and "evidence for" in prompt for prompt in seen)
+
+
+def test_model_proposed_member_joins_and_reports(monkeypatch):
+    db = _db()
+
+    def finding_for(system, user):
+        return {"status": "GAP", "claim_en": "No source.", "claim_zh": "无依据。", "evidence_refs": [], "confidence": 0.2,
+                "gaps": [], "actions": [], "question_en": "", "question_zh": ""}
+
+    _live(monkeypatch, finding_for)
+
+    async def add_risk(*args, **kwargs):
+        return json.dumps({"additions": [{"agent_id": "risk", "reason_en": "exposure needs an owner", "reason_zh": "风险需要负责人"}]})
+
+    monkeypatch.setattr(team, "generate", add_risk)
+    asyncio.run(workflow.analyze_case(db, "CASE-2026-0182"))
+    risk = db.scalar(select(AgentTrace).where(AgentTrace.case_id == "CASE-2026-0182", AgentTrace.agent_id == "risk", AgentTrace.round == 1))
+    assert risk is not None and risk.rationale["en"] == "exposure needs an owner"

@@ -134,9 +134,8 @@ def validate_finding(data: dict, card: AgentCard, results: list[ToolResult]) -> 
         confidence = 0.5
     question = _bi({"en": data.get("question_en"), "zh": data.get("question_zh")})
     questions = [question] if question["en"] else []
-    if status == "SUPPORTED":
-        questions = []
-    elif questions:
+    # A supported finding may still need a case fact; it keeps its question.
+    if questions and status == "GAP":
         status = "NEEDS_INPUT"
     actions = [
         {"text": _bi({"en": a.get("text_en"), "zh": a.get("text_zh")}), "owner_role": _bi({"en": a.get("owner_en"), "zh": a.get("owner_zh")})}
@@ -162,10 +161,13 @@ async def model_finding(card: AgentCard, results: list[ToolResult], case_text: s
     tools_text = "\n".join(f"[{r.tool}] {json.dumps(r.output, ensure_ascii=False, default=str)[:1500]}" for r in results)
     system = (
         f"You are the {card.name['en']} on an overseas infrastructure project. Your discipline: {card.focus['en']}. "
-        "Use ONLY the tool results below. Cite knowledge sources by their exact source_ref. Choose SUPPORTED only when a "
-        "retrieved source directly supports your claim; otherwise GAP, or NEEDS_INPUT with one precise question for the "
-        "project team. Never invent amounts, dates, clauses or names. Claim at most two sentences; English and Simplified "
-        "Chinese. Actions must name an owner role. Your authority is advisory only."
+        "Use ONLY the tool results below. Cite knowledge sources by their exact source_ref. Choose SUPPORTED when a "
+        "retrieved source states the rule, procedure or requirement that governs this case, even if case facts are still "
+        "missing: state what the rule requires, recommend the action it implies, and ask for the missing fact in the "
+        "question field. Choose GAP when no retrieved source governs the case, or NEEDS_INPUT when only the project team "
+        "can supply what is needed. Never invent amounts, dates, clauses or names, and never accept or reject liability, "
+        "cost or time. Claim at most two sentences; English and Simplified Chinese. Actions must name an owner role. Your "
+        "authority is advisory only."
     )
     user = (f"Case:\n{case_text[:3000]}\n\nTool results:\n{tools_text}"
             + (f"\n\nAnswers already provided by the project team:\n" + "\n".join(answers) if answers else "")

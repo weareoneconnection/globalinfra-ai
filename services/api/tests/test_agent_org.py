@@ -119,3 +119,15 @@ def test_runs_and_scorecards_reflect_latest_runs(client):
     assert [r for r in runs if r["case_id"] == case_id]
     scores = {s["agent_id"]: s for s in client.get("/agents/scorecards").json()}
     assert scores["cost"]["runs"] >= 1 and scores["cost"]["needs_input_rate"] is not None
+
+
+def test_similar_questions_from_several_agents_are_asked_once():
+    from app.agent_org.orchestrator import merge_questions
+    q = lambda agent, en: {"agent_id": agent, "question": {"en": en, "zh": en}, "key": agent}  # noqa: E731
+    merged = merge_questions([
+        q("engineering", "Which written instruction or drawing revision required the additional anchor bolts?"),
+        q("claims", "Which written instruction or drawing revision required the additional anchor bolts at T4 to T9?"),
+        q("cost", "Please provide the quantities and the rate build-up for the claimed change."),
+    ])
+    assert [m["agent_id"] for m in merged] == ["engineering", "cost"]
+    assert merged[0]["also_from"] == ["claims"]

@@ -18,21 +18,27 @@ from sqlalchemy.orm import Session
 
 from ..domain import PROJECT_INTELLIGENCE
 from ..i18n import bi
+from ..llm import LLMError, _route_order
 from ..models import AgentTrace, Case, CaseInput, IntakeSubmission, Project
+from ..retrieval import tokenize
 from .cards import CARDS
 from .coordination import build_plan, detect_issues, model_issues, verify
 from .findings import deterministic_finding, model_finding
 from .team import Member, model_additions, rule_team
 from .tools import TOOLS, ToolContext, ToolResult
 
-MAX_MODEL_CALLS = 12
-MODEL_CONCURRENCY = 3  # local gateways serve one request at a time; avoid queueing past timeouts
+MAX_MODEL_CALLS = 8
+# Local gateways serve one request at a time; queueing many calls there only
+# pushes later ones past the request timeout. Cloud endpoints run in parallel.
+LOCAL_CONCURRENCY = 2
+CLOUD_CONCURRENCY = 5
+QUESTION_SIMILARITY = 0.45
 
 
 class Budget:
-    def __init__(self, enabled: bool, limit: int = MAX_MODEL_CALLS):
+    def __init__(self, enabled: bool, limit: int = MAX_MODEL_CALLS, concurrency: int = CLOUD_CONCURRENCY):
         self.enabled, self.remaining, self.used = enabled, limit, 0
-        self.slots = asyncio.Semaphore(MODEL_CONCURRENCY)
+        self.slots = asyncio.Semaphore(concurrency)
 
     def take(self) -> bool:
         if not self.enabled or self.remaining <= 0:
@@ -59,6 +65,29 @@ class OrgResult:
     @property
     def team_ids(self) -> list[str]:
         return [m.agent_id for m in self.team]
+
+
+def _concurrency(route: str | None, sensitivity: str) -> int:
+    try:
+        providers = _route_order(route, sensitivity)
+    except LLMError:
+        return LOCAL_CONCURRENCY
+    return LOCAL_CONCURRENCY if providers and providers[0].name == "local" else CLOUD_CONCURRENCY
+
+
+def merge_questions(questions: list[dict]) -> list[dict]:
+    """Ask each distinct question once; similar questions from several agents are merged."""
+    merged: list[dict] = []
+    for item in questions:
+        tokens = set(tokenize(item["question"]["en"]))
+        for kept in merged:
+            other = set(tokenize(kept["question"]["en"]))
+            if tokens and other and len(tokens & other) / len(tokens | other) >= QUESTION_SIMILARITY:
+                kept.setdefault("also_from", []).append(item["agent_id"])
+                break
+        else:
+            merged.append(dict(item))
+    return merged
 
 
 def _question_key(agent_id: str, question: dict) -> str:
@@ -105,21 +134,25 @@ async def run_organization(db: Session, case: Case, project: Project | None, bas
     ctx = ToolContext(db=db, case=case, project=project, country=country, stage=stage,
                       base_query=" ".join([base_query, *answers]), answers=answers,
                       full_text=" ".join([full_text, *answers]))
-    llm = Budget(llm_enabled)
+    llm = Budget(llm_enabled, concurrency=_concurrency(route, sensitivity))
     traces: list[AgentTrace] = []
     case_type = (case.type or {}).get("en", "")
 
-    # 1. team
+    # 1+2. team and round 1. The rule team starts working at once; the model's
+    # proposed additions are computed in parallel and join as soon as known.
     started = perf_counter()
     team = rule_team(ctx.full_text, case_type, case.risk, core_map, default_team, label=case.type or {})
-    team += await model_additions(ctx.full_text, team, llm, route, sensitivity)
+    core_tasks = [_specialist(ctx, m.agent_id, llm, route, sensitivity) for m in team]
+    additions_task = model_additions(ctx.full_text, team, llm, route, sensitivity)
+    gathered = await asyncio.gather(additions_task, *core_tasks)
+    additions, outcomes = gathered[0], list(gathered[1:])
+    if additions:
+        outcomes += await asyncio.gather(*[_specialist(ctx, m.agent_id, llm, route, sensitivity) for m in additions])
+        team += additions
     traces.append(AgentTrace(case_id=case.id, run_id=run_id, kind="team", agent_id="router", round=0,
-                             output={"team": [m.payload() for m in team]}, method="llm" if any(m.source == "model" for m in team) else "rules",
+                             output={"team": [m.payload() for m in team]}, method="llm" if additions else "rules",
                              duration_ms=max(1, round((perf_counter() - started) * 1000))))
-
-    # 2. round 1, specialists in parallel
     ids = [m.agent_id for m in team]
-    outcomes = await asyncio.gather(*[_specialist(ctx, a, llm, route, sensitivity) for a in ids])
     results = {a: o[0] for a, o in zip(ids, outcomes)}
     findings = {a: o[1] for a, o in zip(ids, outcomes)}
     for member, (res, finding, ms) in zip(team, outcomes):
@@ -130,16 +163,21 @@ async def run_organization(db: Session, case: Case, project: Project | None, bas
     # 3. coordination and one round of targeted follow-ups
     started = perf_counter()
     issues = detect_issues(findings)
-    issues += [i for i in await model_issues(findings, llm, route, sensitivity)
-               if not any(i["follow_up"] == j["follow_up"] for j in issues)]
+    # The model looks for contradictions between conclusions; with fewer than
+    # two evidence-backed findings there is nothing to contradict.
+    if sum(f["status"] == "SUPPORTED" for f in findings.values()) >= 2:
+        issues += [i for i in await model_issues(findings, llm, route, sensitivity)
+                   if not any(i["follow_up"] == j["follow_up"] for j in issues)]
     # A second retrieval pass without a model would only re-rank the same
     # corpus with more of the agent's own terms, which can promote unrelated
     # sources. Follow-ups therefore run only when a model can reason about
     # the coordinator's question; otherwise issues go straight to a human.
+    # Gaps already become questions for people; only conflicts get a follow-up.
     follow_ups = {}
     if llm.enabled:
         for issue in issues:
-            follow_ups.setdefault(issue["follow_up"], issue)
+            if issue["type"] == "conflict":
+                follow_ups.setdefault(issue["follow_up"], issue)
     round2 = await asyncio.gather(*[
         _specialist(ctx, agent_id, llm, route, sensitivity, follow_up=issue["topic"]["en"], extra_query=issue.get("query", ""),
                     rules_fallback=False)  # only a model can resolve a follow-up; never re-rank with rules
@@ -164,10 +202,10 @@ async def run_organization(db: Session, case: Case, project: Project | None, bas
                              duration_ms=max(1, round((perf_counter() - started) * 1000))))
 
     # 4. questions for humans (deduplicated, persisted across re-analysis)
-    questions = []
-    for agent_id in ids:
-        for question in findings[agent_id].get("questions", []):
-            questions.append({"agent_id": agent_id, "question": question, "key": _question_key(agent_id, question)})
+    questions = merge_questions([
+        {"agent_id": agent_id, "question": question, "key": _question_key(agent_id, question)}
+        for agent_id in ids for question in findings[agent_id].get("questions", [])
+    ])
 
     # 5. plan and verification
     plan = build_plan(ids, findings, questions, case.deadline, case.risk, unresolved)
