@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .i18n import bi
+from .field_ai import analyze_reports, classify_report, prepare_case, report_payload
+from .i18n import bi, get_lang, localize
 from .models import (
     AIQualityRun, AuditEvent, Case, Connector, ConnectorSyncRun,
     FieldObservation, Identity, IngestionReceipt, Organization, Project, TwinModelVersion,
@@ -59,6 +60,7 @@ def _field_row(row: FieldObservation) -> dict:
         "severity": row.severity, "description": row.description, "location": row.location,
         "attachments": row.attachments, "reporter_id": row.reporter_id,
         "sync_status": row.sync_status, "case_id": row.case_id,
+        "analysis_status": row.analysis_status, "ai_risk": row.ai_risk,
         "captured_at": row.captured_at.isoformat(), "created_at": row.created_at.isoformat(),
     }
 
@@ -147,6 +149,8 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
         project_routing_confidence=1.0, routing_status="ROUTED",
     )
     db.add_all([case, row])
+    text, result = classify_report(payload.event_type, payload.description, payload.twin_id)
+    prepare_case(db, case, row, text, result)
     receipt = record_ingestion_receipt(
         db, organization_id=principal.organization_id, project_id=payload.project_id,
         channel="event_work_order", source_type="mobile_field",
@@ -225,28 +229,49 @@ def audit_events(
 
 @router.post("/field/observations", status_code=201)
 def create_field_observation(
-    payload: FieldObservationIn,
+    payload: FieldObservationIn, background: BackgroundTasks,
     principal: Principal = Depends(require_roles("field_user", "engineer", "project_manager")),
     db: Session = Depends(get_db),
 ):
     row, created, receipt = _create_field_observation(payload, db, principal)
+    if created:
+        background.add_task(analyze_reports, [row.id])
     return {**_field_row(row), "created": created,
             "ingestion_receipt": receipt_payload(receipt) if receipt else None}
 
 
 @router.post("/field/sync")
 def sync_field_observations(
-    payload: FieldSyncIn,
+    payload: FieldSyncIn, background: BackgroundTasks,
     principal: Principal = Depends(require_roles("field_user", "engineer", "project_manager")),
     db: Session = Depends(get_db),
 ):
-    results = []
+    results, created_ids = [], []
     for observation in payload.observations:
         row, created, receipt = _create_field_observation(observation, db, principal)
+        if created:
+            created_ids.append(row.id)
         results.append({"client_id": row.client_id, "id": row.id, "case_id": row.case_id,
                         "status": row.sync_status, "created": created,
                         "ingestion_receipt": receipt_payload(receipt) if receipt else None})
+    if created_ids:
+        # The agent organization analyses new reports after the response, so
+        # a field user is never kept waiting on the model.
+        background.add_task(analyze_reports, created_ids)
     return {"accepted": len(results), "results": results, "server_time": utc_now().isoformat()}
+
+
+@router.get("/field/reports")
+def my_field_reports(
+    limit: int = Query(20, ge=1, le=100),
+    principal: Principal = Depends(require_roles("viewer", "field_user", "engineer", "project_manager")),
+    db: Session = Depends(get_db), lang: str = Depends(get_lang),
+):
+    """The current user's reports with analysis status, risk review, plan and open questions."""
+    rows = db.scalars(select(FieldObservation).where(
+        FieldObservation.organization_id == principal.organization_id, FieldObservation.reporter_id == principal.subject,
+    ).order_by(FieldObservation.captured_at.desc()).limit(limit))
+    return localize([report_payload(db, row) for row in rows], lang)
 
 
 @router.get("/field/observations")

@@ -28,7 +28,11 @@ def test_ingestion_summary_exposes_seeded_demo_boundary_and_all_channels(client)
     assert body["active_channels"] == 6
     assert set(body["by_channel"]) == EXPECTED_CHANNELS
     assert body["records_accepted"] >= 6
-    demo = [item for item in body["recent"] if item["status"] == "SYNTHETIC_DEMO"]
+    # The summary's "recent" window is shared with other tests that create
+    # receipts, so look the seeded demo receipts up across the full list.
+    receipts = client.get("/ingestion/receipts?limit=200").json()
+    rows = receipts["receipts"] if isinstance(receipts, dict) else receipts
+    demo = [item for item in rows if item["status"] == "SYNTHETIC_DEMO"]
     assert demo
     assert all(item["lineage"]["provenance"] == "SYNTHETIC_DEMO" for item in demo)
 

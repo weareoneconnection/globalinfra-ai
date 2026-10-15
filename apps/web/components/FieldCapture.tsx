@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FIELD_SYNCED_EVENT } from './FieldReports';
 
 type Project = { id:number; code:string; name:string };
 type Labels = Record<string,string>;
@@ -55,12 +56,16 @@ async function digest(file:File) {
   return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 
-export function FieldCapture({projects,labels}:{projects:Project[];labels:Labels}) {
+const EVENT_TYPES=['inspection','ncr','rfi','hse','progress','delivery','commissioning','maintenance'];
+
+export function FieldCapture({projects,labels,eventLabels,severityLabels}:{projects:Project[];labels:Labels;eventLabels:Labels;severityLabels:Labels}) {
   const [projectId,setProjectId]=useState(projects[0]?.id||0);
   const [twinId,setTwinId]=useState(''); const [eventType,setEventType]=useState('inspection');
   const [severity,setSeverity]=useState('MEDIUM'); const [description,setDescription]=useState('');
   const [location,setLocation]=useState<Record<string,number>>({}); const [files,setFiles]=useState<File[]>([]);
   const [pending,setPending]=useState(0); const [status,setStatus]=useState(''); const [busy,setBusy]=useState(false);
+  // Read connectivity after mount; navigator is not available during server render.
+  const [online,setOnline]=useState(false);
 
   const refreshPending=useCallback(async()=>setPending((await readQueued()).length),[]);
   const sync=useCallback(async()=>{
@@ -71,13 +76,15 @@ export function FieldCapture({projects,labels}:{projects:Project[];labels:Labels
       if(!response.ok) throw new Error();
       const body=await response.json(); await removeQueued(body.results.map((x:{client_id:string})=>x.client_id));
       await refreshPending(); setStatus(labels.synced.replace('{count}',String(body.accepted)));
+      window.dispatchEvent(new Event(FIELD_SYNCED_EVENT));
     } catch { setStatus(labels.offlineQueued); } finally { setBusy(false); }
   },[labels,refreshPending]);
 
   useEffect(()=>{
-    refreshPending(); const online=()=>sync(); const message=(event:MessageEvent)=>{if(event.data?.type==='GLOBALINFRA_FIELD_SYNC')sync()};
-    window.addEventListener('online',online); navigator.serviceWorker?.addEventListener('message',message);
-    return()=>{window.removeEventListener('online',online);navigator.serviceWorker?.removeEventListener('message',message)};
+    setOnline(navigator.onLine); const offline=()=>setOnline(false);
+    refreshPending(); const online=()=>{setOnline(true); sync();}; const message=(event:MessageEvent)=>{if(event.data?.type==='GLOBALINFRA_FIELD_SYNC')sync()};
+    window.addEventListener('online',online); window.addEventListener('offline',offline); navigator.serviceWorker?.addEventListener('message',message);
+    return()=>{window.removeEventListener('online',online);window.removeEventListener('offline',offline);navigator.serviceWorker?.removeEventListener('message',message)};
   },[refreshPending,sync]);
 
   function locate(){
@@ -96,7 +103,13 @@ export function FieldCapture({projects,labels}:{projects:Project[];labels:Labels
       event_type:eventType,severity,description:description.trim(),location,attachments,captured_at:new Date().toISOString()
     };
     await putQueued(observation);
-    if('serviceWorker' in navigator){const registration=await navigator.serviceWorker.ready; const syncManager=(registration as ServiceWorkerRegistration&{sync?:{register:(tag:string)=>Promise<void>}}).sync; await syncManager?.register('globalinfra-field-sync').catch(()=>undefined)}
+    // serviceWorker.ready never settles when no worker is registered (blocked
+    // registration, private mode, development), so never wait on it forever.
+    if('serviceWorker' in navigator){
+      const registration=await Promise.race([navigator.serviceWorker.ready,new Promise<null>(resolve=>setTimeout(()=>resolve(null),1000))]);
+      const syncManager=(registration as (ServiceWorkerRegistration&{sync?:{register:(tag:string)=>Promise<void>}})|null)?.sync;
+      await syncManager?.register('globalinfra-field-sync').catch(()=>undefined);
+    }
     setDescription(''); setFiles([]); await refreshPending(); setStatus(labels.savedOffline); setBusy(false);
     if(navigator.onLine) await sync();
   }
@@ -105,7 +118,7 @@ export function FieldCapture({projects,labels}:{projects:Project[];labels:Labels
     <form className="card card-pad field-form" onSubmit={submit}>
       <div className="section-kicker">{labels.captureKicker}</div><h3>{labels.captureTitle}</h3>
       <label>{labels.project}<select value={projectId} onChange={e=>setProjectId(Number(e.target.value))}>{projects.map(p=><option value={p.id} key={p.id}>{p.code} · {p.name}</option>)}</select></label>
-      <div className="field-form-grid"><label>{labels.eventType}<select value={eventType} onChange={e=>setEventType(e.target.value)}><option value="inspection">Inspection</option><option value="ncr">NCR</option><option value="rfi">RFI</option><option value="hse">HSE</option><option value="progress">Progress</option><option value="commissioning">Commissioning</option><option value="maintenance">Maintenance</option></select></label><label>{labels.severity}<select value={severity} onChange={e=>setSeverity(e.target.value)}><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label></div>
+      <div className="field-form-grid"><label>{labels.eventType}<select value={eventType} onChange={e=>setEventType(e.target.value)}>{EVENT_TYPES.map(type=><option value={type} key={type}>{eventLabels[type]??type}</option>)}</select></label><label>{labels.severity}<select value={severity} onChange={e=>setSeverity(e.target.value)}>{['LOW','MEDIUM','HIGH','CRITICAL'].map(level=><option value={level} key={level}>{severityLabels[level]??level}</option>)}</select></label></div>
       <label>{labels.twinId}<input value={twinId} onChange={e=>setTwinId(e.target.value)} placeholder="TWIN-MYRAIL-V12-P47"/></label>
       <label>{labels.description}<textarea required minLength={4} value={description} onChange={e=>setDescription(e.target.value)} placeholder={labels.descriptionHint}/></label>
       <label>{labels.media}<input type="file" accept="image/*,video/*,audio/*" capture="environment" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))}/><small>{files.length?labels.files.replace('{count}',String(files.length)):labels.mediaHint}</small></label>
@@ -113,6 +126,6 @@ export function FieldCapture({projects,labels}:{projects:Project[];labels:Labels
       <button className="button" disabled={busy||!description.trim()||!projectId}>{busy?labels.working:labels.save}</button>
       {status&&<p className="field-status" role="status">{status}</p>}
     </form>
-    <aside className="card card-pad field-queue"><div className="section-kicker">{labels.queueKicker}</div><strong>{pending}</strong><h3>{labels.queueTitle}</h3><p>{labels.queueHint}</p><button className="button secondary" onClick={sync} disabled={busy||!pending}>{labels.syncNow}</button><div className={`connectivity ${typeof navigator!=='undefined'&&navigator.onLine?'online':''}`}><i/>{labels.connectivity}</div></aside>
+    <aside className="card card-pad field-queue"><div className="section-kicker">{labels.queueKicker}</div><strong>{pending}</strong><h3>{labels.queueTitle}</h3><p>{labels.queueHint}</p><button className="button secondary" onClick={sync} disabled={busy||!pending}>{labels.syncNow}</button><div className={`connectivity ${online?'online':''}`}><i/>{labels.connectivity}</div></aside>
   </div>;
 }

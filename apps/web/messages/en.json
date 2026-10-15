@@ -448,7 +448,21 @@
     "synced": "{count} observation(s) synchronized",
     "offlineQueued": "Connection unavailable — item remains in the offline queue",
     "working": "Preparing evidence…",
-    "connectivity": "Automatic sync when the connection returns"
+    "connectivity": "Automatic sync when the connection returns",
+    "eventTypes": {"inspection": "Inspection", "ncr": "Non-conformance (NCR)", "rfi": "RFI", "hse": "Safety (HSE)", "progress": "Progress", "delivery": "Delivery", "commissioning": "Commissioning", "maintenance": "Maintenance"},
+    "severities": {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "CRITICAL": "Critical"},
+    "analysis": {"PENDING": "Agents analyzing…", "ANALYZED": "Analyzed", "FAILED": "Analysis failed; retry from the case page", "NOT_ANALYZED": "Not analyzed (older report)"},
+    "reportsKicker": "My reports",
+    "reportsTitle": "What happened after you reported",
+    "reportsEmpty": "No reports yet.",
+    "loading": "Loading…",
+    "riskRaised": "You reported {reported}; the AI assessed a higher risk, so it was raised to {final}.",
+    "agentAsks": "The agents need: ",
+    "answerPlaceholder": "The case is re-analyzed after you answer",
+    "answer": "Submit",
+    "reanalyzing": "Re-analyzing…",
+    "answerFailed": "Could not submit; please retry.",
+    "openCase": "Open full case"
   },
   "Integrations": {
     "eyebrow": "PHASE 7 · DATA PLANE",

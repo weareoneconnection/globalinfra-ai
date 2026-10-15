@@ -350,6 +350,10 @@ class FieldObservation(Base):
     sync_status: Mapped[str] = mapped_column(String(24), default="SYNCED", index=True)
     case_id: Mapped[str | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime)
+    # Agent-organization analysis of the report and the AI's risk view; the
+    # case risk is the higher of the reporter's severity and the AI's.
+    analysis_status: Mapped[str] = mapped_column(String(16), default="PENDING", server_default="NOT_ANALYZED", index=True)
+    ai_risk: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

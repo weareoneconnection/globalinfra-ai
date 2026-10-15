@@ -448,7 +448,21 @@
     "synced": "已同步 {count} 条观察",
     "offlineQueued": "当前无法连接，事件仍保留在离线队列",
     "working": "正在准备证据……",
-    "connectivity": "网络恢复后自动同步"
+    "connectivity": "网络恢复后自动同步",
+    "eventTypes": {"inspection": "检查", "ncr": "不符合项（NCR）", "rfi": "技术澄清（RFI）", "hse": "安全（HSE）", "progress": "进度", "delivery": "交付", "commissioning": "调试", "maintenance": "维护"},
+    "severities": {"LOW": "低", "MEDIUM": "中", "HIGH": "高", "CRITICAL": "紧急"},
+    "analysis": {"PENDING": "智能体分析中…", "ANALYZED": "已分析", "FAILED": "分析失败，可在案例页重试", "NOT_ANALYZED": "未分析（旧记录）"},
+    "reportsKicker": "我的上报",
+    "reportsTitle": "上报后的处理进展",
+    "reportsEmpty": "还没有上报记录。",
+    "loading": "加载中…",
+    "riskRaised": "你上报为 {reported}，AI 判断风险更高，已提高为 {final}。",
+    "agentAsks": "智能体需要补充：",
+    "answerPlaceholder": "填写后会重新分析",
+    "answer": "提交",
+    "reanalyzing": "重新分析中…",
+    "answerFailed": "提交失败，请重试。",
+    "openCase": "查看完整案例"
   },
   "Integrations": {
     "eyebrow": "阶段 7 · 数据平面",
