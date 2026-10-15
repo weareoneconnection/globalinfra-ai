@@ -125,8 +125,17 @@ def create_golden_thread(path: Path) -> None:
     img.save(path, quality=95)
 
 
-def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, name: str = "PingFang SC") -> None:
-    run.font.name = name
+# Chinese text in 仿宋 (FangSong, built into Windows); Latin text and digits
+# in Times New Roman, the usual pairing for Chinese formal documents.
+CJK_FONT = "仿宋"
+HEADING_FONT = "黑体"
+LATIN_FONT = "Times New Roman"
+
+
+def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, name: str = CJK_FONT, cjk: str = CJK_FONT) -> None:
+    """Body text in 仿宋; pass cjk=HEADING_FONT for titles, headings and table headers."""
+    latin = name if name != CJK_FONT else LATIN_FONT
+    run.font.name = latin
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.color.rgb = color
@@ -135,11 +144,11 @@ def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, n
     if rfonts is None:
         rfonts = OxmlElement("w:rFonts")
         rpr.insert(0, rfonts)
-    rfonts.set(qn("w:hint"), "eastAsia" if name == "PingFang SC" else "default")
-    rfonts.set(qn("w:eastAsia"), name)
-    rfonts.set(qn("w:ascii"), name)
-    rfonts.set(qn("w:hAnsi"), name)
-    rfonts.set(qn("w:cs"), name)
+    rfonts.set(qn("w:hint"), "eastAsia" if name == CJK_FONT else "default")
+    rfonts.set(qn("w:eastAsia"), cjk)
+    rfonts.set(qn("w:ascii"), latin)
+    rfonts.set(qn("w:hAnsi"), latin)
+    rfonts.set(qn("w:cs"), latin)
 
 
 def add_inline_runs(paragraph, text: str, size: float, bold: bool = False) -> None:
@@ -151,7 +160,8 @@ def add_inline_runs(paragraph, text: str, size: float, bold: bool = False) -> No
         strong = part.startswith("**") and part.endswith("**")
         content = part[1:-1] if code else part[2:-2] if strong else part
         run = paragraph.add_run(content)
-        set_run_font(run, 10.5 if code else size, bold=bold or strong, name="Consolas" if code else "PingFang SC")
+        set_run_font(run, 10.5 if code else size, bold=bold or strong, name="Consolas" if code else CJK_FONT,
+                      cjk=HEADING_FONT if strong else CJK_FONT)
 
 
 def add_title(doc: Document, text: str):
@@ -159,9 +169,9 @@ def add_title(doc: Document, text: str):
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(108)
     p.paragraph_format.space_after = Pt(36)
-    p.paragraph_format.line_spacing = 1.5
+    p.paragraph_format.line_spacing = Pt(36)
     run = p.add_run(text)
-    set_run_font(run, 22, bold=True)
+    set_run_font(run, 22, bold=True, cjk=HEADING_FONT)
     return p
 
 
@@ -169,7 +179,7 @@ def add_cover_line(doc: Document, text: str, index: int):
     p = doc.add_paragraph()
     boundary = text.startswith("数据边界")
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY if boundary else WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.line_spacing = 1.5
+    p.paragraph_format.line_spacing = Pt(22 if boundary else 28)
     p.paragraph_format.space_after = Pt(0 if boundary else 6)
     if index == 0:
         size, bold = 16, True
@@ -179,7 +189,10 @@ def add_cover_line(doc: Document, text: str, index: int):
         p.paragraph_format.space_before = Pt(36)
     else:
         size, bold = 14, False
-    add_inline_runs(p, text, size=size, bold=bold)
+    if index == 0:
+        set_run_font(p.add_run(text), size, bold=True, cjk=HEADING_FONT)
+    else:
+        add_inline_runs(p, text, size=size, bold=bold)
     return p
 
 
@@ -193,21 +206,21 @@ def add_heading(doc: Document, text: str, level: int):
         p.paragraph_format.first_line_indent = Inches(0.446)
         p.paragraph_format.space_before = Pt(0)
         p.paragraph_format.space_after = Pt(8)
-        p.paragraph_format.line_spacing = 1.5
+        p.paragraph_format.line_spacing = Pt(30)
         size = 16
     elif level == 2:
         p.paragraph_format.first_line_indent = Inches(0.446)
         p.paragraph_format.space_before = Pt(10)
         p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.35
+        p.paragraph_format.line_spacing = Pt(26)
         size = 15
     else:
         p.paragraph_format.space_before = Pt(8)
         p.paragraph_format.space_after = Pt(3)
-        p.paragraph_format.line_spacing = 1.25
+        p.paragraph_format.line_spacing = Pt(24)
         size = 14
     run = p.add_run(text)
-    set_run_font(run, size, bold=True)
+    set_run_font(run, size, bold=True, cjk=HEADING_FONT)
     return p
 
 
@@ -215,7 +228,7 @@ def add_body(doc: Document, text: str):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.first_line_indent = Inches(0.444)
-    p.paragraph_format.line_spacing = 1.45
+    p.paragraph_format.line_spacing = Pt(27)
     p.paragraph_format.space_after = Pt(0)
     p.paragraph_format.widow_control = True
     add_inline_runs(p, text, 15)
@@ -227,7 +240,7 @@ def add_bullet(doc: Document, text: str):
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.left_indent = Inches(0.58)
     p.paragraph_format.first_line_indent = Inches(-0.28)
-    p.paragraph_format.line_spacing = 1.35
+    p.paragraph_format.line_spacing = Pt(25)
     p.paragraph_format.space_after = Pt(2)
     run = p.add_run("• ")
     set_run_font(run, 14, bold=True)
@@ -307,11 +320,11 @@ def add_table(doc: Document, rows: list[list[str]]) -> None:
             set_cell_shading(cell, NAVY if r_idx == 0 else (PALE_BLUE if r_idx % 2 == 0 else "FFFFFF"))
             p = cell.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER if (r_idx == 0 or len(value) <= 12) else WD_ALIGN_PARAGRAPH.LEFT
-            p.paragraph_format.line_spacing = 1.15
+            p.paragraph_format.line_spacing = Pt(17)
             p.paragraph_format.space_before = Pt(1)
             p.paragraph_format.space_after = Pt(1)
             run = p.add_run(value)
-            set_run_font(run, 10.5, bold=r_idx == 0, color=RGBColor(255, 255, 255) if r_idx == 0 else TEXT)
+            set_run_font(run, 10.5, bold=r_idx == 0, color=RGBColor(255, 255, 255) if r_idx == 0 else TEXT, cjk=HEADING_FONT if r_idx == 0 else CJK_FONT)
     header_tr = table.rows[0]._tr
     tr_pr = header_tr.get_or_add_trPr()
     tbl_header = OxmlElement("w:tblHeader")
