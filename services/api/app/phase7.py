@@ -44,8 +44,9 @@ CONNECTOR_CATALOG = [
 ]
 CONNECTOR_TYPES = {item["type"] for item in CONNECTOR_CATALOG}
 TWIN_SOURCE_TYPES = {"IFC", "GLTF", "3D_TILES", "GEOJSON", "WMS", "IOT"}
-EVENT_TYPES = {"inspection", "ncr", "rfi", "hse", "progress", "delivery", "commissioning", "maintenance"}
-SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+EVENT_TYPES = {"observation", "inspection", "ncr", "rfi", "hse", "progress", "delivery", "commissioning", "maintenance"}
+# AUTO: the reporter leaves the risk to the AI assessment.
+SEVERITIES = {"AUTO", "LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 
 def _naive_utc(value: datetime) -> datetime:

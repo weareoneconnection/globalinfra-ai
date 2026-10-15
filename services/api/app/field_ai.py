@@ -26,6 +26,7 @@ RISK_ORDER = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 # The reporter's category is a hint for classification, not the case type.
 EVENT_HINTS = {
+    "observation": "",
     "inspection": "Site inspection finding.",
     "ncr": "Non-conformance (NCR) defect found.",
     "rfi": "Request for information on design or drawing.",
@@ -38,7 +39,10 @@ EVENT_HINTS = {
 
 
 def higher_risk(reported: str, assessed: str) -> str:
+    """The higher of the reporter's severity and the AI's; AUTO defers to the AI."""
     ranks = {r: i for i, r in enumerate(RISK_ORDER)}
+    if reported not in ranks:
+        return assessed
     return max((reported, assessed), key=lambda r: ranks.get(r, 0))
 
 
@@ -108,7 +112,8 @@ def report_payload(db: Session, observation: FieldObservation) -> dict:
         "analysis_status": observation.analysis_status, "case_id": observation.case_id,
         "risk_review": {
             "reported": observation.severity, "ai": observation.ai_risk, "final": case.risk if case else observation.severity,
-            "raised": bool(case and observation.ai_risk and case.risk != observation.severity),
+            "raised": bool(case and observation.ai_risk and observation.severity in RISK_ORDER and case.risk != observation.severity),
+            "assessed_by_ai": observation.severity == "AUTO",
         },
         "case": None if case is None else {
             "status": case.status, "type": case.type, "deadline": case.deadline, "issues": case.detected_issues,

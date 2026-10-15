@@ -27,7 +27,7 @@ def test_field_report_is_classified_raised_and_analyzed(client):
     report = reports[result["id"]]
     assert report["analysis_status"] == "ANALYZED"
     assert report["case"]["type"] == "HSE"
-    assert report["risk_review"] == {"reported": "MEDIUM", "ai": "CRITICAL", "final": "CRITICAL", "raised": True}
+    assert report["risk_review"] == {"reported": "MEDIUM", "ai": "CRITICAL", "final": "CRITICAL", "raised": True, "assessed_by_ai": False}
     assert report["plan"] and report["plan"][-1]["source"] == "governance"
     case = client.get(f"/cases/{result['case_id']}").json()
     assert case["status"] == "AWAITING_APPROVAL" and case["action"] is not None
@@ -51,3 +51,13 @@ def test_duplicate_sync_is_not_analyzed_twice(client):
     assert first["created"] is True and second["created"] is False and first["case_id"] == second["case_id"]
     runs = [r for r in client.get("/agents/runs?limit=100").json() if r["case_id"] == first["case_id"]]
     assert len(runs) == 1
+
+
+def test_auto_severity_defers_to_the_ai(client):
+    assert higher_risk("AUTO", "HIGH") == "HIGH"
+    result = _report(client, "Owner notice: access road damage, rectification required within 48 hours.",
+                     event_type="observation", severity="AUTO")
+    report = next(r for r in client.get("/field/reports?lang=en").json() if r["id"] == result["id"])
+    assert report["risk_review"]["final"] == "HIGH" and report["risk_review"]["raised"] is False
+    assert report["risk_review"]["assessed_by_ai"] is True
+    assert report["case"]["type"] == "Contract / Technical Interface"

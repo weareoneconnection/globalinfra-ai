@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { FIELD_SYNCED_EVENT } from './FieldReports';
 
 type Project = { id:number; code:string; name:string; latitude?:number; longitude?:number };
@@ -15,7 +16,9 @@ type QueuedObservation = {
 
 const DB_NAME = 'globalinfra-field';
 const STORE = 'observations';
-const EVENT_TYPES = ['inspection','ncr','rfi','hse','progress','delivery','commissioning','maintenance'];
+const EVENT_TYPES = ['observation','inspection','ncr','rfi','hse','progress','delivery','commissioning','maintenance'];
+const SEVERITIES = ['AUTO','LOW','MEDIUM','HIGH','CRITICAL'];
+const SPEECH_LANG: Record<string,string> = { zh: 'zh-CN', en: 'en-US' };
 const NEAREST_PROJECT_KM = 150;
 
 function database(): Promise<IDBDatabase> {
@@ -83,19 +86,57 @@ async function uploadPending(observation: QueuedObservation): Promise<QueuedObse
   return next;
 }
 
+type SpeechRecognitionLike = { lang:string; interimResults:boolean; continuous:boolean; start:()=>void; stop:()=>void;
+  onresult:((event:{resultIndex:number;results:ArrayLike<ArrayLike<{transcript:string}>>})=>void)|null; onerror:(()=>void)|null; onend:(()=>void)|null };
 type BarcodeDetectorLike = { detect:(source:CanvasImageSource)=>Promise<{rawValue:string}[]> };
 
 export function FieldCapture({projects,labels,eventLabels,severityLabels}:{projects:Project[];labels:Labels;eventLabels:Labels;severityLabels:Labels}) {
   const [projectId,setProjectId]=useState(projects[0]?.id||0);
   const [twinId,setTwinId]=useState(''); const [twinObjects,setTwinObjects]=useState<TwinObject[]>([]);
-  const [eventType,setEventType]=useState('inspection');
-  const [severity,setSeverity]=useState('MEDIUM'); const [description,setDescription]=useState('');
+  const locale=useLocale();
+  const [eventType,setEventType]=useState('observation');
+  // AUTO leaves the risk to the AI; the case still takes the higher of the two when a level is chosen.
+  const [severity,setSeverity]=useState('AUTO'); const [description,setDescription]=useState('');
   const [location,setLocation]=useState<Record<string,number>>({}); const [files,setFiles]=useState<File[]>([]);
   const [fileInputKey,setFileInputKey]=useState(0); // remounts the native picker so it forgets saved files
   const [pending,setPending]=useState(0); const [status,setStatus]=useState(''); const [busy,setBusy]=useState(false);
   // Read browser-only capabilities after mount; navigator is not available during server render.
   const [online,setOnline]=useState(false); const [canScan,setCanScan]=useState(false); const [scanning,setScanning]=useState(false);
   const videoRef=useRef<HTMLVideoElement>(null);
+  const [voice,setVoice]=useState<'idle'|'listening'|'recording'>('idle');
+  const recognitionRef=useRef<{stop:()=>void}|null>(null);
+  const recorderRef=useRef<MediaRecorder|null>(null);
+
+  /** Speech to text when the browser can (online); otherwise keep a voice note as evidence. */
+  async function toggleVoice(){
+    if(voice==='listening'){recognitionRef.current?.stop();return}
+    if(voice==='recording'){recorderRef.current?.stop();return}
+    const Recognition=(window as unknown as {SpeechRecognition?:new()=>SpeechRecognitionLike;webkitSpeechRecognition?:new()=>SpeechRecognitionLike}).SpeechRecognition
+      ??(window as unknown as {webkitSpeechRecognition?:new()=>SpeechRecognitionLike}).webkitSpeechRecognition;
+    if(Recognition&&navigator.onLine){
+      const recognition=new Recognition(); recognition.lang=SPEECH_LANG[locale]??'en-US'; recognition.interimResults=false; recognition.continuous=true;
+      recognition.onresult=(event)=>{
+        const text=Array.from(event.results).slice(event.resultIndex).map(r=>r[0].transcript).join('');
+        if(text.trim()) setDescription(prev=>(prev?`${prev} `:'')+text.trim());
+      };
+      recognition.onerror=()=>{setVoice('idle');setStatus(labels.voiceUnsupported)};
+      recognition.onend=()=>setVoice('idle');
+      recognitionRef.current=recognition; recognition.start(); setVoice('listening'); setStatus(labels.voiceListening); return;
+    }
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){setStatus(labels.voiceUnsupported);return}
+    try {
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const recorder=new MediaRecorder(stream); const chunks:Blob[]=[];
+      recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+      recorder.onstop=()=>{
+        stream.getTracks().forEach(t=>t.stop()); setVoice('idle');
+        const type=recorder.mimeType||'audio/webm'; const ext=type.includes('mp4')?'m4a':type.includes('ogg')?'ogg':'webm';
+        const file=new File(chunks,`voice-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`,{type});
+        setFiles(prev=>[...prev,file]); setStatus(labels.voiceSaved);
+      };
+      recorderRef.current=recorder; recorder.start(); setVoice('recording'); setStatus(labels.voiceRecording);
+    } catch { setStatus(labels.voiceUnsupported); }
+  }
 
   useEffect(()=>{
     let alive=true; setTwinObjects([]);
@@ -123,6 +164,8 @@ export function FieldCapture({projects,labels,eventLabels,severityLabels}:{proje
 
   useEffect(()=>{
     setOnline(navigator.onLine); setCanScan('BarcodeDetector' in window && !!navigator.mediaDevices?.getUserMedia);
+    // Pick the nearest project silently only when location access was already granted.
+    navigator.permissions?.query({name:'geolocation' as PermissionName}).then(p=>{if(p.state==='granted')locate()}).catch(()=>undefined);
     const offline=()=>setOnline(false);
     refreshPending(); const goOnline=()=>{setOnline(true); sync();};
     const message=(event:MessageEvent)=>{if(event.data?.type==='GLOBALINFRA_FIELD_SYNC')sync()};
@@ -198,23 +241,31 @@ export function FieldCapture({projects,labels,eventLabels,severityLabels}:{proje
   return <div className="field-layout">
     <form className="card card-pad field-form" onSubmit={submit}>
       <div className="section-kicker">{labels.captureKicker}</div><h3>{labels.captureTitle}</h3>
-      <label>{labels.project}<select value={projectId} onChange={e=>{setProjectId(Number(e.target.value)); setTwinId('');}}>{projects.map(p=><option value={p.id} key={p.id}>{p.code} · {p.name}</option>)}</select></label>
-      <div className="field-form-grid"><label>{labels.eventType}<select value={eventType} onChange={e=>setEventType(e.target.value)}>{EVENT_TYPES.map(type=><option value={type} key={type}>{eventLabels[type]??type}</option>)}</select></label><label>{labels.severity}<select value={severity} onChange={e=>setSeverity(e.target.value)}>{['LOW','MEDIUM','HIGH','CRITICAL'].map(level=><option value={level} key={level}>{severityLabels[level]??level}</option>)}</select></label></div>
-      <label>{labels.twinId}
-        <div className="field-twin-row">
-          <select value={twinId} onChange={e=>setTwinId(e.target.value)}>
-            <option value="">{labels.twinNone}</option>
-            {twinObjects.map(o=><option value={o.id} key={o.id}>{o.name} · {o.id}</option>)}
-          </select>
-          {canScan&&<button type="button" className="button secondary" onClick={scan} disabled={scanning||!twinObjects.length}>{scanning?labels.scanning:labels.scan}</button>}
-        </div>
-      </label>
-      {scanning&&<video ref={videoRef} className="field-scan-video" muted playsInline/>}
-      <label>{labels.description}<textarea required minLength={4} value={description} onChange={e=>setDescription(e.target.value)} placeholder={labels.descriptionHint}/></label>
-      <label>{labels.media}<input key={fileInputKey} type="file" accept="image/*,video/*,audio/*" capture="environment" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))}/><small>{files.length?labels.files.replace('{count}',String(files.length)):labels.mediaHint}</small></label>
-      <div className="field-location"><button className="button secondary" type="button" onClick={locate}>{labels.captureLocation}</button><span>{location.lat?`${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ±${Math.round(location.accuracy_m)}m`:labels.noLocation}</span></div>
-      <button className="button" disabled={busy||!description.trim()||!projectId}>{busy?labels.working:labels.save}</button>
+      <textarea className="field-quick-text" required minLength={4} value={description} onChange={e=>setDescription(e.target.value)} placeholder={labels.quickPlaceholder} aria-label={labels.description}/>
+      <div className="field-quick-actions">
+        <button type="button" className={`button secondary field-big ${voice!=='idle'?'active':''}`} onClick={toggleVoice}>{voice==='idle'?`🎤 ${labels.voice}`:`■ ${labels.voiceStop}`}</button>
+        <label className="button secondary field-big">📷 {labels.photo}<input key={fileInputKey} type="file" accept="image/*,video/*,audio/*" capture="environment" multiple hidden onChange={e=>setFiles(prev=>[...prev,...Array.from(e.target.files||[])])}/></label>
+        <button className="button field-big field-send" disabled={busy||!description.trim()||!projectId}>{busy?labels.working:labels.save}</button>
+      </div>
+      {files.length>0&&<p className="field-files">{labels.files.replace('{count}',String(files.length))}：{files.map(f=>f.name).join('、')} <button type="button" className="field-link" onClick={()=>setFiles([])}>{labels.clearFiles}</button></p>}
       {status&&<p className="field-status" role="status">{status}</p>}
+      <details className="field-more">
+        <summary>{labels.more}</summary>
+        <label>{labels.project}<select value={projectId} onChange={e=>{setProjectId(Number(e.target.value)); setTwinId('');}}>{projects.map(p=><option value={p.id} key={p.id}>{p.code} · {p.name}</option>)}</select></label>
+        <div className="field-form-grid"><label>{labels.eventType}<select value={eventType} onChange={e=>setEventType(e.target.value)}>{EVENT_TYPES.map(type=><option value={type} key={type}>{eventLabels[type]??type}</option>)}</select></label><label>{labels.severity}<select value={severity} onChange={e=>setSeverity(e.target.value)}>{SEVERITIES.map(level=><option value={level} key={level}>{severityLabels[level]??level}</option>)}</select></label></div>
+        <label>{labels.twinId}
+          <div className="field-twin-row">
+            <select value={twinId} onChange={e=>setTwinId(e.target.value)}>
+              <option value="">{labels.twinNone}</option>
+              {twinObjects.map(o=><option value={o.id} key={o.id}>{o.name} · {o.id}</option>)}
+            </select>
+            {canScan&&<button type="button" className="button secondary" onClick={scan} disabled={scanning||!twinObjects.length}>{scanning?labels.scanning:labels.scan}</button>}
+          </div>
+        </label>
+        {scanning&&<video ref={videoRef} className="field-scan-video" muted playsInline/>}
+        <div className="field-location"><button className="button secondary" type="button" onClick={locate}>{labels.captureLocation}</button><span>{location.lat?`${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ±${Math.round(location.accuracy_m)}m`:labels.noLocation}</span></div>
+        <small className="muted">{labels.mediaHint}</small>
+      </details>
     </form>
     <aside className="card card-pad field-queue"><div className="section-kicker">{labels.queueKicker}</div><strong>{pending}</strong><h3>{labels.queueTitle}</h3><p>{labels.queueHint}</p><button className="button secondary" onClick={sync} disabled={busy||!pending}>{labels.syncNow}</button><div className={`connectivity ${online?'online':''}`}><i/>{labels.connectivity}</div></aside>
   </div>;

@@ -9,7 +9,7 @@ type Question = { id: number; question: string; status: string; answer: string |
 type Report = {
   id: string; event_type: string; description: string; captured_at: string; analysis_status: string; case_id: string | null;
   attachments: { name: string; media_type: string; sha256: string; url: string | null }[];
-  risk_review: { reported: string; ai: string | null; final: string; raised: boolean };
+  risk_review: { reported: string; ai: string | null; final: string; raised: boolean; assessed_by_ai: boolean };
   case: { status: string; type: string; deadline: string } | null; plan: Step[]; questions: Question[];
 };
 
@@ -88,6 +88,7 @@ export function FieldReports() {
           : a.media_type.startsWith('audio/') ? <audio key={a.sha256} controls preload="none" src={a.url!} />
           : <a key={a.sha256} href={a.url!} target="_blank" rel="noopener noreferrer">{a.name}</a>)}</div>}
         {report.risk_review.raised && <p className="field-report-raised">{t('riskRaised', { reported: report.risk_review.reported, final: report.risk_review.final })}</p>}
+        {report.risk_review.assessed_by_ai && report.analysis_status === 'ANALYZED' && <p className="field-report-raised">{t('riskByAi', { final: report.risk_review.final })}</p>}
         {report.case && report.analysis_status === 'ANALYZED' && <>
           <p className="muted small">{report.case.type} · {label('statuses', report.case.status, ta)} · {report.case.deadline}</p>
           {actions.length > 0 && <ol className="field-report-plan">{actions.map(step => <li key={step.id}>{step.text}<small> · {step.owner_role}</small></li>)}</ol>}

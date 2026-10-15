@@ -207,6 +207,14 @@ Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/t
 
 The generated IFC/glTF/3D Tiles/GeoJSON/WMS artifacts, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
 
+## Field operations 2.0
+
+- **One-line reporting**: by default a single box with Voice / Photo / Send buttons; project, type, severity, component and location are under "More (optional)". Severity defaults to "Let the AI assess".
+- **Into the agent organization**: synced reports are classified with the intake rules (the reporter's category is a hint), the risk is the higher of the reporter's and the AI's (never lowered), and the agent organization runs in the background. "My reports" shows analysis status, risk review, plan and answerable questions (`GET /field/reports`).
+- **Field evidence**: photos, video and voice notes are validated by file signature (declared types are not trusted), size-limited and stored once per SHA-256 (`POST /field/media`, `GET /field/media/{sha256}`); observations may only reference media the organization uploaded. The offline queue keeps original files and uploads them before syncing.
+- **Component and location**: the Twin ID is picked from the project's components or scanned where the browser supports it; with location already permitted, the nearest project within 150 km is selected.
+- **Voice**: speech to text where the browser supports it; otherwise the recording is kept as an evidence attachment and is not transcribed.
+
 ## Agent organization 2.0
 
 Every case is handled by a governed agent organization (`services/api/app/agent_org/`); every agent is advisory only:

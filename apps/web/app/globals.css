@@ -332,3 +332,17 @@ a.assistant-card:hover{border-color:var(--line2)}
 .field-report-media{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .field-report-media img{width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .field-report-media audio{height:32px;max-width:100%}
+
+/* One-tap field capture */
+.field-quick-text{width:100%;min-height:120px;font-size:16px;line-height:1.6;border:1px solid var(--line2);background:rgba(0,0,0,.2);color:var(--text);border-radius:12px;padding:12px 14px;margin:8px 0;resize:vertical}
+.field-quick-actions{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:8px}
+.field-big{min-height:52px;font-size:16px;display:flex;align-items:center;justify-content:center;width:auto;margin:0;cursor:pointer}
+.field-big.active{border-color:rgba(255,133,133,.6);color:#ffc0c0;background:rgba(255,133,133,.12)}
+.field-send{font-weight:600}
+.field-files{font-size:13px;color:var(--muted);margin:8px 0 0;overflow-wrap:anywhere}
+.field-link{background:none;border:0;color:var(--cyan);cursor:pointer;font:inherit;padding:0}
+.field-more{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.field-more summary{cursor:pointer;color:#c7f5ff;font-size:13px;margin-bottom:8px}
+.field-more label{display:block;margin-top:8px}
+@media(max-width:620px){.field-quick-actions{grid-template-columns:1fr 1fr}.field-send{grid-column:1 / -1}.field-big{min-height:56px}}
+.field-form .field-quick-actions label.field-big{font-size:16px;margin:0;color:inherit;text-transform:none;letter-spacing:normal}
