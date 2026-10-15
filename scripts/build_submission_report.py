@@ -143,13 +143,15 @@ def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, n
 
 
 def add_inline_runs(paragraph, text: str, size: float, bold: bool = False) -> None:
-    parts = re.split(r"(`[^`]+`)", text)
+    parts = re.split(r"(`[^`]+`|\*\*[^*]+\*\*)", text)
     for part in parts:
         if not part:
             continue
         code = part.startswith("`") and part.endswith("`")
-        run = paragraph.add_run(part[1:-1] if code else part)
-        set_run_font(run, 10.5 if code else size, bold=bold, name="Consolas" if code else "PingFang SC")
+        strong = part.startswith("**") and part.endswith("**")
+        content = part[1:-1] if code else part[2:-2] if strong else part
+        run = paragraph.add_run(content)
+        set_run_font(run, 10.5 if code else size, bold=bold or strong, name="Consolas" if code else "PingFang SC")
 
 
 def add_title(doc: Document, text: str):
@@ -165,12 +167,13 @@ def add_title(doc: Document, text: str):
 
 def add_cover_line(doc: Document, text: str, index: int):
     p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if index < 5 else WD_ALIGN_PARAGRAPH.JUSTIFY
+    boundary = text.startswith("数据边界")
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY if boundary else WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.line_spacing = 1.5
-    p.paragraph_format.space_after = Pt(6 if index < 5 else 0)
+    p.paragraph_format.space_after = Pt(0 if boundary else 6)
     if index == 0:
         size, bold = 16, True
-    elif index == 5:
+    elif boundary:
         size, bold = 12, False
         p.paragraph_format.first_line_indent = Inches(0.44)
         p.paragraph_format.space_before = Pt(36)
