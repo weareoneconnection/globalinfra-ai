@@ -197,9 +197,19 @@ def format_deadline(amount: int | None, unit: str) -> dict | None:
     return None
 
 
+# A response window is phrased "within N days" / "N 天内"; prefer it over other
+# durations in the text (e.g. "an extension of time of 10 days").
+_WITHIN_RE = re.compile(r"within\s+(\d+)\s*(hours?|hrs?|days?)|(\d+)\s*(小时|天)内", re.IGNORECASE)
+
+
 def _detect_deadline(text: str) -> dict | None:
     if _IMMEDIATE_RE.search(text or ""):
         return format_deadline(None, "immediate")
+    within = _WITHIN_RE.search(text or "")
+    if within:
+        amount = int(within.group(1) or within.group(3))
+        unit = (within.group(2) or within.group(4) or "").lower()
+        return format_deadline(amount, "hours" if unit.startswith(("hour", "hr", "小时")) else "days")
     hours = _DEADLINE_HOURS_RE.search(text or "")
     if hours:
         return format_deadline(int(hours.group(1)), "hours")

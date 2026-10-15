@@ -71,6 +71,40 @@ class AgentRun(Base):
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+class AgentTrace(Base):
+    """One step of an agent-organization run (team assembly, a specialist
+    round, coordination, planning or verification), with the tool calls it
+    made and its structured output. Replaced on every re-analysis."""
+    __tablename__ = "agent_traces"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    run_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    agent_id: Mapped[str] = mapped_column(String(40), index=True)
+    round: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(24), default="COMPLETED", index=True)
+    rationale: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tool_calls: Mapped[list] = mapped_column(JSON, default=list)
+    output: Mapped[dict] = mapped_column(JSON, default=dict)
+    method: Mapped[str] = mapped_column(String(16), default="rules")
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+class CaseInput(Base):
+    """A question an agent needs a human to answer before it can conclude.
+    Survives re-analysis so answers feed the next run."""
+    __tablename__ = "case_inputs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(String(40))
+    question_key: Mapped[str] = mapped_column(String(120), index=True)
+    question: Mapped[dict] = mapped_column(JSON)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="OPEN", index=True)
+    answered_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
 class Approval(Base):
     __tablename__ = "approvals"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

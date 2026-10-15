@@ -378,6 +378,11 @@ type CaseDetail = {
   verification_receipt: { id: string; status: string; checks: Record<string, boolean> } | null;
   artifact: { id: string } | null;
 };
+type TeamMember = { agent_id: string; name: string; source: string; rationale: string };
+type PlanStep = { id: string; text: string; owner_role: string; due: string; source: string; evidence_refs: string[] };
+type AgentFinding = { agent_id: string; name: string; status: string; claim: string; method: string; tool_calls: { tool: string; ok: boolean; summary: string }[] };
+type AgentQuestion = { id: number; agent: string; question: string; status: string; answer: string | null };
+type AgentRunView = { team: TeamMember[]; findings: AgentFinding[]; plan: PlanStep[]; unresolved: { topic: string; agents: string[] }[]; questions: AgentQuestion[] };
 type ApprovalRow = { id: number; case_id: string; title: string; approver_role: string; status: string; risk: string };
 
 function planSteps(summary: string): string[] {
@@ -391,16 +396,20 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
   const locale = useLocale();
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [agentRun, setAgentRun] = useState<AgentRunView | null>(null);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [caseBody, approvalBody] = await Promise.all([
+      const [caseBody, approvalBody, runBody] = await Promise.all([
         readJson(await fetch(`/backend/cases/${caseId}?lang=${locale}`)),
         readJson(await fetch(`/backend/approvals?lang=${locale}`)),
+        fetch(`/backend/cases/${caseId}/agent-run?lang=${locale}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       setDetail(caseBody);
+      setAgentRun(runBody && runBody.team?.length ? runBody : null);
       setApprovals((approvalBody as ApprovalRow[]).filter(row => row.case_id === caseId));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('failed'));
@@ -444,14 +453,45 @@ function CaseReply({ caseId, summary, projects, planningAgent }: { caseId: strin
       </div>
       <div className="assistant-facts">
         <div><span>{t('deadline')}</span><b>{deadline || '—'}</b></div>
-        {summary && <div><span>{t('team')}</span><b>{summary.team.join('、') || '—'}</b></div>}
+        {(agentRun || summary) && <div><span>{t('team')}</span><b>{(agentRun ? agentRun.team.map(m => m.name) : summary?.team ?? []).join('、') || '—'}</b></div>}
         {summary && <div><span>{t('method')}</span><b>{summary.method === 'llm' ? t('methodLlm') : t('methodRules')}</b></div>}
       </div>
       {issues.length > 0 && <div className="assistant-issues">{issues.map(issue => <span key={issue}>{issue}</span>)}</div>}
       {!detail && !error && <Thinking intent="help" />}
       {detail && <>
+        {agentRun && <>
+          <div className="assistant-section-label">{t('orgTeam', { count: agentRun.team.length })}</div>
+          <div className="assistant-team">{agentRun.team.map(member => {
+            const finding = agentRun.findings.find(f => f.agent_id === member.agent_id);
+            return <div key={member.agent_id} className={`assistant-member ${finding?.status?.toLowerCase() ?? ''}`} title={member.rationale}>
+              <b>{member.name}</b>
+              <span className={`assistant-member-source ${member.source}`}>{t(`orgSource.${member.source}`)}</span>
+              {finding && <span className="assistant-member-status">{t(`orgStatus.${finding.status}`)}</span>}
+              <small>{member.rationale}</small>
+            </div>;
+          })}</div>
+        </>}
+        {agentRun && agentRun.questions.some(q => q.status === 'OPEN') && <div className="assistant-questions">
+          <div className="assistant-section-label">{t('orgQuestions')}</div>
+          {agentRun.questions.filter(q => q.status === 'OPEN').map(q => <div key={q.id} className="assistant-question">
+            <p><b>{q.agent}：</b>{q.question}</p>
+            <div className="assistant-question-row">
+              <input value={answers[q.id] ?? ''} onChange={event => setAnswers(prev => ({ ...prev, [q.id]: event.target.value }))} placeholder={t('orgAnswerPlaceholder')} />
+              <button className="button" disabled={!!busy || !(answers[q.id] ?? '').trim()}
+                onClick={() => post(`q${q.id}`, `/cases/${caseId}/inputs`, { input_id: q.id, answer: answers[q.id] })}>
+                {busy === `q${q.id}` ? t('orgReanalyzing') : t('orgAnswer')}
+              </button>
+            </div>
+          </div>)}
+        </div>}
+        {agentRun && agentRun.unresolved.length > 0 && <div className="assistant-unresolved">
+          <div className="assistant-section-label">{t('orgUnresolved')}</div>
+          <ul>{agentRun.unresolved.map(issue => <li key={issue.topic}>{issue.topic}</li>)}</ul>
+        </div>}
         <div className="assistant-section-label">{t('plan')}</div>
-        {steps.length ? <ol className="assistant-plan">{steps.map(step => <li key={step}>{step}</li>)}</ol> : <p className="muted">{planRun?.summary ?? '—'}</p>}
+        {agentRun?.plan.length
+          ? <ol className="assistant-plan structured">{agentRun.plan.map(step => <li key={step.id}><span>{step.text}</span><small>{step.owner_role} · {step.due}</small></li>)}</ol>
+          : steps.length ? <ol className="assistant-plan">{steps.map(step => <li key={step}>{step}</li>)}</ol> : <p className="muted">{planRun?.summary ?? '—'}</p>}
         {(() => {
           // Only verified evidence (above the confident relevance threshold)
           // is shown as a basis; the rest is folded and carries no score.

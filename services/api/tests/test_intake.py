@@ -312,3 +312,9 @@ def test_encroachment_is_not_tagged_as_ncr():
     issues = [i["en"] for i in build_intake_result("Earthwork encroachment at the interface zone, Malaysia.")["issues"]]
     assert "Earthwork encroachment" in issues and "Non-conformance (NCR)" not in issues
     assert "Non-conformance (NCR)" in [i["en"] for i in build_intake_result("Raised NCR-2026-084 for honeycomb.")["issues"]]
+
+
+def test_response_window_beats_other_durations():
+    text = "Request an extension of time of 10 days. Please respond within 14 days."
+    assert build_intake_result(text)["deadline"]["en"] == "14 days"
+    assert build_intake_result("工期延长 10 天，请在 3 天内回复。")["deadline"]["zh"] == "3 天"

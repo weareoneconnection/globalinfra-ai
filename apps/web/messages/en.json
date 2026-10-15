@@ -112,18 +112,62 @@
     "teamBadge": "ACTIVE"
   },
   "Agents": {
-    "eyebrow": "Multi-agent engineering organization",
-    "title": "Specialist agent registry",
-    "subtitle": "Agents do not operate as isolated chatbots. The Case Router assembles a temporary, policy-constrained team around each engineering event.",
-    "available": "{count} specialists available",
-    "incomingLabel": "INCOMING CASE",
-    "incomingValue": "NCR · Concrete crack · Schedule exposure",
-    "routerLabel": "CASE ROUTER",
-    "routerValue": "Classify · Assemble · Govern",
-    "teamLabel": "DYNAMIC TEAM",
-    "teamValue": "Quality + Engineering + Contract + Planning",
-    "practiceKicker": "SPECIALIST PRACTICE",
-    "agentsCount": "{count} agents"
+    "eyebrow": "Agent organization 2.0",
+    "title": "Agent organization",
+    "subtitle": "For every case the team router staffs specialists from the case content; agents call real tools and return structured findings, the coordinator surfaces conflicts and gaps, and only a planned and verified case reaches human approval. Every agent is advisory only.",
+    "available": "{count} specialist agents",
+    "flow": [
+      {
+        "title": "Team router",
+        "text": "core members plus signal-based additions, with reasons"
+      },
+      {
+        "title": "Specialists",
+        "text": "call tools and return evidence-backed findings"
+      },
+      {
+        "title": "Coordinator",
+        "text": "surfaces conflicts and gaps, asks humans when needed"
+      },
+      {
+        "title": "Planner",
+        "text": "each step has an owner, a due time and a source"
+      },
+      {
+        "title": "Verifier",
+        "text": "checks every finding against its evidence"
+      },
+      {
+        "title": "Human approval",
+        "text": "only people approve external actions"
+      }
+    ],
+    "runsKicker": "Live runs",
+    "runsTitle": "Recent team runs",
+    "runsCount": "{count} runs",
+    "runsEmpty": "No runs yet. Upload a letter or analyze a case to see one.",
+    "colCase": "Case",
+    "colTeam": "Team",
+    "colConsistency": "Evidence-backed",
+    "colModelCalls": "Model calls",
+    "colChecks": "Org checks",
+    "checksPassed": "passed",
+    "checksFailed": "failed",
+    "scoreKicker": "Performance",
+    "scoreTitle": "Agent scorecards",
+    "scoreNote": "Latest run per case",
+    "colAgent": "Agent",
+    "colRuns": "Runs",
+    "colSupported": "Backed",
+    "colGap": "Gap",
+    "colInput": "Needs input",
+    "colLlm": "LLM-written",
+    "colRejected": "Rejected cases",
+    "practiceKicker": "Practice area",
+    "agentsCount": "{count} agents",
+    "advisory": "advisory",
+    "escalation": "Asks when evidence is missing: ",
+    "countryVariants": "Country variants: "
   },
   "Approvals": {
     "eyebrow": "Human governance",
@@ -667,6 +711,14 @@
     "docTypes": {"LAW_INDEX": "Law source index", "REGULATION_INDEX": "Regulation source index", "CODE_INDEX": "Code source index", "PORTAL_INDEX": "Official portal", "GUIDANCE": "Guidance", "CONTRACT_CLAUSE": "Contract clause", "PROCEDURE": "Procedure"},
     "docStatuses": {"CURRENT": "current", "SUPERSEDED": "superseded", "DRAFT": "draft"},
     "sourcesUncited": "Other retrieved sources ({count}, not cited in the answer)",
+    "orgTeam": "Specialist team ({count})",
+    "orgSource": {"core": "core", "signal": "added by signal", "model": "suggested by LLM"},
+    "orgStatus": {"SUPPORTED": "evidence-backed", "GAP": "evidence gap", "NEEDS_INPUT": "needs input"},
+    "orgQuestions": "The agents need your input",
+    "orgAnswerPlaceholder": "The case is re-analyzed after you answer",
+    "orgAnswer": "Submit and re-analyze",
+    "orgReanalyzing": "Re-analyzing…",
+    "orgUnresolved": "Needs a human decision",
     "approvalsNone": "Nothing is awaiting approval."
   }
 }

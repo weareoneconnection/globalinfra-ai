@@ -73,18 +73,26 @@ def test_generate_wraps_a_network_failure_as_llmerror(monkeypatch):
         asyncio.run(generate("system", "user"))
 
 
-def test_analyze_endpoint_returns_a_clean_502_instead_of_crashing(client, monkeypatch):
+def test_analyze_degrades_to_rules_when_the_model_fails(client, monkeypatch):
+    """A failing model must not abort analysis: every agent-organization step
+    falls back to its deterministic path and the run says so."""
+    import app.agent_org.coordination as coordination
+    import app.agent_org.findings as findings
+    import app.agent_org.team as team
+
     monkeypatch.setattr(workflow.settings, "llm_mode", "live")
     monkeypatch.setattr(workflow.settings, "openai_compat_api_key", "sk-test")
 
-    async def failing_generate(system, user):
+    async def failing_generate(*args, **kwargs):
         raise LLMError("Upstream model call to 'gpt-5.6 Luna' failed with HTTP 400: model does not exist")
 
-    monkeypatch.setattr(workflow, "generate", failing_generate)
+    for module in (coordination, findings, team):
+        monkeypatch.setattr(module, "generate", failing_generate)
 
     r = client.post("/cases/CASE-2026-0182/analyze")
-    assert r.status_code == 502
-    assert "gpt-5.6 Luna" in r.text
+    assert r.status_code == 200
+    run = client.get("/cases/CASE-2026-0182/agent-run").json()
+    assert run["team"] and all(f["method"] == "rules" for f in run["findings"])
 
 
 def test_translate_endpoint_returns_a_clean_502_instead_of_crashing(client, monkeypatch):

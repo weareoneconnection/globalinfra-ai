@@ -207,6 +207,21 @@ Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/t
 
 The generated IFC/glTF/3D Tiles/GeoJSON/WMS artifacts, BMS/SCADA readings and scenarios are synthetic integration fixtures. Production deployments replace them through model-conversion, project-controls, object-storage and telemetry adapters while preserving the same Twin ID and API contracts.
 
+## Agent organization 2.0
+
+Every case is handled by a governed agent organization (`services/api/app/agent_org/`); every agent is advisory only:
+
+- **Agent cards**: each agent's scope, tools, evidence policy, escalation question and country-specific search terms are defined once and versioned (`GET /agents/cards`).
+- **Dynamic teams**: the core team for the case type plus specialists triggered by the letter (cost, claims, procurement, plant, commissioning, asset; at most 6), each with the reason it was selected; with a model configured, up to 2 more may be proposed from the registry.
+- **Real tools**: jurisdiction-filtered knowledge search, resolved similar cases, project status, twin element lookup, permit gates, schedule impact and cost estimate. Tools only read existing data and say so when data is missing.
+- **Structured findings**: claim, evidence, confidence, gaps, actions with an owner role and questions for people; a model citing a source its agent did not retrieve is downgraded to a gap.
+- **Coordination and escalation**: the coordinator detects dependency conflicts (e.g. a contractual position that depends on an unknown technical cause) and gaps; with a model it sends one targeted follow-up, otherwise it escalates to a human. Agent questions can be answered in the chat, which re-runs the analysis (`POST /cases/{id}/inputs`).
+- **Plan and verification**: every plan step traces to a finding, a question or a governance gate and has an owner and due time; the verifier checks each finding against its evidence.
+- **Observability**: full trace `GET /cases/{id}/agent-run`, recent runs `GET /agents/runs`, scorecards `GET /agents/scorecards`; the agent organization page shows live runs.
+- **Evaluation**: `python evals/run_agent_org_eval.py` checks team composition, escalation, plan traceability and grounded findings on 12 synthetic cases, and runs in CI.
+
+Each case uses at most 12 model calls and 3 concurrent calls; a failing model degrades step by step to rules without aborting the analysis.
+
 ## V4.3 Assistant (conversational entry point)
 
 The web app now opens on the **Assistant** (`/`); the former Command Center moved to `/overview` and every other page is unchanged. The assistant is a conversational entry point to the same governed capabilities, not a new reasoning engine:

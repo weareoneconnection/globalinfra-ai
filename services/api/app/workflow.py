@@ -52,9 +52,10 @@ from sqlalchemy.orm import Session
 from .agents import AGENTS
 from .config import settings
 from .i18n import bi
-from .llm import generate, is_llm_configured, translate
+from .llm import is_llm_configured
 from .models import Action, AgentRun, Approval, Case, Claim, Evidence, ExecutionReceipt, KnowledgeDocument, Project, Verification
-from .retrieval import KnowledgeIndex, case_query_text
+from .retrieval import case_query_text
+from .agent_org.orchestrator import coordinator_summary, persist as persist_organization, run_organization, team_summary
 
 AGENTS_BY_ID = {a["id"]: a for a in AGENTS}
 
@@ -69,44 +70,8 @@ SPECIALISTS_BY_CASE_TYPE: dict[str, list[str]] = {
 }
 DEFAULT_SPECIALISTS = ["contract", "engineering"]
 
-# Short bilingual domain-focus search terms per agent: bias the shared
-# retrieval index toward that agent's discipline so two agents looking at
-# the same case don't just echo the same single top hit. This is
-# retrieval/synthesis plumbing, not the public agent directory the
-# `/agents` endpoint shows to users, so it is kept here rather than in
-# agents.py.
-FOCUS_TERMS: dict[str, str] = {
-    "contract": "contract clause responsibility matrix scope exclusion temporary works variation instruction 合同 条款 责任 矩阵 范围 除外 临时工程 变更 指令",
-    "engineering": "engineering technical evidence crack location width chronology causation structural 工程 技术 证据 裂缝 位置 宽度 时序 成因",
-    "interface": "interface civil mep rail systems external boundary coordination earthwork 接口 土建 机电 轨道 系统 边界 协调 土方",
-    "hse": "safety environment hazard control fall protection working at height ppe 安全 环境 危险源 管控 坠落 防护 高处作业",
-    "compliance": "compliance permit local law regulation method statement approval 合规 许可 当地法规 施工方案 审批",
-    "workforce": "workforce competency training productivity localization 人力 能力 资质 培训 生产率 本地化",
-    "quality": "quality inspection ncr defect corrective action trend 质量 检验 不符合项 缺陷 纠正措施 趋势",
-    "construction": "construction work package method site condition progress 施工 工作包 方法 现场条件 进度",
-    "knowledge": "knowledge approved project memory standards lessons learned 知识 项目记忆 标准 经验教训",
-}
-
-FOCUS_LABEL: dict[str, dict] = {
-    "contract": bi("contractual responsibility", "合同责任划分"),
-    "engineering": bi("technical/engineering causation", "工程技术成因"),
-    "interface": bi("cross-discipline interface coordination", "跨专业接口协调"),
-    "hse": bi("safety and environmental control", "安全与环境管控"),
-    "compliance": bi("local compliance and permitting", "当地合规与许可"),
-    "workforce": bi("workforce competency and training", "人力资质与培训"),
-    "quality": bi("inspection and defect disposition", "检验与缺陷处置"),
-    "construction": bi("site execution and work packages", "现场施工与工作包"),
-    "knowledge": bi("approved project precedent", "已批准的项目先例"),
-}
-
-# Similarity thresholds (see retrieval.KnowledgeIndex.search's cosine
-# scores) calibrated against the seeded demo knowledge base: below
-# MIN_RELEVANCE nothing is cited at all; between the two an agent cites
-# what it found but flags it as a gap rather than a conclusion; at or
-# above CONFIDENT_RELEVANCE the finding is treated as evidence-backed.
-MIN_RELEVANCE = 0.05
-CONFIDENT_RELEVANCE = 0.22
-TOP_K_EVIDENCE = 2
+# Relevance thresholds live with the agent tools (single source of truth).
+from .agent_org.tools import CONFIDENT_RELEVANCE, MIN_RELEVANCE, TOP_K_EVIDENCE  # noqa: E402,F401
 
 APPROVER_ROLE = bi("Project Manager", "项目经理")
 
@@ -117,73 +82,6 @@ def _lang(value: dict, lang: str) -> str:
 
 def _llm_ready(model_route: str | None = None, data_classification: str = "internal") -> bool:
     return is_llm_configured(model_route, data_classification)
-
-
-async def _specialist_summary(
-    agent_id: str,
-    hits: list[tuple[float, object]],
-    llm_ready: bool,
-    model_route: str | None = None,
-    data_classification: str = "internal",
-) -> dict:
-    """Build the (en, zh) finding text for one specialist agent."""
-    focus = FOCUS_LABEL[agent_id]
-    if llm_ready:
-        evidence_lines = "\n".join(
-            f"- [{doc.source_ref}] {doc.summary.get('en', '')} (similarity {score:.2f})" for score, doc in hits
-        ) or "(nothing relevant found)"
-        system = (
-            "You are a specialist assurance agent on an overseas infrastructure project. "
-            "Respond in at most two sentences. Only state what the evidence below actually supports; "
-            "if it is insufficient to support a conclusion, say so explicitly instead of guessing."
-        )
-        user = f"Your discipline focus: {focus['en']}.\nRetrieved evidence:\n{evidence_lines}\nWrite your finding."
-        routing = {}
-        if model_route is not None:
-            routing["route"] = model_route
-        if data_classification != "internal":
-            routing["sensitivity"] = data_classification
-        english = (await generate(system, user, **routing)).strip()
-        chinese = (await translate(english, "zh", **routing)).strip()
-        return bi(english, chinese)
-
-    if not hits:
-        return bi(
-            f"No evidence relevant to {focus['en']} was found in the knowledge base; no conclusion is asserted pending further input.",
-            f"知识库中未找到与{focus['zh']}相关的证据；在获得进一步信息前不作结论。",
-        )
-    top_score, top_doc = hits[0]
-    refs = ", ".join(doc.source_ref for _, doc in hits)
-    if top_score < CONFIDENT_RELEVANCE:
-        return bi(
-            f"Only limited evidence for {focus['en']} was found ({refs}, similarity {top_score:.2f}); "
-            "this is recorded as a gap rather than a conclusion until stronger evidence is available.",
-            f"仅找到与{focus['zh']}有限相关的证据（{refs}，相关度 {top_score:.2f}）；"
-            "在获得更充分证据前，此处记为证据缺口而非结论。",
-        )
-    return bi(
-        f"Reviewed {len(hits)} evidence item(s) for {focus['en']}; top reference {top_doc.source_ref} — "
-        f"\"{top_doc.summary.get('en', '')}\" (similarity {top_score:.2f}).",
-        f"针对{focus['zh']}核查了 {len(hits)} 条证据；首要引用 {top_doc.source_ref} ——"
-        f"“{top_doc.summary.get('zh', '')}”（相关度 {top_score:.2f}）。",
-    )
-
-
-def _plan_steps(specialist_ids: list[str], confident_ids: set[str]) -> tuple[list[str], list[str]]:
-    steps_en = ["confirm scope and stakeholders"]
-    steps_zh = ["确认范围与相关方"]
-    for agent_id in specialist_ids:
-        label = FOCUS_LABEL[agent_id]
-        if agent_id in confident_ids:
-            steps_en.append(f"act on the {label['en']} finding")
-            steps_zh.append(f"依据{label['zh']}方面的结论采取行动")
-        else:
-            steps_en.append(f"close the {label['en']} evidence gap")
-            steps_zh.append(f"补齐{label['zh']}方面的证据缺口")
-    steps_en += ["compile the consolidated evidence package", "draft the governed response",
-                 f"obtain {_lang(APPROVER_ROLE, 'en')} approval"]
-    steps_zh += ["汇总完整证据包", "起草受管控的回复", f"获取{_lang(APPROVER_ROLE, 'zh')}审批"]
-    return steps_en, steps_zh
 
 
 async def analyze_case(
@@ -232,52 +130,33 @@ async def analyze_case(
         duration_ms=max(1, round((perf_counter() - t0) * 1000)),
     ))
 
-    # --- specialists: real retrieval-grounded findings, selected by case type ---
-    # Jurisdiction-aware evidence: a routed case only cites its own country's
-    # records plus country-neutral (project/global) ones. The index keeps the
-    # whole corpus so relevance scores do not shift; foreign records are
-    # dropped from the ranked results instead.
+    # --- agent organization: dynamic team, tools, findings, coordination ---
     project = db.get(Project, case.project_id) if case.project_id is not None else None
-    country = project.country_code if project is not None else None
-    index = KnowledgeIndex(list(db.scalars(select(KnowledgeDocument))))
-
-    def in_jurisdiction(doc) -> bool:
-        return not country or not doc.country_code or doc.country_code == country
-    base_query = case_query_text(case)
-    specialist_ids = SPECIALISTS_BY_CASE_TYPE.get(case_type_en, DEFAULT_SPECIALISTS)
+    t0 = perf_counter()
+    org = await run_organization(
+        db, case, project, case_query_text(case), llm_ready, model_route, data_classification,
+        SPECIALISTS_BY_CASE_TYPE, DEFAULT_SPECIALISTS,
+    )
+    db.add(AgentRun(
+        case_id=case_id, agent=bi("Team Router", "组队调度"), status="COMPLETED", summary=team_summary(org),
+        duration_ms=max(1, round((perf_counter() - t0) * 1000)),
+    ))
+    for agent_id in org.team_ids:
+        finding = org.findings[agent_id]
+        trace = next(t for t in org.traces if t.kind == "specialist" and t.agent_id == agent_id and t.round == 1)
+        db.add(AgentRun(
+            case_id=case_id, agent=AGENTS_BY_ID[agent_id]["name"],
+            status="COMPLETED" if finding["status"] == "SUPPORTED" else finding["status"],
+            summary=finding["claim"], duration_ms=trace.duration_ms,
+        ))
+    if org.issues:
+        db.add(AgentRun(case_id=case_id, agent=bi("Coordinator", "协调器"), status="COMPLETED",
+                        summary=coordinator_summary(org), duration_ms=1))
 
     evidence_by_ref: dict[str, dict] = {}
-    cited_ids: list[str] = []
-    confident_ids: set[str] = set()
-
-    # Specialist findings are independent once retrieval has completed. Run
-    # their model calls concurrently so a three-discipline case pays for one
-    # model round-trip chain instead of three sequential chains.
-    specialist_inputs = [
-        (
-            agent_id,
-            [(score, doc) for score, doc in index.search(
-                f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE + 8
-            ) if score >= MIN_RELEVANCE and in_jurisdiction(doc)][:TOP_K_EVIDENCE],
-        )
-        for agent_id in specialist_ids
-    ]
-    started_at = {agent_id: perf_counter() for agent_id, _ in specialist_inputs}
-    summaries = await asyncio.gather(*[
-        _specialist_summary(agent_id, hits, llm_ready, model_route, data_classification)
-        for agent_id, hits in specialist_inputs
-    ])
-
-    for (agent_id, hits), summary in zip(specialist_inputs, summaries, strict=True):
-        db.add(AgentRun(
-            case_id=case_id, agent=AGENTS_BY_ID[agent_id]["name"], status="COMPLETED", summary=summary,
-            duration_ms=max(1, round((perf_counter() - started_at[agent_id]) * 1000)),
-        ))
-        if hits:
-            cited_ids.append(agent_id)
-            if hits[0][0] >= CONFIDENT_RELEVANCE:
-                confident_ids.add(agent_id)
-            for score, doc in hits:
+    for agent_id in org.team_ids:
+        for result in org.results[agent_id]:
+            for score, doc in result.hits:
                 confidence = round(min(0.97, 0.6 + score), 3)
                 existing = evidence_by_ref.get(doc.source_ref)
                 if not existing or confidence > existing["confidence"]:
@@ -296,6 +175,7 @@ async def analyze_case(
             case_id=case_id, claim_id=claim.id, title=doc.title, source_type=doc.category, source_ref=doc.source_ref,
             excerpt=doc.summary, confidence=item["confidence"], verified=item["verified"],
         ))
+    persist_organization(db, case_id, org)
 
     # --- localization: what got terminology-locked, derived from the real citations ---
     t0 = perf_counter()
@@ -315,16 +195,15 @@ async def analyze_case(
         summary=localization_summary, duration_ms=max(1, round((perf_counter() - t0) * 1000)),
     ))
 
-    # --- planning: an action plan derived from which specialists found what ---
-    t0 = perf_counter()
-    steps_en, steps_zh = _plan_steps(specialist_ids, confident_ids)
+    # --- planning: steps derived from the organization's findings ---
+    plan = org.plan
     db.add(AgentRun(
         case_id=case_id, agent=AGENTS_BY_ID["planning"]["name"], status="COMPLETED",
         summary=bi(
-            f"Created a {len(steps_en)}-step response plan: " + "; ".join(steps_en) + ".",
-            f"已生成 {len(steps_zh)} 步响应计划：" + "；".join(steps_zh) + "。",
+            f"Created a {len(plan)}-step response plan: " + "; ".join(step["text"]["en"] for step in plan) + ".",
+            f"已生成 {len(plan)} 步响应计划：" + "；".join(step["text"]["zh"] for step in plan) + "。",
         ),
-        duration_ms=max(1, round((perf_counter() - t0) * 1000)),
+        duration_ms=1,
     ))
     if case.project_id is None:
         case.status = "NEEDS_PROJECT_CONFIRMATION"
@@ -379,37 +258,48 @@ async def analyze_case(
     for approval in approvals:
         approval.action_id = action.id
 
-    # --- verification: scores computed from this run's own evidence/findings ---
+    # --- verification: checks and scores computed from this run ---
     t0 = perf_counter()
-    total = len(specialist_ids)
-    cited_count = len(cited_ids)
-    confident_count = len(confident_ids)
-    citation_score = round(cited_count / total, 3) if total else 0.0
+    team_ids = org.team_ids
+    total = len(team_ids)
+    org_check = org.verification
+    citation_score = org_check["citation_score"]
+    consistency_score = org_check["consistency_score"]
     evidence_score = round(sum(i["confidence"] for i in evidence_by_ref.values()) / len(evidence_by_ref), 3) if evidence_by_ref else 0.0
-    consistency_score = round(confident_count / total, 3) if total else 0.0
-    confident_en = ", ".join(_lang(AGENTS_BY_ID[a]["name"], "en") for a in specialist_ids if a in confident_ids) or "none"
-    confident_zh = "、".join(_lang(AGENTS_BY_ID[a]["name"], "zh") for a in specialist_ids if a in confident_ids) or "无"
+    supported = org_check["supported"]
+    confident_en = ", ".join(_lang(AGENTS_BY_ID[a]["name"], "en") for a in supported) or "none"
+    confident_zh = "、".join(_lang(AGENTS_BY_ID[a]["name"], "zh") for a in supported) or "无"
     findings = [bi(
-        f"{confident_count}/{total} specialist agent(s) reached a confident, evidence-backed finding ({confident_en}).",
-        f"{confident_count}/{total} 个专业智能体给出了有证据支撑的确定性结论（{confident_zh}）。",
+        f"{len(supported)}/{total} specialist agent(s) reached a confident, evidence-backed finding ({confident_en}).",
+        f"{len(supported)}/{total} 个专业智能体给出了有证据支撑的确定性结论（{confident_zh}）。",
     )]
-    if confident_count < total:
+    if len(supported) < total:
         findings.append(bi(
-            f"{total - confident_count} specialist finding(s) were flagged as an evidence gap rather than a conclusion.",
-            f"{total - confident_count} 项专业结论因证据不足被标记为缺口而非结论。",
+            f"{total - len(supported)} specialist finding(s) were flagged as an evidence gap rather than a conclusion.",
+            f"{total - len(supported)} 项专业结论因证据不足被标记为缺口而非结论。",
         ))
+    if org.unresolved:
+        findings.append(bi(f"{len(org.unresolved)} cross-discipline issue(s) are left for a human decision.",
+                           f"{len(org.unresolved)} 个跨专业问题交由人工决定。"))
+    if org.questions:
+        findings.append(bi(f"{len(org.questions)} question(s) are open for the project team.",
+                           f"有 {len(org.questions)} 个问题待项目团队补充。"))
+    for check in org_check["checks"]:
+        if not check["passed"]:
+            findings.append(check["detail"])
     findings.append(bi("External action blocked pending human approval.", "对外行动已阻止，待人工审批。"))
     db.add(Verification(
         case_id=case_id, status="WARN", citation_score=citation_score, evidence_score=evidence_score,
         consistency_score=consistency_score, findings=findings,
     ))
+    passed = sum(1 for c in org_check["checks"] if c["passed"])
     db.add(AgentRun(
         case_id=case_id, agent=AGENTS_BY_ID["verification"]["name"], status="COMPLETED",
         summary=bi(
-            f"Verified {cited_count}/{total} specialist citation(s) against the knowledge base "
+            f"Passed {passed}/{len(org_check['checks'])} organization checks; {len(supported)}/{total} findings are evidence-backed "
             f"(average evidence confidence {evidence_score:.2f}); blocked external execution pending required human approval.",
-            f"对照知识库核验了 {cited_count}/{total} 项专业引用（平均证据置信度 {evidence_score:.2f}）；"
-            "在获得所需人工审批前阻止对外执行。",
+            f"组织核验通过 {passed}/{len(org_check['checks'])} 项；{len(supported)}/{total} 项结论有证据支撑"
+            f"（平均证据置信度 {evidence_score:.2f}）；在获得所需人工审批前阻止对外执行。",
         ),
         duration_ms=max(1, round((perf_counter() - t0) * 1000)),
     ))

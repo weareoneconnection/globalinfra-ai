@@ -112,18 +112,62 @@
     "teamBadge": "进行中"
   },
   "Agents": {
-    "eyebrow": "多智能体工程组织",
-    "title": "专家智能体注册表",
-    "subtitle": "智能体并非孤立运行的聊天机器人。工单路由器会围绕每一个工程事件，组建一个受策略约束的临时团队。",
-    "available": "{count} 个专家智能体可用",
-    "incomingLabel": "新进工单",
-    "incomingValue": "不符合项 · 混凝土裂缝 · 进度风险敞口",
-    "routerLabel": "工单路由器",
-    "routerValue": "分类 · 组建 · 管控",
-    "teamLabel": "动态团队",
-    "teamValue": "质量 + 工程 + 合同 + 计划",
-    "practiceKicker": "专家实践领域",
-    "agentsCount": "{count} 个智能体"
+    "eyebrow": "智能体组织 2.0",
+    "title": "智能体组织",
+    "subtitle": "每个案例由组队调度按事件内容组建专家团队；智能体调用真实工具、给出结构化结论，协调器发现冲突和缺口，计划与核验后才进入人工审批。所有智能体只有建议权。",
+    "available": "{count} 个专业智能体",
+    "flow": [
+      {
+        "title": "组队调度",
+        "text": "核心成员 + 按信号加入，记录理由"
+      },
+      {
+        "title": "专业智能体",
+        "text": "调用工具，给出有依据的结构化结论"
+      },
+      {
+        "title": "协调器",
+        "text": "发现冲突与缺口，必要时向人提问"
+      },
+      {
+        "title": "计划",
+        "text": "每步有负责角色、期限和来源"
+      },
+      {
+        "title": "核验",
+        "text": "结论与证据逐条对照"
+      },
+      {
+        "title": "人工审批",
+        "text": "对外行动只能由人批准"
+      }
+    ],
+    "runsKicker": "真实运行",
+    "runsTitle": "最近的团队运行",
+    "runsCount": "{count} 次",
+    "runsEmpty": "暂无运行记录。上传一份函件或分析一个案例后即可看到。",
+    "colCase": "案例",
+    "colTeam": "团队",
+    "colConsistency": "结论有依据",
+    "colModelCalls": "模型调用",
+    "colChecks": "组织核验",
+    "checksPassed": "通过",
+    "checksFailed": "未通过",
+    "scoreKicker": "表现",
+    "scoreTitle": "智能体成绩单",
+    "scoreNote": "按每个案例最近一次运行统计",
+    "colAgent": "智能体",
+    "colRuns": "参与次数",
+    "colSupported": "有依据",
+    "colGap": "证据缺口",
+    "colInput": "需补充",
+    "colLlm": "大模型产出",
+    "colRejected": "被驳回案例",
+    "practiceKicker": "专业领域",
+    "agentsCount": "{count} 个智能体",
+    "advisory": "仅建议",
+    "escalation": "缺证据时会问：",
+    "countryVariants": "国家定制："
   },
   "Approvals": {
     "eyebrow": "人工治理",
@@ -667,6 +711,14 @@
     "docTypes": {"LAW_INDEX": "法律来源索引", "REGULATION_INDEX": "法规来源索引", "CODE_INDEX": "规范来源索引", "PORTAL_INDEX": "官方门户", "GUIDANCE": "指引", "CONTRACT_CLAUSE": "合同条款", "PROCEDURE": "程序文件"},
     "docStatuses": {"CURRENT": "现行", "SUPERSEDED": "已被取代", "DRAFT": "草稿"},
     "sourcesUncited": "其他检索结果（{count} 条，回答未引用）",
+    "orgTeam": "专家团队（{count} 人）",
+    "orgSource": {"core": "核心成员", "signal": "按信号加入", "model": "大模型建议"},
+    "orgStatus": {"SUPPORTED": "有依据", "GAP": "证据缺口", "NEEDS_INPUT": "需补充信息"},
+    "orgQuestions": "智能体需要你补充",
+    "orgAnswerPlaceholder": "填写后系统会重新分析",
+    "orgAnswer": "提交并重新分析",
+    "orgReanalyzing": "重新分析中…",
+    "orgUnresolved": "需要人工决定",
     "approvalsNone": "目前没有待审批事项。"
   }
 }

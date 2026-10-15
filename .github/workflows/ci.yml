@@ -22,6 +22,7 @@ jobs:
       - run: python evals/run_eval.py
       - run: python evals/run_intake_eval.py
       - run: python evals/run_competition_eval.py
+      - run: python evals/run_agent_org_eval.py
       # Alembic migrations must apply cleanly to a bare database and produce the
       # same schema the app's create_all path does (V1.3 M1 introduced them).
       - name: Alembic upgrade on a bare database
