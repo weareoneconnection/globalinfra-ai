@@ -32,7 +32,8 @@ MAX_MODEL_CALLS = 8
 # pushes later ones past the request timeout. Cloud endpoints run in parallel.
 LOCAL_CONCURRENCY = 2
 CLOUD_CONCURRENCY = 5
-QUESTION_SIMILARITY = 0.45
+QUESTION_SIMILARITY = 0.35
+MAX_QUESTIONS = 3
 
 
 class Budget:
@@ -87,7 +88,7 @@ def merge_questions(questions: list[dict]) -> list[dict]:
                 break
         else:
             merged.append(dict(item))
-    return merged
+    return merged[:MAX_QUESTIONS]
 
 
 def _question_key(agent_id: str, question: dict) -> str:

@@ -131,3 +131,23 @@ def test_similar_questions_from_several_agents_are_asked_once():
     ])
     assert [m["agent_id"] for m in merged] == ["engineering", "cost"]
     assert merged[0]["also_from"] == ["claims"]
+
+
+def test_similar_actions_from_several_agents_become_one_plan_step():
+    from app.agent_org.coordination import build_plan
+    from app.i18n import bi
+
+    def finding(text, owner):
+        return {"status": "SUPPORTED", "evidence_refs": ["PROC-VO-02"], "retrieved_refs": ["PROC-VO-02"],
+                "actions": [{"text": bi(text, text), "owner_role": bi(owner, owner)}]}
+
+    findings = {
+        "contract": finding("Register the letter as a variation request and acknowledge receipt", "Contract Manager"),
+        "cost": finding("Register the variation request and acknowledge receipt without admitting cost", "Quantity Surveyor"),
+        "claims": finding("Review the extension of time against the critical path", "Planning Engineer"),
+    }
+    plan = build_plan(list(findings), findings, [], bi("14 days", "14 天"), "MEDIUM", [])
+    actions = [s for s in plan if s["source"].startswith("finding:")]
+    assert len(actions) == 2
+    assert actions[0]["owner_role"]["en"] == "Contract Manager / Quantity Surveyor"
+    assert actions[0]["source"] == "finding:contract+cost"

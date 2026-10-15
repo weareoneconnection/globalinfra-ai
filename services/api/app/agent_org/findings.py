@@ -139,7 +139,7 @@ def validate_finding(data: dict, card: AgentCard, results: list[ToolResult]) -> 
         status = "NEEDS_INPUT"
     actions = [
         {"text": _bi({"en": a.get("text_en"), "zh": a.get("text_zh")}), "owner_role": _bi({"en": a.get("owner_en"), "zh": a.get("owner_zh")})}
-        for a in (data.get("actions") or [])[:3] if isinstance(a, dict) and a.get("text_en")
+        for a in (data.get("actions") or [])[:2] if isinstance(a, dict) and a.get("text_en")
     ] if status == "SUPPORTED" else []
     claim = _bi({"en": data["claim_en"], "zh": data.get("claim_zh")})
     if downgraded:
@@ -166,7 +166,8 @@ async def model_finding(card: AgentCard, results: list[ToolResult], case_text: s
         "missing: state what the rule requires, recommend the action it implies, and ask for the missing fact in the "
         "question field. Choose GAP when no retrieved source governs the case, or NEEDS_INPUT when only the project team "
         "can supply what is needed. Never invent amounts, dates, clauses or names, and never accept or reject liability, "
-        "cost or time. Claim at most two sentences; English and Simplified Chinese. Actions must name an owner role. Your "
+        "cost or time. Claim at most two sentences; English and Simplified Chinese. At most two actions, each naming an owner "
+        "role. If a fact is missing, ask ONE short question (under 25 words) for the single most important fact. Your "
         "authority is advisory only."
     )
     user = (f"Case:\n{case_text[:3000]}\n\nTool results:\n{tools_text}"

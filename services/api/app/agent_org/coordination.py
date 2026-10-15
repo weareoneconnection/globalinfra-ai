@@ -16,6 +16,7 @@ import re
 
 from ..i18n import bi
 from ..llm import LLMError, generate
+from ..retrieval import tokenize
 from .cards import CARDS
 from .tools import CONFIDENT_RELEVANCE
 
@@ -64,16 +65,18 @@ async def model_issues(findings: dict[str, dict], budget, route, sensitivity) ->
     if len(findings) < 2 or not budget.take():
         return []
     listing = "\n".join(f"- {aid} ({f['status']}): {f['claim']['en']}" for aid, f in findings.items())
-    system = ("You coordinate specialist agents. List at most three genuine contradictions or missing links between "
-              "the findings below. For each, name the agents involved, which single agent should follow up, the topic "
-              "in English and Chinese, and the follow-up question. Return an empty list when the findings are consistent.")
+    system = ("You coordinate specialist agents. List at most two GENUINE CONTRADICTIONS: cases where two agents' "
+              "conclusions disagree with each other. Missing facts, open questions or evidence still to be provided are NOT "
+              "contradictions; never list them. For each contradiction, name the agents involved, which single agent should "
+              "follow up, the topic in English and Chinese, and the follow-up question. Return an empty list when the "
+              "conclusions are consistent, which is the normal case.")
     try:
         raw = await generate(system, listing, response_format=COORDINATION_FORMAT, route=route, sensitivity=sensitivity)
         data = json.loads(re.search(r"\{.*\}", raw or "", re.DOTALL).group(0))
     except (LLMError, ValueError, AttributeError):
         return []
     issues = []
-    for item in data.get("issues", [])[:3]:
+    for item in data.get("issues", [])[:2]:
         agents = [a for a in item.get("agents", []) if a in findings]
         follow_up = item.get("follow_up")
         if len(agents) >= 1 and follow_up in findings and str(item.get("topic_en") or "").strip():
@@ -91,6 +94,35 @@ def _due(case_deadline: dict, urgent: bool) -> dict:
     return bi(f"within {en}" if en[0].isdigit() else en, f"{zh}内" if zh[0].isdigit() else zh)
 
 
+MAX_ACTION_STEPS = 6
+MAX_QUESTION_STEPS = 3
+ACTION_SIMILARITY = 0.35
+
+
+def _tokens(text: str) -> set[str]:
+    return set(tokenize(text))
+
+
+def _merge_actions(team: list[str], findings: dict[str, dict]) -> list[dict]:
+    """One step per distinct action; owners and sources of similar actions are combined."""
+    merged: list[dict] = []
+    for agent_id in team:
+        finding = findings[agent_id]
+        for action in finding.get("actions", []):
+            tokens = _tokens(action["text"]["en"])
+            target = next((m for m in merged if tokens and m["tokens"] and
+                           len(tokens & m["tokens"]) / len(tokens | m["tokens"]) >= ACTION_SIMILARITY), None)
+            if target is None:
+                merged.append({"text": action["text"], "owners": [action["owner_role"]], "agents": [agent_id],
+                               "refs": list(finding.get("evidence_refs", [])), "tokens": tokens})
+            else:
+                if action["owner_role"]["en"] not in [o["en"] for o in target["owners"]]:
+                    target["owners"].append(action["owner_role"])
+                target["agents"].append(agent_id)
+                target["refs"] = list(dict.fromkeys(target["refs"] + finding.get("evidence_refs", [])))
+    return merged[:MAX_ACTION_STEPS]
+
+
 def build_plan(team: list[str], findings: dict[str, dict], open_questions: list[dict], case_deadline: dict,
                risk: str, unresolved: list[dict]) -> list[dict]:
     """Every step traces to a finding, an open question, an unresolved issue or a governance gate."""
@@ -104,12 +136,11 @@ def build_plan(team: list[str], findings: dict[str, dict], open_questions: list[
 
     urgent = risk == "CRITICAL"
     action_ids = []
-    for agent_id in team:
-        finding = findings[agent_id]
-        for action in finding.get("actions", []):
-            action_ids.append(add(action["text"], action["owner_role"], _due(case_deadline, urgent), f"finding:{agent_id}",
-                                  finding.get("evidence_refs", [])))
-    for question in open_questions:
+    for action in _merge_actions(team, findings):
+        owner = bi(" / ".join(o["en"] for o in action["owners"]), "、".join(o["zh"] for o in action["owners"]))
+        action_ids.append(add(action["text"], owner, _due(case_deadline, urgent),
+                              "finding:" + "+".join(dict.fromkeys(action["agents"])), action["refs"]))
+    for question in open_questions[:MAX_QUESTION_STEPS]:
         card = CARDS[question["agent_id"]]
         action_ids.append(add(bi(f"Obtain from the project team: {question['question']['en']}", f"向项目团队补充：{question['question']['zh']}"),
                               bi("Project Manager", "项目经理"), _due(case_deadline, False), f"question:{question['agent_id']}"))
