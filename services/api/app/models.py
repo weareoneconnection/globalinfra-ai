@@ -631,3 +631,16 @@ class TwinCopilotRun(Base):
     confidence: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(24), default="GROUNDED")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class AssistantSession(Base):
+    """Server-side memory of one assistant conversation: the recent turns and
+    what "this case" / "this project" currently refer to."""
+    __tablename__ = "assistant_sessions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    subject: Mapped[str] = mapped_column(String(255), index=True)
+    turns: Mapped[list] = mapped_column(JSON, default=list)
+    context: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

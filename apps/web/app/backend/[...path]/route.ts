@@ -11,6 +11,7 @@ function timeoutFor(path: string[]): number {
     route === 'intake/document' ||
     route === 'i18n/translate' ||
     route === 'assistant/chat' ||
+    route === 'assistant/dispatch' ||
     /^cases\/[^/]+\/(analyze|confirm-project|execute)$/.test(route) ||
     /^actions\/[^/]+\/execute$/.test(route)
   ) {

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { RiskBadge } from './RiskBadge';
 
@@ -11,7 +11,7 @@ export type AssistantProject = {
 };
 
 type Mode = 'auto' | 'incident' | 'knowledge' | 'progress' | 'approvals';
-type Intent = Exclude<Mode, 'auto'> | 'help' | 'caseStatus';
+type Intent = Exclude<Mode, 'auto'> | 'help' | 'caseStatus' | 'dispatch';
 type Method = 'llm' | 'rules' | 'user';
 type Tool = 'report_incident' | 'search_knowledge' | 'case_status' | 'project_progress' | 'pending_approvals' | 'answer_directly';
 type Plan = { tool: Tool; method: Method; reply: string | null; case_id: string | null; project_id: number | null; query: string | null; hits: KnowledgeHit[] | null };
@@ -24,7 +24,30 @@ type CaseSummary = {
 };
 type KnowledgeHit = { id: number; title: string; source_ref: string; jurisdiction: string; version: string; summary: string; relevance: number };
 
+type StepStatus = 'waiting' | 'running' | 'ok' | 'error';
+type IntakeData = { case_id: string; case_type_label: string; risk: string; risk_label: string; country_label: string | null; stage: string | null; deadline: string | null; issues: string[]; team: string[]; method: string };
+type StepData = Partial<IntakeData> & {
+  query?: string; hits?: KnowledgeHit[]; answer?: string | null; question?: string; reanalyzed?: boolean;
+  project_ids?: number[]; count?: number;
+  reports?: { id: string; description: string; status: string; risk: string; case_id: string | null; open_questions: number }[];
+};
+type DispatchStep = { index: number; agent: string; name: string; authority: string; query: string; case_id: string | null; status: StepStatus; summary?: string; data?: StepData };
+type Dispatch = {
+  kind: 'dispatch'; method: Method | null; steps: DispatchStep[]; summary: { text: string; method: 'llm' | 'rules' } | null;
+  reply: string | null; contextCase: string | null; error: string | null; done: boolean; route: string; classification: string;
+};
+type DispatchEvent =
+  | { type: 'session'; session_id: string; context_case_id: string | null }
+  | { type: 'plan'; method: Method; steps: Omit<DispatchStep, 'status'>[] }
+  | { type: 'step_start'; index: number }
+  | { type: 'step_done'; index: number; status: 'ok' | 'error'; summary: string; data?: StepData }
+  | { type: 'summary'; text: string; method: 'llm' | 'rules' }
+  | { type: 'reply'; text: string | null }
+  | { type: 'error'; message: string }
+  | { type: 'done' };
+
 type Reply =
+  | Dispatch
   | { kind: 'case'; data: CaseSummary }
   | { kind: 'ocr'; message: string; filename: string }
   | { kind: 'knowledge'; query: string; hits: KnowledgeHit[]; answer?: string | null }
@@ -40,6 +63,7 @@ type Message =
   | { id: string; role: 'assistant'; intent: Intent | null; method?: Method; reply: Reply | null };
 
 const STORAGE_KEY = 'globalinfra-assistant-v1';
+const SESSION_KEY = 'globalinfra-assistant-session';
 // Matches workflow.CONFIDENT_RELEVANCE: below it a hit is not evidence.
 const CONFIDENT_RELEVANCE = 0.22;
 
@@ -72,6 +96,20 @@ function historyLine(message: Message): string {
     case 'help': return 'Explained what the assistant can do.';
     case 'ocr': return `Received ${reply.filename}; OCR is required.`;
     case 'error': return 'The request failed.';
+    case 'dispatch': return reply.summary?.text ?? reply.reply ?? reply.steps.map(step => `${step.name}: ${step.summary ?? ''}`).join(' ');
+  }
+}
+
+function applyEvent(state: Dispatch, event: DispatchEvent): Dispatch {
+  switch (event.type) {
+    case 'session': return { ...state, contextCase: event.context_case_id };
+    case 'plan': return { ...state, method: event.method, steps: event.steps.map(step => ({ ...step, status: 'waiting' })) };
+    case 'step_start': return { ...state, steps: state.steps.map(step => step.index === event.index ? { ...step, status: 'running' } : step) };
+    case 'step_done': return { ...state, steps: state.steps.map(step => step.index === event.index ? { ...step, status: event.status, summary: event.summary, data: event.data } : step) };
+    case 'summary': return { ...state, summary: { text: event.text, method: event.method } };
+    case 'reply': return { ...state, reply: event.text };
+    case 'error': return { ...state, error: event.message };
+    case 'done': return { ...state, done: true };
   }
 }
 
@@ -111,6 +149,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   const [route, setRoute] = useState<'auto' | 'local' | 'openai'>('auto');
   const [restricted, setRestricted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const textInput = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -119,6 +158,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) setMessages((JSON.parse(saved) as Message[]).filter(m => m.role === 'user' || m.reply));
+      setSessionId(sessionStorage.getItem(SESSION_KEY));
     } catch { /* storage unavailable: start empty */ }
   }, []);
 
@@ -187,6 +227,57 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     }));
   }
 
+  // The dispatcher plans several steps and streams their progress. Returns
+  // false when the stream could not start, so the caller can fall back.
+  async function dispatch(input: string, history: Message[], show: (reply: Dispatch, method: Method | null) => void): Promise<boolean> {
+    let response: Response;
+    try {
+      response = await fetch(`/backend/assistant/dispatch?lang=${locale}`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: input, session_id: sessionId,
+          history: history.map(m => ({ role: m.role, content: historyLine(m).slice(0, 1900) })).filter(turn => turn.content).slice(-8),
+          project_id: projectId === 'auto' ? null : Number(projectId),
+          model_route: effectiveRoute, data_classification: classification,
+        }),
+      });
+    } catch { return false; }
+    if (!response.ok || !response.body) return false;
+    let state: Dispatch = { kind: 'dispatch', method: null, steps: [], summary: null, reply: null, contextCase: null, error: null, done: false, route: effectiveRoute, classification };
+    show(state, null);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf('\n\n')) >= 0) {
+          const chunk = buffer.slice(0, cut);
+          buffer = buffer.slice(cut + 2);
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const event = JSON.parse(line.slice(6)) as DispatchEvent;
+            if (event.type === 'session') {
+              setSessionId(event.session_id);
+              try { sessionStorage.setItem(SESSION_KEY, event.session_id); } catch { /* ignore */ }
+            }
+            state = applyEvent(state, event);
+            show(state, state.method);
+          }
+        }
+      }
+    } catch (reason) {
+      state = { ...state, error: reason instanceof Error ? reason.message : t('failed') };
+    }
+    if (!state.done) state = { ...state, done: true, error: state.error ?? t('failed') };
+    show(state, state.method);
+    return true;
+  }
+
   // Used only when the planner endpoint itself is unreachable.
   async function fallbackPlan(input: string, intent: Intent): Promise<Plan> {
     const base: Plan = { tool: 'answer_directly', method: 'rules', reply: null, case_id: null, project_id: null, query: null, hits: null };
@@ -224,6 +315,8 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     try {
       if (upload) {
         update({ method: 'user', reply: await runIntake(input || upload.name, upload, null) });
+      } else if (!chosen && await dispatch(input, history, (reply, method) => update({ intent: 'dispatch', method: method ?? undefined, reply }))) {
+        // streamed by the dispatcher
       } else {
         let planned: Plan;
         try {
@@ -322,7 +415,10 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   return <div className="assistant">
     <div className="assistant-thread-head">
       <span>{t('threadTitle')}</span>
-      <button type="button" className="button secondary" onClick={() => setMessages([])} disabled={busy}>＋ {t('newChat')}</button>
+      <button type="button" className="button secondary" onClick={() => {
+        setMessages([]); setSessionId(null);
+        try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      }} disabled={busy}>＋ {t('newChat')}</button>
     </div>
     <div className="assistant-thread">
       {messages.map(message => message.role === 'user'
@@ -331,7 +427,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
           <div className="brand-mark assistant-avatar"><span>GI</span></div>
           <div className="assistant-reply">
             <div className="assistant-intent">
-              {message.intent ? t(`intents.${message.intent}`) : t('understanding')}
+              {message.intent === 'dispatch' ? t('dispatch') : message.intent ? t(`intents.${message.intent}`) : t('understanding')}
               {message.intent && message.method && <span className={`assistant-method ${message.method}`}>{t(`methods.${message.method}`)}</span>}
             </div>
             {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} /> : <Thinking intent={message.intent ?? 'help'} />}
@@ -365,7 +461,113 @@ function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects:
     case 'approvals': return <ApprovalsReply />;
     case 'help': return <div className="assistant-text">{t('help')}</div>;
     case 'error': return <div className="assistant-error" role="alert">{t('failed')} · {reply.message}</div>;
+    case 'dispatch': return <DispatchReply reply={reply} projects={projects} planningAgent={planningAgent} />;
   }
+}
+
+const STEP_ICON: Record<StepStatus, string> = { waiting: '○', running: '◌', ok: '✓', error: '✕' };
+
+function clip(text: string, length: number) {
+  const plain = text.replace(/\s+/g, ' ').trim();
+  return plain.length > length ? `${plain.slice(0, length)}…` : plain;
+}
+
+function Elapsed() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds(value => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return seconds > 1 ? <small className="dispatch-elapsed">{seconds}s</small> : null;
+}
+
+function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; projects: AssistantProject[]; planningAgent: string }) {
+  const t = useTranslations('Assistant');
+  const anchor = useId();
+  if (!reply.method && !reply.error) return <div className="assistant-thinking"><span className="assistant-dots"><i /><i /><i /></span>{t('dispatchPlanning')}<Elapsed /></div>;
+  if (reply.steps.length === 0) {
+    if (reply.error) return <div className="assistant-error" role="alert">{t('failed')} · {reply.error}</div>;
+    return reply.reply ? <div className="assistant-text assistant-prose">{reply.reply}</div> : <div className="assistant-text">{t('help')}</div>;
+  }
+  const sectionId = (index: number) => `${anchor}-s${index + 1}`;
+  // Turn "[S2]" tags in the summary into links to that step's result.
+  const summary = reply.summary?.text.split(/(\[[^\[\]]+\])/g).map((part, index) => {
+    const match = /^\[S(\d)\]$/.exec(part);
+    if (match && Number(match[1]) <= reply.steps.length) return <a key={index} className="assistant-cite" href={`#${sectionId(Number(match[1]) - 1)}`}>S{match[1]}</a>;
+    return /^\[[^\[\]]+\]$/.test(part) ? <span key={index} className="assistant-cite">{part.slice(1, -1)}</span> : part;
+  });
+  // One work-order card per case, at the first step that produced it.
+  const shownCases = new Set<string>();
+  return <div className="assistant-dispatch">
+    {reply.contextCase && <p className="muted small">{t('dispatchContext', { id: reply.contextCase })}</p>}
+    <div className="dispatch-timeline">
+      <div className="dispatch-head">{t('dispatchPlan', { count: reply.steps.length })}</div>
+      <ol>{reply.steps.map((step, index) => <li key={step.index} className={`dispatch-step ${step.status}`}>
+        <span className="dispatch-dot" aria-hidden>{STEP_ICON[step.status]}</span>
+        <div>
+          <div className="dispatch-step-head">
+            <b>S{index + 1} · {step.name}</b>
+            <span className={`dispatch-authority ${step.authority}`}>{t(`authority.${step.authority}`)}</span>
+            <span className="dispatch-status">{t(`dispatchStatus.${step.status}`)}</span>
+            {step.status === 'running' && <Elapsed />}
+          </div>
+          {step.summary && <p>{clip(step.summary, 140)}</p>}
+        </div>
+      </li>)}</ol>
+    </div>
+    {/* A rules summary repeats the timeline line by line; only a model summary adds to it. */}
+    {summary && reply.summary?.method === 'llm' && <div className="assistant-card dispatch-summary">
+      <div className="assistant-section-label">{t('dispatchSummary')} · {t(`summaryMethods.${reply.summary!.method}`)}</div>
+      <div className="assistant-prose">{summary}</div>
+    </div>}
+    {reply.error && <div className="assistant-error" role="alert">{t('failed')} · {reply.error}</div>}
+    {reply.steps.map((step, index) => {
+      if (step.status !== 'ok' || !step.data) return null;
+      const data = step.data;
+      let body: ReactNode = null;
+      const caseId = data.case_id;
+      if (caseId && !shownCases.has(caseId)) {
+        shownCases.add(caseId);
+        const intake = step.agent === 'intake' ? {
+          caseId, typeLabel: data.case_type_label ?? '', risk: data.risk ?? '', riskLabel: data.risk_label ?? data.risk ?? '',
+          country: data.country_label ?? '', stage: data.stage ?? '', deadline: data.deadline ?? '', issues: data.issues ?? [],
+          team: data.team ?? [], method: data.method ?? 'rules', route: reply.route, classification: reply.classification,
+        } : undefined;
+        body = <>
+          {step.agent === 'answer' && <p className="assistant-text">{t('answerRecorded', { answer: clip(String(data.answer ?? ''), 80) })}</p>}
+          <CaseReply caseId={caseId} summary={intake} projects={projects} planningAgent={planningAgent} />
+        </>;
+      } else if (step.agent === 'knowledge') {
+        body = <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />;
+      } else if (step.agent === 'progress') {
+        body = <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />;
+      } else if (step.agent === 'approvals') {
+        body = <ApprovalsReply />;
+      } else if (step.agent === 'field') {
+        body = <FieldDispatchReply reports={data.reports ?? []} />;
+      }
+      if (!body) return null;
+      return <section key={step.index} id={sectionId(index)} className="dispatch-section">
+        {reply.steps.length > 1 && <div className="assistant-section-label">S{index + 1} · {step.name}</div>}
+        {body}
+      </section>;
+    })}
+  </div>;
+}
+
+function FieldDispatchReply({ reports }: { reports: NonNullable<StepData['reports']> }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{t('fieldIntro', { count: reports.length })}</p>
+    {reports.map(report => <div key={report.id} className="assistant-card compact">
+      <div className="assistant-card-head"><RiskBadge risk={report.risk} /><b>{clip(report.description, 60)}</b></div>
+      <p className="muted small">
+        {report.status}{report.open_questions > 0 && ` · ${t('fieldQuestions', { count: report.open_questions })}`}
+        {report.case_id && <> · <Link href={`/cases/${report.case_id}`}>{report.case_id}</Link></>}
+      </p>
+    </div>)}
+    <Link className="assistant-link" href="/field">{t('fieldOpen')} →</Link>
+  </div>;
 }
 
 type CaseDetail = {

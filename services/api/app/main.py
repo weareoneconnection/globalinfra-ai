@@ -42,6 +42,7 @@ from .country_knowledge import router as country_knowledge_router
 from .competition import router as competition_router
 from .ingestion import receipt_payload, record_ingestion_receipt, router as ingestion_router
 from .assistant import router as assistant_router
+from .dispatcher import router as dispatcher_router
 from .agent_org.api import router as agent_org_router
 from .field_media import router as field_media_router
 
@@ -73,6 +74,7 @@ app.include_router(country_knowledge_router)
 app.include_router(competition_router)
 app.include_router(ingestion_router)
 app.include_router(assistant_router)
+app.include_router(dispatcher_router)
 app.include_router(agent_org_router)
 app.include_router(field_media_router)
 

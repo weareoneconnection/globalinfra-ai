@@ -230,6 +230,18 @@ Every case is handled by a governed agent organization (`services/api/app/agent_
 
 Each case uses at most 12 model calls and 3 concurrent calls; a failing model degrades step by step to rules without aborting the analysis.
 
+## Dispatching assistant
+
+Every message on the assistant home page goes to the dispatcher (`POST /assistant/dispatch`, `services/api/app/dispatcher.py`):
+
+- **Several tasks per message**: up to 4 steps, each served by a sub-agent -- intake (convenes the agent organization), regulation, case follow-up, clarification, progress, approval queue, field reports (`GET /assistant/agents`). Independent steps run concurrently; a step that refers to the work order created in the same plan (`case_id = NEW`) waits for it; writes never run concurrently.
+- **Verifiable plans**: with a model, the plan follows a JSON schema and every agent, case id, project code and question id is checked against the database and the conversation; anything invalid falls back to the rules, which route each clause and plan single-intent messages exactly like `/assistant/chat`. A reported incident always reaches intake.
+- **Live timeline**: server-sent events `plan -> step_start/step_done -> summary -> done` show each agent's state and result as it happens.
+- **Grounded summary**: with two or more steps a model summarises, citing only steps (`[S1]`) and the sources they returned; otherwise one line per step.
+- **Memory**: recent turns and the current case and project are kept server-side (`AssistantSession`, migration 0014), so "this case" resolves after a reload; agent questions can be answered in the chat and trigger re-analysis.
+- **Governance unchanged**: approving, executing, verifying and closing are not sub-agents; at most 4 steps per message, with 1 planning call, up to 2 knowledge answers and 1 summary (the organization inside intake has its own budget).
+- **Evaluation**: `python evals/run_dispatch_eval.py` checks plans, step completion and summaries on 15 synthetic messages, in CI.
+
 ## V4.3 Assistant (conversational entry point)
 
 The web app now opens on the **Assistant** (`/`); the former Command Center moved to `/overview` and every other page is unchanged. The assistant is a conversational entry point to the same governed capabilities, not a new reasoning engine:

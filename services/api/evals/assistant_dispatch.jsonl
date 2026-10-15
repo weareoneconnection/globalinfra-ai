@@ -1,0 +1,15 @@
+{"id": "D01", "message": "马来西亚高处作业有什么要求？", "agents": ["knowledge"]}
+{"id": "D02", "message": "业主通知：P47 墩高处作业无防护，要求48小时内整改", "agents": ["intake"]}
+{"id": "D03", "message": "待我审批", "agents": ["approvals"]}
+{"id": "D04", "message": "你好", "agents": []}
+{"id": "D05", "message": "查一下马来西亚高处作业规定，再看看项目进展", "agents": ["knowledge", "progress"]}
+{"id": "D06", "message": "项目进展，另外待我审批", "agents": ["progress", "approvals"]}
+{"id": "D07", "message": "我的上报处理得怎么样了", "agents": ["field"]}
+{"id": "D08", "message": "P47 墩发生坍塌事故有人受伤，查一下马来西亚事故报告规定", "agents": ["intake", "knowledge"]}
+{"id": "D09", "message": "P47 墩临边防护缺失存在隐患，然后看看待我审批", "agents": ["intake", "approvals"]}
+{"id": "D10", "message": "看看项目进展，再查一下印尼施工许可要求，顺便列出待我审批", "agents": ["progress", "knowledge", "approvals"]}
+{"id": "D11", "message": "What are the work at height requirements in Malaysia? Also show project progress", "agents": ["knowledge", "progress"]}
+{"id": "D12", "message": "Owner notice: guardrail missing at Pier P47, rectify within 48 hours, then show pending approvals", "agents": ["intake", "approvals"]}
+{"id": "D13", "message": "MY-RAIL-A 项目进展", "agents": ["progress"]}
+{"id": "D14", "message": "我的上报有结果了吗，另外待我审批", "agents": ["field", "approvals"]}
+{"id": "D15", "message": "Subcontractor letter, Malaysia: Request for Variation Order for additional anchor bolts at roof trusses T4 to T9 of Station S12, and an extension of time of 10 days. Please check the contract clause and respond within 14 days, then register it. The anchor bolts were requested by the design consultant after the structural review; quantities are pending.", "agents": ["intake"]}
