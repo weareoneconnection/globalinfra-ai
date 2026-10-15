@@ -90,6 +90,18 @@ class AgentTrace(Base):
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+class FieldMedia(Base):
+    """Validated original field evidence (photo, video or voice), addressed by
+    its SHA-256 so retries and duplicates store one copy."""
+    __tablename__ = "field_media"
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    media_type: Mapped[str] = mapped_column(String(80))
+    size: Mapped[int] = mapped_column(Integer)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
 class CaseInput(Base):
     """A question an agent needs a human to answer before it can conclude.
     Survives re-analysis so answers feed the next run."""

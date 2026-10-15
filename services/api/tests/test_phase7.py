@@ -15,7 +15,11 @@ def test_phase7_capabilities_and_identity(client):
     assert "field_user" in identity["roles"]
 
 
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"field-photo"
+
+
 def test_field_sync_is_idempotent_and_creates_case(client):
+    upload = client.post("/field/media", files={"file": ("p47.jpg", JPEG, "image/jpeg")}).json()
     payload = {
         "client_id": "mobile-device-001:event-001",
         "project_id": 1,
@@ -25,8 +29,8 @@ def test_field_sync_is_idempotent_and_creates_case(client):
         "description": "Crack width reading requires engineering review.",
         "location": {"lat": 3.139, "lng": 101.687, "accuracy_m": 8},
         "attachments": [{
-            "name": "p47.jpg", "media_type": "image/jpeg", "size": 1200,
-            "sha256": "a" * 64, "storage_ref": "s3://field/p47.jpg",
+            "name": "p47.jpg", "media_type": "image/jpeg", "size": upload["size"],
+            "sha256": upload["sha256"], "storage_ref": upload["storage_ref"],
         }],
         "captured_at": datetime.now(UTC).isoformat(),
     }

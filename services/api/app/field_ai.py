@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
+from .field_media import media_url
 from .i18n import bi
 from .intake import LANGUAGE_DISPLAY, build_intake_result
 from .models import AgentTrace, Case, CaseInput, FieldObservation, IntakeSubmission
@@ -102,7 +103,8 @@ def report_payload(db: Session, observation: FieldObservation) -> dict:
     return {
         "id": observation.id, "client_id": observation.client_id, "project_id": observation.project_id,
         "twin_id": observation.twin_id, "event_type": observation.event_type, "description": observation.description,
-        "captured_at": observation.captured_at.isoformat(), "attachments": observation.attachments,
+        "captured_at": observation.captured_at.isoformat(),
+        "attachments": [{**item, "url": media_url(item.get("storage_ref"))} for item in observation.attachments or []],
         "analysis_status": observation.analysis_status, "case_id": observation.case_id,
         "risk_review": {
             "reported": observation.severity, "ai": observation.ai_risk, "final": case.risk if case else observation.severity,

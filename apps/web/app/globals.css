@@ -326,3 +326,9 @@ a.assistant-card:hover{border-color:var(--line2)}
 .field-report-question p{margin:6px 0;font-size:13px}
 .field-report-link{display:inline-block;margin-top:6px;color:var(--cyan);font-size:13px}
 .field-reports .small{font-size:12px;margin:4px 0}
+
+.field-twin-row{display:flex;gap:8px}.field-twin-row select{flex:1;min-width:0}.field-twin-row .button{width:auto;flex:none;margin:0}
+.field-scan-video{width:100%;max-height:260px;border-radius:10px;background:#000;object-fit:cover}
+.field-report-media{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.field-report-media img{width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.field-report-media audio{height:32px;max-width:100%}

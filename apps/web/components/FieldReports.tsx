@@ -8,6 +8,7 @@ type Step = { id: string; text: string; owner_role: string; due: string; source:
 type Question = { id: number; question: string; status: string; answer: string | null };
 type Report = {
   id: string; event_type: string; description: string; captured_at: string; analysis_status: string; case_id: string | null;
+  attachments: { name: string; media_type: string; sha256: string; url: string | null }[];
   risk_review: { reported: string; ai: string | null; final: string; raised: boolean };
   case: { status: string; type: string; deadline: string } | null; plan: Step[]; questions: Question[];
 };
@@ -82,6 +83,10 @@ export function FieldReports() {
           <time>{new Date(report.captured_at).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}</time>
         </header>
         <p className="field-report-text">{report.description}</p>
+        {report.attachments.some(a => a.url) && <div className="field-report-media">{report.attachments.filter(a => a.url).map(a =>
+          a.media_type.startsWith('image/') ? <a key={a.sha256} href={a.url!} target="_blank" rel="noopener noreferrer"><img src={a.url!} alt={a.name} loading="lazy" /></a>
+          : a.media_type.startsWith('audio/') ? <audio key={a.sha256} controls preload="none" src={a.url!} />
+          : <a key={a.sha256} href={a.url!} target="_blank" rel="noopener noreferrer">{a.name}</a>)}</div>}
         {report.risk_review.raised && <p className="field-report-raised">{t('riskRaised', { reported: report.risk_review.reported, final: report.risk_review.final })}</p>}
         {report.case && report.analysis_status === 'ANALYZED' && <>
           <p className="muted small">{report.case.type} · {label('statuses', report.case.status, ta)} · {report.case.deadline}</p>

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from .field_ai import analyze_reports, classify_report, prepare_case, report_payload
+from .field_media import verify_attachment
 from .i18n import bi, get_lang, localize
 from .models import (
     AIQualityRun, AuditEvent, Case, Connector, ConnectorSyncRun,
@@ -127,6 +128,9 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
         twin = db.get(TwinObject, payload.twin_id)
         if not twin or twin.project_id != payload.project_id:
             raise HTTPException(422, "Twin ID is not part of the selected project")
+    for attachment in payload.attachments:
+        if attachment.storage_ref:
+            verify_attachment(db, principal.organization_id, attachment.sha256, attachment.storage_ref)
     observation_id = f"FO-{uuid4().hex[:16].upper()}"
     case_id = f"CASE-FIELD-{uuid4().hex[:10].upper()}"
     attachments = [item.model_dump() for item in payload.attachments]
