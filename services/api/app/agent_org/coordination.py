@@ -103,28 +103,102 @@ def _tokens(text: str) -> set[str]:
     return set(tokenize(text))
 
 
-def _merge_actions(team: list[str], findings: dict[str, dict]) -> list[dict]:
-    """One step per distinct action; owners and sources of similar actions are combined."""
+def raw_actions(team: list[str], findings: dict[str, dict]) -> list[dict]:
+    return [
+        {"agent_id": agent_id, "text": action["text"], "owner_role": action["owner_role"],
+         "refs": list(findings[agent_id].get("evidence_refs", []))}
+        for agent_id in team for action in findings[agent_id].get("actions", [])
+    ]
+
+
+CONSOLIDATION_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {"name": "consolidation", "strict": True, "schema": {
+        "type": "object", "additionalProperties": False, "required": ["actions", "questions"],
+        "properties": {
+            "actions": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                        "required": ["ids", "text_en", "text_zh"],
+                        "properties": {"ids": {"type": "array", "items": {"type": "integer"}},
+                                       "text_en": {"type": "string"}, "text_zh": {"type": "string"}}}},
+            "questions": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                          "required": ["ids", "text_en", "text_zh"],
+                          "properties": {"ids": {"type": "array", "items": {"type": "integer"}},
+                                         "text_en": {"type": "string"}, "text_zh": {"type": "string"}}}},
+        },
+    }},
+}
+
+
+def _groups(items: list, ids_expected: int) -> list[dict] | None:
+    seen: list[int] = []
+    groups = []
+    for item in items or []:
+        ids = [i for i in item.get("ids", []) if isinstance(i, int)]
+        if not ids or not str(item.get("text_en") or "").strip():
+            return None
+        seen += ids
+        groups.append({"ids": ids, "text": bi(item["text_en"].strip()[:300], (item.get("text_zh") or item["text_en"]).strip()[:300])})
+    # every original item exactly once, nothing invented
+    return groups if sorted(seen) == list(range(ids_expected)) else None
+
+
+async def consolidate(actions: list[dict], questions: list[dict], budget, route, sensitivity) -> tuple[list[dict] | None, list[dict] | None]:
+    """Merge semantically equivalent actions and questions with the model.
+
+    Returns (merged_actions, merged_questions) in the planner's shapes, or
+    (None, None) when the model is unavailable or its grouping is invalid.
+    """
+    if len(actions) + len(questions) < 2 or not budget.take():
+        return None, None
+    listing = {
+        "actions": [{"id": i, "text": a["text"]["en"]} for i, a in enumerate(actions)],
+        "questions": [{"id": i, "text": q["question"]["en"]} for i, q in enumerate(questions)],
+    }
+    system = ("Merge items that ask for or do the same thing. Put EVERY id in exactly one group. Write each group's text "
+              "as one concise sentence in English and Simplified Chinese using only information from its items; add "
+              "nothing new. Keep distinct items in separate groups.")
+    try:
+        raw = await generate(system, json.dumps(listing, ensure_ascii=False), response_format=CONSOLIDATION_FORMAT,
+                             route=route, sensitivity=sensitivity)
+        data = json.loads(re.search(r"\{.*\}", raw or "", re.DOTALL).group(0))
+    except (LLMError, ValueError, AttributeError):
+        return None, None
+    action_groups, question_groups = _groups(data.get("actions"), len(actions)), _groups(data.get("questions"), len(questions))
+    if action_groups is None or question_groups is None:
+        return None, None
+    merged_actions = []
+    for group in action_groups:
+        members = [actions[i] for i in group["ids"]]
+        owners = list({m["owner_role"]["en"]: m["owner_role"] for m in members}.values())
+        merged_actions.append({"text": group["text"], "owners": owners, "agents": [m["agent_id"] for m in members],
+                               "refs": list(dict.fromkeys(r for m in members for r in m["refs"]))})
+    merged_questions = []
+    for group in question_groups:
+        members = [questions[i] for i in group["ids"]]
+        merged_questions.append({**members[0], "question": group["text"], "also_from": [m["agent_id"] for m in members[1:]]})
+    return merged_actions, merged_questions
+
+
+def merge_actions(actions: list[dict]) -> list[dict]:
+    """Lexical fallback: one step per distinct action; owners of similar actions are combined."""
     merged: list[dict] = []
-    for agent_id in team:
-        finding = findings[agent_id]
-        for action in finding.get("actions", []):
-            tokens = _tokens(action["text"]["en"])
-            target = next((m for m in merged if tokens and m["tokens"] and
-                           len(tokens & m["tokens"]) / len(tokens | m["tokens"]) >= ACTION_SIMILARITY), None)
-            if target is None:
-                merged.append({"text": action["text"], "owners": [action["owner_role"]], "agents": [agent_id],
-                               "refs": list(finding.get("evidence_refs", [])), "tokens": tokens})
-            else:
-                if action["owner_role"]["en"] not in [o["en"] for o in target["owners"]]:
-                    target["owners"].append(action["owner_role"])
-                target["agents"].append(agent_id)
-                target["refs"] = list(dict.fromkeys(target["refs"] + finding.get("evidence_refs", [])))
-    return merged[:MAX_ACTION_STEPS]
+    for action in actions:
+        tokens = _tokens(action["text"]["en"])
+        target = next((m for m in merged if tokens and m["tokens"] and
+                       len(tokens & m["tokens"]) / len(tokens | m["tokens"]) >= ACTION_SIMILARITY), None)
+        if target is None:
+            merged.append({"text": action["text"], "owners": [action["owner_role"]], "agents": [action["agent_id"]],
+                           "refs": list(action["refs"]), "tokens": tokens})
+        else:
+            if action["owner_role"]["en"] not in [o["en"] for o in target["owners"]]:
+                target["owners"].append(action["owner_role"])
+            target["agents"].append(action["agent_id"])
+            target["refs"] = list(dict.fromkeys(target["refs"] + action["refs"]))
+    return merged
 
 
 def build_plan(team: list[str], findings: dict[str, dict], open_questions: list[dict], case_deadline: dict,
-               risk: str, unresolved: list[dict]) -> list[dict]:
+               risk: str, unresolved: list[dict], merged_actions: list[dict] | None = None) -> list[dict]:
     """Every step traces to a finding, an open question, an unresolved issue or a governance gate."""
     steps: list[dict] = []
 
@@ -136,7 +210,7 @@ def build_plan(team: list[str], findings: dict[str, dict], open_questions: list[
 
     urgent = risk == "CRITICAL"
     action_ids = []
-    for action in _merge_actions(team, findings):
+    for action in (merged_actions if merged_actions is not None else merge_actions(raw_actions(team, findings)))[:MAX_ACTION_STEPS]:
         owner = bi(" / ".join(o["en"] for o in action["owners"]), "、".join(o["zh"] for o in action["owners"]))
         action_ids.append(add(action["text"], owner, _due(case_deadline, urgent),
                               "finding:" + "+".join(dict.fromkeys(action["agents"])), action["refs"]))

@@ -22,12 +22,12 @@ from ..llm import LLMError, _route_order
 from ..models import AgentTrace, Case, CaseInput, IntakeSubmission, Project
 from ..retrieval import tokenize
 from .cards import CARDS
-from .coordination import build_plan, detect_issues, model_issues, verify
+from .coordination import build_plan, consolidate, detect_issues, model_issues, raw_actions, verify
 from .findings import deterministic_finding, model_finding
 from .team import Member, model_additions, rule_team
 from .tools import TOOLS, ToolContext, ToolResult
 
-MAX_MODEL_CALLS = 8
+MAX_MODEL_CALLS = 9
 # Local gateways serve one request at a time; queueing many calls there only
 # pushes later ones past the request timeout. Cloud endpoints run in parallel.
 LOCAL_CONCURRENCY = 2
@@ -203,13 +203,16 @@ async def run_organization(db: Session, case: Case, project: Project | None, bas
                              duration_ms=max(1, round((perf_counter() - started) * 1000))))
 
     # 4. questions for humans (deduplicated, persisted across re-analysis)
-    questions = merge_questions([
+    raw_questions = [
         {"agent_id": agent_id, "question": question, "key": _question_key(agent_id, question)}
         for agent_id in ids for question in findings[agent_id].get("questions", [])
-    ])
+    ]
+    actions = raw_actions(ids, findings)
+    merged_actions, merged_questions = await consolidate(actions, raw_questions, llm, route, sensitivity)
+    questions = (merged_questions if merged_questions is not None else merge_questions(raw_questions))[:MAX_QUESTIONS]
 
     # 5. plan and verification
-    plan = build_plan(ids, findings, questions, case.deadline, case.risk, unresolved)
+    plan = build_plan(ids, findings, questions, case.deadline, case.risk, unresolved, merged_actions)
     verification = verify(ids, findings, plan, unresolved)
     verification["model_calls"] = llm.used
     traces.append(AgentTrace(case_id=case.id, run_id=run_id, kind="planner", agent_id="planning", round=3, output={"steps": plan}))

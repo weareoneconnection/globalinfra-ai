@@ -166,3 +166,43 @@ def test_model_proposed_member_joins_and_reports(monkeypatch):
     asyncio.run(workflow.analyze_case(db, "CASE-2026-0182"))
     risk = db.scalar(select(AgentTrace).where(AgentTrace.case_id == "CASE-2026-0182", AgentTrace.agent_id == "risk", AgentTrace.round == 1))
     assert risk is not None and risk.rationale["en"] == "exposure needs an owner"
+
+
+def test_model_consolidates_equivalent_questions_and_actions(monkeypatch):
+    db = _db()
+
+    def finding_for(system, user):
+        return {"status": "SUPPORTED", "claim_en": "Register under the procedure.", "claim_zh": "按程序登记。",
+                "evidence_refs": ["CTR-A / Clause C-14.2"], "confidence": 0.8, "gaps": [],
+                "actions": [{"text_en": "Register the request", "text_zh": "登记申请", "owner_en": "Contract Manager", "owner_zh": "合同经理"}],
+                "question_en": "Was it formally instructed?", "question_zh": "是否有正式指令？"}
+
+    seen = _live(monkeypatch, finding_for)
+
+    async def fake(system, user, response_format=None, route=None, sensitivity="internal"):
+        if response_format and response_format["json_schema"]["name"] == "consolidation":
+            data = json.loads(user)
+            return json.dumps({
+                "actions": [{"ids": [a["id"] for a in data["actions"]], "text_en": "Register the request", "text_zh": "登记申请"}],
+                "questions": [{"ids": [q["id"] for q in data["questions"]], "text_en": "Was a written instruction issued?", "text_zh": "是否发出书面指令？"}],
+            })
+        return json.dumps(finding_for(system, user))
+
+    import app.agent_org.coordination as coordination_module
+    monkeypatch.setattr(findings, "generate", fake)
+    monkeypatch.setattr(coordination_module, "generate", fake)
+    asyncio.run(workflow.analyze_case(db, "CASE-2026-0182"))
+    planner = db.scalar(select(AgentTrace).where(AgentTrace.case_id == "CASE-2026-0182", AgentTrace.kind == "planner"))
+    actions = [s for s in planner.output["steps"] if s["source"].startswith("finding:")]
+    questions = [s for s in planner.output["steps"] if s["source"].startswith("question:")]
+    # Only agents whose own search retrieved the cited clause keep a SUPPORTED
+    # finding (and its action); the consolidated step traces back to them.
+    assert len(actions) == 1 and actions[0]["source"].startswith("finding:contract")
+    assert len(questions) == 1 and "written instruction" in questions[0]["text"]["en"]
+
+
+def test_invalid_consolidation_falls_back_to_lexical_merge():
+    from app.agent_org.coordination import _groups
+    assert _groups([{"ids": [0], "text_en": "a", "text_zh": "a"}], 2) is None          # id 1 dropped
+    assert _groups([{"ids": [0, 1, 2], "text_en": "a", "text_zh": "a"}], 2) is None    # invented id
+    assert _groups([{"ids": [1], "text_en": "b", "text_zh": "b"}, {"ids": [0], "text_en": "a", "text_zh": "a"}], 2)
