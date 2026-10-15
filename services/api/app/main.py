@@ -79,7 +79,7 @@ app.include_router(agent_org_router)
 app.include_router(field_media_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"4.3.0","product_version":"V4.3","architecture":"unified-ingestion-control-plane"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"5.0.0","product_version":"V5.0","architecture":"agent-dispatch"}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}

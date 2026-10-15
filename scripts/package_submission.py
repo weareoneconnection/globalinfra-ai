@@ -65,7 +65,7 @@ def build() -> Path:
     ]
     manifest = {
         "package": "GlobalInfra AI 第二届交融杯 AI出海赛道提交材料",
-        "release": "V4.3 参赛提交版",
+        "release": "V5.0 参赛提交版",
         "release_time": RELEASE_TIME,
         "data_boundary": "系统、评测与数字孪生示例使用合成数据；尚无真实客户生产验收记录。",
         "manual_items_remaining": [
