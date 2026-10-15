@@ -345,7 +345,7 @@ def add_figure(doc: Document, image_path: Path, caption: str) -> None:
         figure_width = 5.25
     elif image_path.name == "golden-thread.png":
         figure_width = 5.0
-    elif image_path.name.startswith("assistant-"):
+    elif image_path.name.startswith(("assistant-", "field-")):
         # Tall UI screenshots: narrower so two fit on one page.
         figure_width = 4.3
     else:

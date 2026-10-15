@@ -228,7 +228,7 @@ Every case is handled by a governed agent organization (`services/api/app/agent_
 - **Observability**: full trace `GET /cases/{id}/agent-run`, recent runs `GET /agents/runs`, scorecards `GET /agents/scorecards`; the agent organization page shows live runs.
 - **Evaluation**: `python evals/run_agent_org_eval.py` checks team composition, escalation, plan traceability and grounded findings on 12 synthetic cases, and runs in CI.
 
-Each case uses at most 12 model calls and 3 concurrent calls; a failing model degrades step by step to rules without aborting the analysis.
+Each case uses at most 9 model calls, with 5 concurrent calls to a cloud model and 2 to a local one; a failing model degrades step by step to rules without aborting the analysis.
 
 ## Dispatching assistant
 
