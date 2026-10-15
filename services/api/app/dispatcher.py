@@ -487,7 +487,11 @@ async def agent_case(step: Step, run: Dispatch, db: Session) -> dict:
     actions = [s for s in _latest_plan(db, case_id) if not str(s.get("source", "")).startswith("governance")]
     questions = localize(open_questions(db, case_id), run.lang)
     pending = db.scalars(select(Approval).where(Approval.case_id == case_id, Approval.status == "PENDING")).all()
-    first = localize(actions[0]["text"], run.lang) if actions else None
+    first = None
+    if actions:
+        first = localize(actions[0]["text"], run.lang).rstrip("。.；; ")
+        owner = localize(actions[0].get("owner_role") or "", run.lang)
+        first += _t(run.lang, f" (owner: {owner})", f"（负责：{owner}）") if owner else ""
     status = localize(CASE_STATUS.get(case.status, bi(case.status)), run.lang)
     summary = _t(run.lang,
                  f"{case_id} is {status}, risk {case.risk}; {len(actions)} specialist actions"
