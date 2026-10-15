@@ -99,7 +99,8 @@ ISSUE_SIGNALS: list[tuple[tuple[str, ...], dict]] = [
      bi("Variation / change request", "变更 / 签证申请")),
     (("owner notice", "employer notice", "通知函", "通知"), bi("Owner notice", "业主通知")),
     (("delay", "extension of time", "eot", "延误", "工期"), bi("Schedule / delay impact", "进度 / 延误影响")),
-    (("ncr", "non-conformance", "不符合"), bi("Non-conformance (NCR)", "不符合项（NCR）")),
+    # "ncr" only as a token: a bare substring also matches "encroachment".
+    (("ncr-", " ncr ", "ncr ", "non-conformance", "不符合"), bi("Non-conformance (NCR)", "不符合项（NCR）")),
 ]
 
 # (country code, bilingual label, keyword tuple). First match wins; drives the

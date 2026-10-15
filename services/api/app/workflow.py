@@ -53,7 +53,7 @@ from .agents import AGENTS
 from .config import settings
 from .i18n import bi
 from .llm import generate, is_llm_configured, translate
-from .models import Action, AgentRun, Approval, Case, Claim, Evidence, ExecutionReceipt, KnowledgeDocument, Verification
+from .models import Action, AgentRun, Approval, Case, Claim, Evidence, ExecutionReceipt, KnowledgeDocument, Project, Verification
 from .retrieval import KnowledgeIndex, case_query_text
 
 AGENTS_BY_ID = {a["id"]: a for a in AGENTS}
@@ -233,7 +233,16 @@ async def analyze_case(
     ))
 
     # --- specialists: real retrieval-grounded findings, selected by case type ---
+    # Jurisdiction-aware evidence: a routed case only cites its own country's
+    # records plus country-neutral (project/global) ones. The index keeps the
+    # whole corpus so relevance scores do not shift; foreign records are
+    # dropped from the ranked results instead.
+    project = db.get(Project, case.project_id) if case.project_id is not None else None
+    country = project.country_code if project is not None else None
     index = KnowledgeIndex(list(db.scalars(select(KnowledgeDocument))))
+
+    def in_jurisdiction(doc) -> bool:
+        return not country or not doc.country_code or doc.country_code == country
     base_query = case_query_text(case)
     specialist_ids = SPECIALISTS_BY_CASE_TYPE.get(case_type_en, DEFAULT_SPECIALISTS)
 
@@ -248,8 +257,8 @@ async def analyze_case(
         (
             agent_id,
             [(score, doc) for score, doc in index.search(
-                f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE
-            ) if score >= MIN_RELEVANCE],
+                f"{base_query} {FOCUS_TERMS.get(agent_id, '')}", top_k=TOP_K_EVIDENCE + 8
+            ) if score >= MIN_RELEVANCE and in_jurisdiction(doc)][:TOP_K_EVIDENCE],
         )
         for agent_id in specialist_ids
     ]

@@ -66,3 +66,10 @@ def test_low_signal_case_is_flagged_as_an_evidence_gap_not_a_false_conclusion(cl
     assert v["consistency_score"] < 1.0
     summaries = " ".join(r["summary"] for r in detail["agent_runs"])
     assert "gap" in summaries.lower()
+
+
+def test_routed_case_cites_only_its_country_or_neutral_sources(client):
+    text = "马来西亚项目 P47 墩高处作业无防护，工人未系安全带，要求 24 小时内整改。"
+    case_id = client.post("/intake/text", json={"text": text, "project_id": 1}).json()["case_id"]
+    refs = [e["source_ref"] for e in client.get(f"/cases/{case_id}").json()["evidence"]]
+    assert refs and not any(ref.startswith(("AE-", "SA-", "ID-")) for ref in refs)

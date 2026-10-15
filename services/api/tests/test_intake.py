@@ -306,3 +306,9 @@ def test_intake_document_enforces_upload_limit(client, monkeypatch):
     monkeypatch.setattr(settings, "max_upload_bytes", 8)
     r = client.post("/intake/document", files={"file": ("large.txt", b"123456789", "text/plain")})
     assert r.status_code == 413
+
+
+def test_encroachment_is_not_tagged_as_ncr():
+    issues = [i["en"] for i in build_intake_result("Earthwork encroachment at the interface zone, Malaysia.")["issues"]]
+    assert "Earthwork encroachment" in issues and "Non-conformance (NCR)" not in issues
+    assert "Non-conformance (NCR)" in [i["en"] for i in build_intake_result("Raised NCR-2026-084 for honeycomb.")["issues"]]
