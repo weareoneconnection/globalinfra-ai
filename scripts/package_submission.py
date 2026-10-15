@@ -16,8 +16,8 @@ PACKAGE_ROOT = "GlobalInfra_AI_AI出海赛道_提交材料"
 ZIP_PATH = FINAL / "GlobalInfra_AI_交融杯_AI出海赛道_提交包.zip"
 MANIFEST_PATH = FINAL / "FINAL_SUBMISSION_MANIFEST.json"
 HASH_PATH = FINAL / "SHA256SUMS.txt"
-RELEASE_TIME = "2026-10-14T00:00:00+08:00"
-ZIP_TIME = (2026, 10, 14, 0, 0, 0)
+RELEASE_TIME = "2026-10-15T00:00:00+08:00"
+ZIP_TIME = (2026, 10, 15, 0, 0, 0)
 
 FILES = [
     FINAL / "GlobalInfra_AI_AI出海应用设计报告.docx",
@@ -65,7 +65,7 @@ def build() -> Path:
     ]
     manifest = {
         "package": "GlobalInfra AI 第二届交融杯 AI出海赛道提交材料",
-        "release": "V4.2 / 阶段 9.7",
+        "release": "V4.3 参赛提交版",
         "release_time": RELEASE_TIME,
         "data_boundary": "系统、评测与数字孪生示例使用合成数据；尚无真实客户生产验收记录。",
         "manual_items_remaining": [
