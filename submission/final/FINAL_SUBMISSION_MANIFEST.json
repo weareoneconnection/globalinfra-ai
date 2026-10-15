@@ -13,13 +13,13 @@
   "files": [
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/GlobalInfra_AI_AI出海应用设计报告.docx",
-      "bytes": 2977188,
-      "sha256": "5afc7f0ba84f2da5d1b20f20a7cc652a56c9b5d0c80a0147d9c671552c1d5eac"
+      "bytes": 2977420,
+      "sha256": "e4cebf77ff0858cb3d39cc22daa4e5911eea5e776c478549978230252fe5ec09"
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/GlobalInfra_AI_AI出海应用设计报告.pdf",
-      "bytes": 2002865,
-      "sha256": "8703db50412db076d882728869d6505a9a2cc5546b682d9bb8d5ff30783fd7ab"
+      "bytes": 2017564,
+      "sha256": "fee2a2a7d071c76462dd061eee13e67b338ce31843af4ac1309c993dc772e145"
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/02_五分钟演示脚本与分镜.md",
@@ -28,8 +28,8 @@
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/03_证据真实性与数据边界清单.md",
-      "bytes": 2843,
-      "sha256": "deaf7a26b31e5e2fd45f931dca52ccc1d6ff79f31cbad060cf9e3e752eb0fd03"
+      "bytes": 3053,
+      "sha256": "f10795b1e2cacbc4a746497207a1f14323b3302762b2dc3865f5bf5c66868990"
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/04_模型与算法评测报告.md",
@@ -38,8 +38,8 @@
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/05_一键复现与开源说明.md",
-      "bytes": 2511,
-      "sha256": "28a78665bc0427a9f20a91bdc3698a60e248493157149448e9b36db8e3417b41"
+      "bytes": 3055,
+      "sha256": "e2c4b1e34812f73675da6eeda6ccd42b5692ef5dc3e38ac681069913f71dc5fd"
     },
     {
       "path": "GlobalInfra_AI_AI出海赛道_提交材料/06_最终提交检查表.md",
