@@ -1,9 +1,11 @@
 import './globals.css';
+import './theme-light.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
+import { THEME_BOOT_SCRIPT } from '@/components/ThemeToggle';
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
@@ -27,7 +29,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html lang={locale}>
+    <html lang={locale} suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} /></head>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ServiceWorkerRegistration />

@@ -44,6 +44,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: npm ci
+      # The light theme is generated from globals.css; fail if it is stale.
+      - name: Light theme is up to date
+        working-directory: .
+        run: python3 scripts/gen_light_theme.py && git diff --exit-code apps/web/app/theme-light.css
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run build
         env:

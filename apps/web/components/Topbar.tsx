@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { LocaleSwitcher } from './LocaleSwitcher';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Topbar() {
   const t = useTranslations('Topbar');
@@ -12,6 +13,7 @@ export function Topbar() {
     <div className="top-actions">
       <span className="data-pill"><span className="status-dot" />{t('dataSynced')}</span>
       <span className="scope">{t('timestamp')}</span>
+      <ThemeToggle />
       <LocaleSwitcher />
       <span className="avatar">MQ</span>
     </div>

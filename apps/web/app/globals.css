@@ -369,3 +369,4 @@ a.assistant-card:hover{border-color:var(--line2)}
 .dispatch-section{scroll-margin-top:80px}
 @keyframes dispatch-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.dispatch-step.running .dispatch-dot{animation:none}}
+.theme-switch{font-size:13px;line-height:1;padding:5px 9px;min-width:32px}

@@ -55,7 +55,9 @@
     "title": "Portfolio Control Plane",
     "dataSynced": "Data synchronized",
     "timestamp": "30 Sep 2026 · 16:40 CST",
-    "switchToLabel": "中文"
+    "switchToLabel": "中文",
+    "themeToLight": "Switch to light theme (day)",
+    "themeToDark": "Switch to dark theme (night)"
   },
   "Home": {
     "eyebrow": "Global command center · Portfolio live",

@@ -55,7 +55,9 @@
     "title": "项目组合控制面板",
     "dataSynced": "数据已同步",
     "timestamp": "2026年9月30日 · 16:40 CST",
-    "switchToLabel": "EN"
+    "switchToLabel": "EN",
+    "themeToLight": "切换到浅色主题（白天）",
+    "themeToDark": "切换到深色主题（黑夜）"
   },
   "Home": {
     "eyebrow": "全局指挥中心 · 项目组合实时",
