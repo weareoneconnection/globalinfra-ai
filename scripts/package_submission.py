@@ -16,8 +16,8 @@ PACKAGE_ROOT = "GlobalInfra_AI_AI出海赛道_提交材料"
 ZIP_PATH = FINAL / "GlobalInfra_AI_交融杯_AI出海赛道_提交包.zip"
 MANIFEST_PATH = FINAL / "FINAL_SUBMISSION_MANIFEST.json"
 HASH_PATH = FINAL / "SHA256SUMS.txt"
-RELEASE_TIME = "2026-10-15T00:00:00+08:00"
-ZIP_TIME = (2026, 10, 15, 0, 0, 0)
+RELEASE_TIME = "2026-10-18T21:53:31+08:00"
+ZIP_TIME = (2026, 10, 18, 21, 53, 30)
 
 FILES = [
     FINAL / "GlobalInfra_AI_AI出海应用设计报告.docx",
@@ -30,6 +30,9 @@ FILES = [
     SUBMISSION / "07_参赛版本发布说明.md",
     SUBMISSION / "08_第三方组件清单.md",
     SUBMISSION / "README.md",
+    ROOT / "LICENSE",
+    ROOT / "NOTICE.md",
+    ROOT / "NOTICE.zh-CN.md",
 ]
 
 
@@ -44,6 +47,8 @@ def sha256(path: Path) -> str:
 def archive_name(path: Path) -> str:
     if path.parent == FINAL:
         relative = Path(path.name)
+    elif path.parent == ROOT:
+        relative = Path("开源许可") / path.name
     else:
         relative = path.relative_to(SUBMISSION)
     return f"{PACKAGE_ROOT}/{relative.as_posix()}"
@@ -65,14 +70,13 @@ def build() -> Path:
     ]
     manifest = {
         "package": "GlobalInfra AI 第二届交融杯 AI出海赛道提交材料",
-        "release": "V5.0 参赛提交版",
+        "release": "V5.1 最终参赛提交版",
         "release_time": RELEASE_TIME,
         "data_boundary": "系统、评测与数字孪生示例使用合成数据；尚无真实客户生产验收记录。",
         "manual_items_remaining": [
-            "参赛单位名称",
-            "团队负责人及成员",
+            "完整团队成员",
             "平台报名编号",
-            "不超过五分钟的最终录屏",
+            "约四分钟且不超过五分钟的最终录屏",
             "平台提交回执",
         ],
         "files": entries,

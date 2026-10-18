@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-import shutil
 import zipfile
 from pathlib import Path
 
@@ -25,7 +24,7 @@ TEMPLATE = Path("/Users/maqing/Downloads/附件3：AI出海赛道设计报告模
 OUTPUT_DIR = ROOT / "submission" / "final"
 ASSET_DIR = ROOT / "submission" / "assets"
 OUTPUT_DOCX = OUTPUT_DIR / "GlobalInfra_AI_AI出海应用设计报告.docx"
-SCREENSHOT = Path("/private/tmp/globalinfra-phase91-production.png")
+SCREENSHOT = ASSET_DIR / "phase91-production.png"
 
 FONT_REGULAR = Path("/System/Library/AssetsV2/com_apple_MobileAsset_Font8/1b6b2f148cdf17dd0d788706c83c61ca1998c3a6.asset/AssetData/STFANGSO.ttf")
 FONT_UI = Path("/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc")
@@ -125,15 +124,14 @@ def create_golden_thread(path: Path) -> None:
     img.save(path, quality=95)
 
 
-# Chinese text in 仿宋 (FangSong, built into Windows); Latin text and digits
-# in Times New Roman, the usual pairing for Chinese formal documents.
-CJK_FONT = "仿宋"
+# Chinese body text in 宋体; Latin text and digits in Times New Roman.
+CJK_FONT = "宋体"
 HEADING_FONT = "黑体"
 LATIN_FONT = "Times New Roman"
 
 
 def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, name: str = CJK_FONT, cjk: str = CJK_FONT) -> None:
-    """Body text in 仿宋; pass cjk=HEADING_FONT for titles, headings and table headers."""
+    """Body text in 宋体; pass cjk=HEADING_FONT for titles, headings and table headers."""
     latin = name if name != CJK_FONT else LATIN_FONT
     run.font.name = latin
     run.font.size = Pt(size)
@@ -149,6 +147,21 @@ def set_run_font(run, size: float, bold: bool = False, color: RGBColor = TEXT, n
     rfonts.set(qn("w:ascii"), latin)
     rfonts.set(qn("w:hAnsi"), latin)
     rfonts.set(qn("w:cs"), latin)
+
+
+def set_style_font(style, cjk: str = CJK_FONT) -> None:
+    """Keep template paragraph styles from reintroducing a non-Song body font."""
+    style.font.name = LATIN_FONT
+    rpr = style._element.get_or_add_rPr()
+    rfonts = rpr.rFonts
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.insert(0, rfonts)
+    rfonts.set(qn("w:hint"), "eastAsia")
+    rfonts.set(qn("w:eastAsia"), cjk)
+    rfonts.set(qn("w:ascii"), LATIN_FONT)
+    rfonts.set(qn("w:hAnsi"), LATIN_FONT)
+    rfonts.set(qn("w:cs"), LATIN_FONT)
 
 
 def add_inline_runs(paragraph, text: str, size: float, bold: bool = False) -> None:
@@ -228,10 +241,10 @@ def add_body(doc: Document, text: str):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.first_line_indent = Inches(0.444)
-    p.paragraph_format.line_spacing = Pt(27)
+    p.paragraph_format.line_spacing = Pt(22)
     p.paragraph_format.space_after = Pt(0)
     p.paragraph_format.widow_control = True
-    add_inline_runs(p, text, 15)
+    add_inline_runs(p, text, 12)
     return p
 
 
@@ -240,11 +253,11 @@ def add_bullet(doc: Document, text: str):
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.left_indent = Inches(0.58)
     p.paragraph_format.first_line_indent = Inches(-0.28)
-    p.paragraph_format.line_spacing = Pt(25)
+    p.paragraph_format.line_spacing = Pt(22)
     p.paragraph_format.space_after = Pt(2)
     run = p.add_run("• ")
-    set_run_font(run, 14, bold=True)
-    add_inline_runs(p, text, 14)
+    set_run_font(run, 12, bold=True)
+    add_inline_runs(p, text, 12)
     return p
 
 
@@ -416,13 +429,14 @@ def build_report() -> Path:
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
     create_architecture(ASSET_DIR / "architecture.png")
     create_golden_thread(ASSET_DIR / "golden-thread.png")
-    if SCREENSHOT.exists():
-        shutil.copy2(SCREENSHOT, ASSET_DIR / "phase91-production.png")
-    else:
+    if not SCREENSHOT.exists():
         raise FileNotFoundError(f"Production verification screenshot is missing: {SCREENSHOT}")
 
     doc = Document(TEMPLATE)
     clear_document_body(doc)
+    for style in doc.styles:
+        if style.type == WD_STYLE_TYPE.PARAGRAPH and style.name.casefold() in {"normal", "header", "footer"}:
+            set_style_font(style)
     if "Title" not in [style.name for style in doc.styles]:
         doc.styles.add_style("Title", WD_STYLE_TYPE.PARAGRAPH)
     doc.core_properties.title = "GlobalInfra AI AI出海应用设计报告"
