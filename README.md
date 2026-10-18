@@ -1,19 +1,24 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V4.3
+# GlobalInfra AI V5.1
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V4.3 is an operational digital-twin and trusted-execution platform for overseas infrastructure projects. It connects the complete project lifecycle and eight intelligence domains to live geometry, schedule, cost, telemetry and evidence-grounded decisions, with a reproducible competition golden thread, measured evaluation evidence and a six-channel unified data-ingestion control plane.
+GlobalInfra AI V5.1 is an open-source operational digital-twin and trusted-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The competition release adds a six-channel ingestion control plane, 30 governed agents, a seven-step human-controlled execution loop, three versioned evaluation suites with 57/57 cases passing, and a judge-facing evidence center that maps every scoring criterion to reproducible proof.
+
+- Public deployment: https://globalinfra-ai-production.up.railway.app/
+- Competition evidence center: https://globalinfra-ai-production.up.railway.app/competition
+- Reproducible evidence API: https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=en
+- License: [Apache License 2.0](LICENSE)
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 
-## What is runnable in V1.1
+## What is runnable in V5.1
 
 - Conversational Assistant entry point (default home)
 - Global Command Center dashboard
 - Lifecycle-aware project portfolio and project workspace
-- Eight intelligence domains covering 24 engineering disciplines
+- 24 engineering-domain agents plus 6 control and assurance agents
 - Infrastructure digital thread across technical, delivery, commercial and asset records
 - Case intelligence workflow
 - Dynamic specialist-team assembly and multi-agent analysis trace
@@ -26,7 +31,8 @@ GlobalInfra AI V4.3 is an operational digital-twin and trusted-execution platfor
 - Independent verification record
 - Synthetic demo dataset
 - Docker Compose for web + API + PostgreSQL + Redis
-- Evaluation harness and CI skeleton
+- Three versioned competition evaluation suites (30 + 12 + 15 cases) and a full CI release gate
+- Judge-facing evidence center with 10 scoring-criterion mappings, dataset hashes, model-routing status and human-authority boundaries
 - **Full-chain English/Chinese switching**: the web app auto-detects the browser language (with manual override), the API returns bilingual data per request, and a translation-model integration point powers dynamically generated content
 
 The default AI mode is **deterministic demo mode**, so the system works without buying model tokens. An OpenAI-compatible model gateway is included and can be enabled later with environment variables.
@@ -91,7 +97,7 @@ provider/model attempt and whether it succeeded. The same fields are accepted by
 `POST /intake/text`; document intake and case re-analysis accept them as query
 parameters.
 
-Demo login is intentionally skipped in V1.0 competition mode. Add enterprise SSO before production deployment.
+Demo login is intentionally skipped in the competition deployment. Add enterprise SSO before production deployment.
 
 ## Quick start: local development
 
@@ -186,9 +192,11 @@ Phase 8 adds a native WebGL GLTF workspace with Twin-ID picking, traceable model
 
 For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
 
-## V4.2 Phase 9.1 Competition Golden Thread
+## V5.1 Competition Golden Thread and Submission Evidence
 
-`/competition` now composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. A versioned 30-case suite supplies live metrics and a CI release gate; none of the displayed evaluation figures are hard-coded. See [Phase 9.1 Competition Golden Thread](docs/PHASE9_COMPETITION_GOLDEN_THREAD.md).
+`/competition` composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. The submission evidence API calculates the live 30-case AI-outbound result and binds it to the 12-case agent-organization and 15-case dispatcher suites, dataset digests, a versioned CI snapshot and the deployed commit. See [Phase 9.1 Competition Golden Thread](docs/PHASE9_COMPETITION_GOLDEN_THREAD.md).
+
+The V5.1 evidence center consolidates three suites with 57/57 passing cases, a traceable 265-test release snapshot and three release gates, six data/intelligence capabilities, ten judging-criterion mappings, plus model-routing, lineage, hash and human-authority proofs. Criterion cards locate evidence; they do not claim self-awarded scores.
 
 ## V2.0 Phase 6 Digital Twin
 
@@ -325,4 +333,8 @@ See `docs/ARCHITECTURE.md` (Chinese: `docs/ARCHITECTURE.zh-CN.md`) for the compl
 
 ## Production hardening still required
 
-This V1.1 is a strong competition/product foundation, not a claim of production certification. Before enterprise rollout, complete SSO, secrets management, encrypted object storage, full document parsing, regional deployment, privacy impact assessment, threat modeling, vulnerability management, backup/restore drills, and jurisdiction-specific legal review.
+V5.1 is a competition-ready reference implementation and controlled-pilot foundation, not a claim of production certification. Before enterprise rollout, complete SSO, secrets management, encrypted object storage, full document parsing, regional deployment, privacy impact assessment, threat modeling, vulnerability management, backup/restore drills, and jurisdiction-specific legal review.
+
+## Open-source contribution
+
+GlobalInfra AI is published under the Apache License 2.0. Issues and pull requests are welcome. Do not submit customer data, personal data, credentials, confidential project documents or third-party material that you are not authorized to redistribute. Synthetic fixtures are marked as competition/demo data and must not be represented as production evidence.

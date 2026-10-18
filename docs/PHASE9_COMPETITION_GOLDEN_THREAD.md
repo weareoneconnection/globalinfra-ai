@@ -2,6 +2,8 @@
 
 Phase 9.1 turns existing product capabilities into one jury-verifiable AI-outbound story instead of adding a separate scripted demo.
 
+V5.0 retains the seven-step golden thread and turns the page into a dynamic evidence center. Release time and deployment commit come from the runtime environment; three suites contribute 57 versioned cases; the last verified CI snapshot records 263 API tests plus web build, migration and full-stack smoke gates; six platform capabilities, ten judging criteria, model routing, lineage, hashes and human authority boundaries are all inspectable.
+
 ## Positioning
 
 **GlobalInfra AI — trusted AI execution and operational digital twins for overseas transport infrastructure.**
@@ -30,5 +32,7 @@ curl 'http://localhost:8001/competition/evaluation?include_cases=true'
 ```
 
 The same suite is a CI gate. Metrics shown in the UI are computed from that function; they are not authored presentation values.
+
+The ten judging cards map published criteria to inspectable system evidence. They are not self-awarded scores.
 
 All project, case, twin and evaluation records in this route are synthetic. Country packs are operational source indexes rather than legal advice, and the six twin formats are integration-shaped examples rather than as-built models.
