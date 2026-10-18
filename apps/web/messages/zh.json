@@ -2,7 +2,7 @@
   "Sidebar": {
     "brandName": "GlobalInfra AI",
     "brandTag": "项目智能",
-    "footerVersion": "V5.0 · 总调度",
+    "footerVersion": "V5.1 · 总调度",
     "footerSub": "智能体组织 · 现场作业 2.0",
     "groups": [
       {
@@ -581,11 +581,11 @@
     "noRuns": "尚未记录 AI 质量评测"
   },
   "Competition": {
-    "eyebrow": "V5.0 · AI 出海参赛证据中心",
+    "eyebrow": "V5.1 · AI 出海参赛证据中心",
     "title": "从一条黄金主线，升级为一套可核验的参赛证据系统。",
     "subtitle": "七步业务闭环、三套评测、六类数据入口、模型路由、数据血缘、CI 门禁与执行回执采用同一版本口径。",
     "verifiedCases": "条核心评测通过",
-    "releaseSummary": "V5.0 证据版本摘要",
+    "releaseSummary": "V5.1 证据版本摘要",
     "release": "产品版本",
     "generatedAt": "证据生成时间",
     "requestGenerated": "由本次请求实时生成",
@@ -594,7 +594,7 @@
     "ciGate": "CI 质量门禁",
     "apiTests": "项 API 测试通过",
     "deploymentCommit": "部署提交",
-    "capabilityKicker": "V5.0 能力证据",
+    "capabilityKicker": "V5.1 能力证据",
     "capabilityTitle": "六项升级能力已进入证据链",
     "goldenKicker": "参赛黄金主线",
     "closedLoop": "闭环已核验",

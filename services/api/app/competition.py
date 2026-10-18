@@ -57,8 +57,8 @@ DATASET_PATH = Path(__file__).resolve().parent.parent / "evals" / "competition_o
 AGENT_ORG_DATASET_PATH = DATASET_PATH.parent / "agent_org.jsonl"
 DISPATCH_DATASET_PATH = DATASET_PATH.parent / "assistant_dispatch.jsonl"
 PRODUCT_VERSION = "V5.1"
-CI_EVIDENCE_RUN = "38745920242"
-CI_VERIFIED_AT = "2026-10-15T16:00:00+08:00"
+CI_EVIDENCE_RUN = "39131735043"
+CI_VERIFIED_AT = "2026-10-18T21:31:01+08:00"
 CI_API_TESTS_PASSED = 265
 REQUIRED_INTAKE_KEYS = {
     "primary_domain", "professional_domain", "case_type", "classification_method",
@@ -457,12 +457,12 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
         ],
         "scorecard": [
             {"id": "industry-pain", "category": bi("Innovation", "创新性"), "criterion": bi("Industry pain", "行业痛点解决能力"), "max_score": 15, "evidence": bi("A seven-step overseas-project closure with evidence at every handoff", "海外项目七步闭环，每次交接均产生证据"), "href": "#golden-thread", "evidence_ids": ["CASE-GOLDEN-MY-001", "VR-132090E44B5A478AB51712C7DB6B4934"]},
-            {"id": "technology-fusion", "category": bi("Innovation", "创新性"), "criterion": bi("Technology fusion", "技术融合创新性"), "max_score": 10, "evidence": bi("LLM routing, knowledge retrieval, multi-agent coordination, MCP and operational twin", "大模型路由、知识检索、多智能体、MCP 与运营孪生融合"), "href": "/architecture", "evidence_ids": ["V5.0", "agent-dispatch"]},
+            {"id": "technology-fusion", "category": bi("Innovation", "创新性"), "criterion": bi("Technology fusion", "技术融合创新性"), "max_score": 10, "evidence": bi("LLM routing, knowledge retrieval, multi-agent coordination, MCP and operational twin", "大模型路由、知识检索、多智能体、MCP 与运营孪生融合"), "href": "/architecture", "evidence_ids": [PRODUCT_VERSION, "agent-dispatch"]},
             {"id": "business-model", "category": bi("Innovation", "创新性"), "criterion": bi("Business model", "业务模式突破性"), "max_score": 5, "evidence": bi("Reusable country packs and governed capability delivery", "可复用国家包与受治理能力输出"), "href": "/country-packs", "evidence_ids": ["MY", "ID", "SA", "AE"]},
-            {"id": "technical-route", "category": bi("Practicality", "实用性"), "criterion": bi("Technical route", "技术路线合理性"), "max_score": 10, "evidence": bi("Layered architecture with deterministic fallbacks and human authority gates", "分层架构、确定性降级与人工责任关卡"), "href": "/architecture", "evidence_ids": ["263-tests", "full-stack-smoke"]},
+            {"id": "technical-route", "category": bi("Practicality", "实用性"), "criterion": bi("Technical route", "技术路线合理性"), "max_score": 10, "evidence": bi("Layered architecture with deterministic fallbacks and human authority gates", "分层架构、确定性降级与人工责任关卡"), "href": "/architecture", "evidence_ids": [f"{CI_API_TESTS_PASSED}-tests", "full-stack-smoke"]},
             {"id": "data-support", "category": bi("Practicality", "实用性"), "criterion": bi("Data support", "数据支撑有效性"), "max_score": 10, "evidence": bi("Six typed ingestion channels, lineage receipts and three hashed datasets", "六类专业数据入口、血缘回执与三套哈希数据集"), "href": "/data-ingestion", "evidence_ids": ["6-channels", evidence_digest[:16]]},
             {"id": "model-performance", "category": bi("Practicality", "实用性"), "criterion": bi("Model and algorithm performance", "模型/算法性能"), "max_score": 10, "evidence": bi(f"{passed_cases}/{total_cases} benchmark cases plus model-route transparency", f"{passed_cases}/{total_cases} 条评测通过，并公开模型路由状态"), "href": "#evaluation-suites", "evidence_ids": ["30/30", "12/12", "15/15"]},
-            {"id": "report-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Design report", "设计报告规范性"), "max_score": 10, "evidence": bi("V5.0 architecture, implementation, validation and limitations are version-aligned", "V5.0 架构、实施、验证和局限采用同一版本口径"), "href": "/architecture", "evidence_ids": ["V5.0-report"]},
+            {"id": "report-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Design report", "设计报告规范性"), "max_score": 10, "evidence": bi(f"{PRODUCT_VERSION} architecture, implementation, validation and limitations are version-aligned", f"{PRODUCT_VERSION} 架构、实施、验证和局限采用同一版本口径"), "href": "/architecture", "evidence_ids": [f"{PRODUCT_VERSION}-report"]},
             {"id": "scenario-fit", "category": bi("Completeness", "方案完整性"), "criterion": bi("Scenario fit", "场景适配性"), "max_score": 10, "evidence": bi("Overseas transport lifecycle, localization and controlled execution", "海外交通全生命周期、属地化与受控执行"), "href": "#golden-thread", "evidence_ids": ["MY-RAIL-A"]},
             {"id": "demo-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Demo and reproducibility", "演示/录屏/开源材料质量"), "max_score": 10, "evidence": bi("Public deployment, runnable APIs, CI runners and downloadable JSON evidence", "公网部署、可运行 API、CI 脚本与可下载 JSON 证据"), "href": "/backend/competition/evaluation?include_cases=true", "evidence_ids": [CI_EVIDENCE_RUN, evidence_digest[:16]]},
             {"id": "scalability", "category": bi("Completeness", "方案完整性"), "criterion": bi("Scalability", "可扩展性"), "max_score": 10, "evidence": bi("Country packs, domain agents and six twin interfaces are independently extensible", "国家包、领域智能体与六类孪生接口均可独立扩展"), "href": "/platform", "evidence_ids": ["24-domains", "6-interfaces"]},
