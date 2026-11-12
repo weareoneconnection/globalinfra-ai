@@ -6,13 +6,14 @@
 
 GlobalInfra AI V6.0 is an open-source operational digital-twin and governed-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The competition release adds a six-channel ingestion plane, 30 governed agents, an isolated judge sandbox with five distinct approval/execution/verification/closure identities, and commit-bound signed evaluation evidence. Missing, unsigned or mismatched evidence is displayed as `UNVERIFIED`; unavailable real-model blind evaluation is displayed as `NOT_RUN`.
 
-- Reference deployment target (verify its commit and evidence status before judging): https://globalinfra-ai-production.up.railway.app/
-- Competition evidence center: https://globalinfra-ai-production.up.railway.app/competition
-- Fail-closed evidence API: https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=en
+- Isolated V6 competition demo: https://globalinfra-v6-demo-competition-demo.up.railway.app/
+- Competition evidence center: https://globalinfra-v6-demo-competition-demo.up.railway.app/competition
+- Fail-closed evidence API: https://globalinfra-v6-demo-competition-demo.up.railway.app/backend/competition/submission-evidence?lang=en
 - License: [Apache License 2.0](LICENSE)
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 > A URL alone is not release proof. Treat the deployment as V6 only when the evidence API reports `VERIFIED_PASSED` for the same deployed commit.
+> The public `competition-demo` is deliberately non-production: deterministic mock AI, demo auth, ephemeral SQLite and no mounted signed release envelope. It demonstrates the governed workflow but must remain `UNVERIFIED` until the protected signing pipeline and production dependencies are supplied. The previous `globalinfra-ai-production` service remains on V5.1 and is not the V6 judging target.
 
 ## What is runnable in V6.0
 

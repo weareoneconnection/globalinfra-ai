@@ -6,13 +6,14 @@
 
 GlobalInfra AI V6.0 是一个面向海外交通基础设施项目的开源运营数字孪生与受治理执行平台。它把工程全生命周期和 24 个专业域连接到项目控制、文档、BIM/GIS、遥测与证据化决策。参赛版提供六类数据接入、30 个受治理智能体、按评委隔离且采用不同审批/执行/核验身份的七步沙箱，以及与 commit 绑定的签名评测证据。缺失、未签名或版本不一致统一显示 `UNVERIFIED`；尚未具备真实盲测条件时显示 `NOT_RUN`。
 
-- 参考部署目标（评审前须核对其 commit 与证据状态）：https://globalinfra-ai-production.up.railway.app/
-- 参赛证据中心：https://globalinfra-ai-production.up.railway.app/competition
-- 失败关闭证据 API：https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=zh
+- 隔离的 V6 竞赛演示环境：https://globalinfra-v6-demo-competition-demo.up.railway.app/
+- 参赛证据中心：https://globalinfra-v6-demo-competition-demo.up.railway.app/competition
+- 失败关闭证据 API：https://globalinfra-v6-demo-competition-demo.up.railway.app/backend/competition/submission-evidence?lang=zh
 - 开源许可证：[Apache License 2.0](LICENSE)
 
 > 范围说明：本仓库是一个全新的独立代码库。它不依赖、不导入、不调用、也不暴露 TheOne 或任何 TheOne 品牌的运行时。
 > 仅有公网 URL 不构成发布证明；只有证据 API 对同一部署 commit 返回 `VERIFIED_PASSED` 时，才可将该环境称为 V6 已验证部署。
+> 公网 `competition-demo` 明确是非生产演示：确定性 mock AI、演示身份模式、临时 SQLite，且未挂载签名 release envelope。它用于展示受治理闭环，在受保护签名流水线和生产依赖补齐前必须保持 `UNVERIFIED`。原 `globalinfra-ai-production` 服务仍运行 V5.1，不是本次 V6 评审入口。
 
 ## V6.0 中可运行的能力
 
