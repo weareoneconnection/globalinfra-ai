@@ -8,20 +8,20 @@ Overseas transport projects operate across languages, contracts, standards, loca
 ## 0:30-0:55 - Product
 GlobalInfra AI turns field issues and owner correspondence into evidence-backed, governed actions.
 
-## 0:55-1:15 - Architecture
-Show Command Center and explain Country Pack + Domain Pack + regional data-plane concept.
+## 0:55-1:15 - Verifiable setup
+Open `/competition`, create a judge-isolated synthetic session and point out its TTL, session ID and five distinct role identities.
 
 ## 1:15-3:35 - Main live workflow
-Open `CASE-2026-0182`, run AI analysis, show specialist agents, evidence chain, action plan and approval gate. Open Approval Center and approve. Return to the case to show verification PASS.
+Run the seven explicit steps: create, analyze, project-manager approval, HSE countersignature, execution, independent verification and closure. At each governed step, show the actor, content digest and signed receipt. End on the complete evidence chain and `DRAFT_ONLY_NOT_SENT` status.
 
 ## 3:35-4:10 - Technical differentiation
 Show Knowledge Fabric, Evidence Graph, policy-constrained agents and independent verification.
 
-## 4:10-4:35 - Local workforce integration
-Open Training and show English / Bahasa Melayu / Chinese HSE localization.
+## 4:10-4:35 - Tamper and separation-of-duties proof
+Explain that role tickets cannot cross sessions, the five actors cannot be reused, and changed inputs, artifacts or receipts prevent verification/closure. Use the automated tests as proof; do not alter the live session into a staged pass.
 
-## 4:35-5:00 - Global scale
-Show Architecture page: Country Packs, Domain Packs, regional data planes and project edge.
+## 4:35-5:00 - Evidence and scale
+Show the signed-release status and evaluation artifacts, then close on Country Packs, Domain Packs and regional data planes. If the artifact is unsigned or commit-mismatched, leave `UNVERIFIED` visible and explain why.
 
 ## Optional add-on - full-chain English/Chinese switching
 Change the preferred language in the browser settings (or use the language switch button in the top bar) and refresh any page to show the UI copy, case data, agent names and domain model switching together, with no change to the URL path.

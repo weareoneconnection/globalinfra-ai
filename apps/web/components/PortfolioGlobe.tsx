@@ -132,7 +132,7 @@ export function PortfolioGlobe({projects,labels}:{projects:GlobeProject[];labels
           key={project.id}
         ><i/><span>{project.country_code}</span></button>)}
       </div>
-      <div className="map-coordinates" aria-hidden="true"><span>03°08&apos;N</span><i/><span>LIVE GEOINT</span><i/><span>101°41&apos;E</span></div>
+      <div className="map-coordinates" aria-hidden="true"><span>03°08&apos;N</span><i/><span>SYNTHETIC GEO CONTEXT</span><i/><span>101°41&apos;E</span></div>
       <div className="map-status"><i className="live-dot"/>{labels.live}<span>{projects.length} {labels.projectsOnline}</span></div>
     </div>
     {selected?<aside className="globe-project-detail" aria-live="polite">

@@ -20,7 +20,7 @@ from .models import (Project, TwinConversionJob, TwinCopilotRun, TwinEvent,
                      TwinModelVersion, TwinObject, TwinProfile, TwinScheduleLink,
                      TwinSensor, TwinSource, TwinTelemetryReading, utc_now)
 from .twin_demo import seed_synthetic_twin_sources
-from .security import Principal, require_project, require_roles
+from .security import Principal, get_principal, require_project, require_roles
 from .ingestion import receipt_payload, record_ingestion_receipt
 
 router = APIRouter(prefix="/twin", tags=["phase-8-operational-twin"])
@@ -41,7 +41,8 @@ def _version(row: TwinModelVersion) -> dict:
 
 
 @router.get("/model-versions")
-def model_versions(project_id: int, db: Session = Depends(get_db)):
+def model_versions(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    require_project(principal, project_id, db)
     _project(db, project_id)
     rows = db.scalars(select(TwinModelVersion).where(TwinModelVersion.project_id == project_id).order_by(TwinModelVersion.created_at.desc())).all()
     jobs = db.scalars(select(TwinConversionJob).where(TwinConversionJob.project_id == project_id).order_by(TwinConversionJob.started_at.desc()).limit(10)).all()
@@ -57,7 +58,7 @@ class ConversionIn(BaseModel):
 
 @router.post("/conversions", status_code=201)
 def convert_model(payload: ConversionIn, principal: Principal = Depends(require_roles("engineer", "project_manager", "organization_admin")), db: Session = Depends(get_db)):
-    require_project(principal, payload.project_id)
+    require_project(principal, payload.project_id, db)
     project = _project(db, payload.project_id)
     if not set(payload.output_formats).issubset({"GLTF", "3D_TILES", "GEOJSON"}):
         raise HTTPException(422, "Unsupported output format")
@@ -86,7 +87,8 @@ def convert_model(payload: ConversionIn, principal: Principal = Depends(require_
 
 
 @router.get("/model-diff")
-def model_diff(project_id: int, db: Session = Depends(get_db)):
+def model_diff(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    require_project(principal, project_id, db)
     rows = db.scalars(select(TwinModelVersion).where(TwinModelVersion.project_id == project_id).order_by(TwinModelVersion.created_at.desc()).limit(2)).all()
     if not rows:
         raise HTTPException(404, "No model versions")
@@ -109,7 +111,7 @@ class ProjectGeneratorIn(BaseModel):
 def generate_project(payload: ProjectGeneratorIn, principal: Principal = Depends(require_roles("project_manager", "organization_admin")), db: Session = Depends(get_db)):
     if db.scalar(select(Project.id).where(Project.code == payload.code)):
         raise HTTPException(409, "Project code already exists")
-    project = Project(code=payload.code, name=bi(payload.name, payload.name), country_code=payload.country_code.upper(), country_name=bi(payload.country_code.upper(), payload.country_code.upper()), domain=bi(payload.domain, payload.domain), region="GLOBAL", status="ACTIVE", risk_level="MEDIUM", languages=["English", "中文"])
+    project = Project(organization_id=principal.organization_id, code=payload.code, name=bi(payload.name, payload.name), country_code=payload.country_code.upper(), country_name=bi(payload.country_code.upper(), payload.country_code.upper()), domain=bi(payload.domain, payload.domain), region="GLOBAL", status="ACTIVE", risk_level="MEDIUM", languages=["English", "中文"])
     db.add(project); db.flush()
     slug = payload.code.lower()
     version = utc_now().strftime("%Y.%m-A")
@@ -153,7 +155,7 @@ class TelemetryIn(BaseModel):
 
 @router.post("/telemetry/ingest", status_code=202)
 def ingest_telemetry(payload: TelemetryIn, principal: Principal = Depends(require_roles("integration_service", "engineer", "field_user")), db: Session = Depends(get_db)):
-    require_project(principal, payload.project_id)
+    require_project(principal, payload.project_id, db)
     sensor = db.get(TwinSensor, payload.sensor_id)
     if not sensor:
         raise HTTPException(404, "Sensor not found")
@@ -181,13 +183,15 @@ def ingest_telemetry(payload: TelemetryIn, principal: Principal = Depends(requir
 
 
 @router.get("/telemetry/history")
-def telemetry_history(project_id: int, limit: int = Query(default=60, ge=1, le=500), db: Session = Depends(get_db)):
+def telemetry_history(project_id: int, limit: int = Query(default=60, ge=1, le=500), principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    require_project(principal, project_id, db)
     rows = db.scalars(select(TwinTelemetryReading).where(TwinTelemetryReading.project_id == project_id).order_by(TwinTelemetryReading.sampled_at.desc()).limit(limit)).all()
     return [{"id": row.id, "sensor_id": row.sensor_id, "twin_id": row.twin_id, "value": row.value, "unit": row.unit, "quality": row.quality, "sampled_at": row.sampled_at.isoformat()} for row in rows]
 
 
 @router.get("/telemetry/live/{project_id}")
-async def live_telemetry(project_id: int, events: int = Query(default=60, ge=1, le=300), db: Session = Depends(get_db)):
+async def live_telemetry(project_id: int, events: int = Query(default=60, ge=1, le=300), principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    require_project(principal, project_id, db)
     ids = list(db.scalars(select(TwinObject.id).where(TwinObject.project_id == project_id)))
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids)))) if ids else []
     if not sensors:
@@ -208,7 +212,7 @@ class CopilotIn(BaseModel):
 
 @router.post("/copilot/query")
 def twin_copilot(payload: CopilotIn, principal: Principal = Depends(require_roles("viewer", "engineer", "project_manager")), db: Session = Depends(get_db)):
-    require_project(principal, payload.project_id)
+    require_project(principal, payload.project_id, db)
     project = _project(db, payload.project_id)
     objects = list(db.scalars(select(TwinObject).where(TwinObject.project_id == project.id).order_by(TwinObject.health_score)))
     events = list(db.scalars(select(TwinEvent).where(TwinEvent.twin_id.in_([o.id for o in objects])).order_by(TwinEvent.occurred_at.desc()))) if objects else []
@@ -231,7 +235,8 @@ def twin_copilot(payload: CopilotIn, principal: Principal = Depends(require_role
 
 
 @router.get("/showcase/{project_id}")
-def showcase(project_id: int, db: Session = Depends(get_db)):
+def showcase(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    require_project(principal, project_id, db)
     project = _project(db, project_id)
     return {"project": {"id":project.id, "code":project.code, "name":project.name}, "duration_seconds":180, "steps":[
         {"id":"8.1", "title":"Real 3D", "seconds":28, "action":"Inspect GLTF object and its stable Twin ID"},

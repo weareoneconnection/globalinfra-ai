@@ -32,7 +32,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
 DATASET = API / "evals" / "agent_org.jsonl"
-GATES = {"team_accuracy": 100.0, "escalation_accuracy": 100.0, "plan_traceability": 100.0, "grounded_findings": 100.0}
+GATE_THRESHOLDS = {"team_accuracy": 100.0, "escalation_accuracy": 100.0, "plan_traceability": 100.0, "grounded_findings": 100.0}
 
 
 def main() -> int:
@@ -67,9 +67,11 @@ def main() -> int:
         "grounded_findings": round(100 * sum(r["grounded"] for r in results) / n, 1),
         "avg_team_size": round(sum(len(r["team"]) for r in results) / n, 2),
     }
-    passed = all(metrics[k] >= v for k, v in GATES.items())
+    gates = {key: metrics[key] >= threshold for key, threshold in GATE_THRESHOLDS.items()}
+    passed = all(gates.values())
     print(json.dumps({"suite": "AGENT_ORGANIZATION", "total_cases": n, "status": "PASSED" if passed else "FAILED",
-                      "metrics": metrics, "gates": GATES, "cases": results}, ensure_ascii=False, indent=2))
+                      "metrics": metrics, "thresholds": GATE_THRESHOLDS,
+                      "gates": gates, "cases": results}, ensure_ascii=False, indent=2))
     return 0 if passed else 1
 
 

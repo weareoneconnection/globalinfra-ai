@@ -3,13 +3,22 @@ import hashlib
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from sqlalchemy import func, select
+
+from app.database import SessionLocal
+from app.models import FieldMediaGrant
+
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32 + uuid4().bytes
 PNG = b"\x89PNG\r\n\x1a\n" + uuid4().bytes
 M4A = b"\x00\x00\x00\x20ftypM4A " + uuid4().bytes
 
 
-def _upload(client, name, content, declared="application/octet-stream"):
-    return client.post("/field/media", files={"file": (name, content, declared)})
+def _upload(client, name, content, declared="application/octet-stream", project_id=1):
+    return client.post(
+        "/field/media",
+        data={"project_id": str(project_id)},
+        files={"file": (name, content, declared)},
+    )
 
 
 def test_upload_detects_type_from_bytes_and_dedupes(client):
@@ -50,3 +59,24 @@ def test_observation_may_only_reference_uploaded_media(client):
     assert created.status_code == 201 and created.json()["sync_status"] == "SYNCED"
     report = next(r for r in client.get("/field/reports").json() if r["id"] == created.json()["id"])
     assert report["attachments"][0]["url"] == f"/backend/field/media/{uploaded['sha256']}"
+
+
+def test_same_content_gets_independent_project_grants(client):
+    content = b"\xff\xd8\xff\xe0" + uuid4().bytes + b"project-scoped-evidence"
+    first = _upload(client, "same.jpg", content, project_id=1)
+    second = _upload(client, "same.jpg", content, project_id=2)
+    repeated = _upload(client, "same.jpg", content, project_id=2)
+
+    assert first.status_code == second.status_code == repeated.status_code == 201
+    assert first.json()["created"] is True
+    assert second.json()["created"] is True
+    assert repeated.json()["created"] is False
+    assert first.json()["sha256"] == second.json()["sha256"]
+
+    with SessionLocal() as db:
+        grants = db.scalar(
+            select(func.count(FieldMediaGrant.id)).where(
+                FieldMediaGrant.sha256 == first.json()["sha256"]
+            )
+        )
+    assert grants == 2

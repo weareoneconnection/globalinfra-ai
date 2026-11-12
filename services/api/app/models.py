@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -10,6 +10,7 @@ def utc_now() -> datetime:
 class Project(Base):
     __tablename__ = "projects"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
     code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[dict] = mapped_column(JSON)
     country_code: Mapped[str] = mapped_column(String(8))
@@ -25,6 +26,7 @@ class Project(Base):
 class Case(Base):
     __tablename__ = "cases"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     title: Mapped[dict] = mapped_column(JSON)
     description: Mapped[dict] = mapped_column(JSON)
@@ -96,9 +98,33 @@ class FieldMedia(Base):
     __tablename__ = "field_media"
     sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
     organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     media_type: Mapped[str] = mapped_column(String(80))
     size: Mapped[int] = mapped_column(Integer)
     content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class FieldMediaGrant(Base):
+    """Tenant/project authorization for globally content-addressed media.
+
+    The blob can be deduplicated by SHA-256 without making its first uploader
+    the global owner. Access is always decided by this explicit grant.
+    """
+    __tablename__ = "field_media_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "sha256", "organization_id", "project_id",
+            name="uq_field_media_grant_scope",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sha256: Mapped[str] = mapped_column(ForeignKey("field_media.sha256"), index=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     uploaded_by: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
@@ -117,6 +143,20 @@ class CaseInput(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+
+class CompetitionSession(Base):
+    """Isolated, resettable competition sandbox bound to one synthetic case."""
+    __tablename__ = "competition_sessions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id"), unique=True, index=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ACTIVE", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    reset_count: Mapped[int] = mapped_column(Integer, default=0)
+    snapshot_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class Approval(Base):
     __tablename__ = "approvals"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -125,9 +165,27 @@ class Approval(Base):
     approver_role: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="PENDING")
     risk: Mapped[str] = mapped_column(String(20), default="HIGH")
-    action_id: Mapped[str | None] = mapped_column(ForeignKey("actions.id"), nullable=True, index=True)
+    # Break the intentional Approval <-> Action metadata cycle for ordered DDL
+    # generation. The persisted constraint already has this name (migration
+    # 0004); use_alter changes creation order, not the relational contract.
+    action_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "actions.id",
+            name="fk_approvals_action_id",
+            use_alter=True,
+        ),
+        nullable=True,
+        index=True,
+    )
+    sandbox_session_id: Mapped[str | None] = mapped_column(ForeignKey("competition_sessions.id"), nullable=True, index=True)
+    required_role: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    policy_version: Mapped[str] = mapped_column(String(64), default="legacy.v5", index=True)
     decided_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    decided_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decision_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    decision_key_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
@@ -143,6 +201,14 @@ class Action(Base):
     input_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    policy_version: Mapped[str] = mapped_column(String(64), default="legacy.v5", index=True)
+    proposed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    proposal_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    closed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closure_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    closure_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    closure_key_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -168,6 +234,8 @@ class ExecutionReceipt(Base):
     action_id: Mapped[str] = mapped_column(ForeignKey("actions.id"), unique=True, index=True)
     approval_id: Mapped[int] = mapped_column(ForeignKey("approvals.id"), index=True)
     executor: Mapped[str] = mapped_column(String(120))
+    executor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    policy_version: Mapped[str] = mapped_column(String(64), default="legacy.v5", index=True)
     action_type: Mapped[str] = mapped_column(String(80))
     started_at: Mapped[datetime] = mapped_column(DateTime)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -177,6 +245,9 @@ class ExecutionReceipt(Base):
     output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    receipt_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    receipt_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    key_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
 class VerificationReceipt(Base):
@@ -187,12 +258,18 @@ class VerificationReceipt(Base):
     action_id: Mapped[str] = mapped_column(ForeignKey("actions.id"), unique=True, index=True)
     execution_receipt_id: Mapped[str] = mapped_column(ForeignKey("execution_receipts.id"), unique=True, index=True)
     approval_id: Mapped[int] = mapped_column(ForeignKey("approvals.id"), index=True)
+    verified_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    verifier_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    policy_version: Mapped[str] = mapped_column(String(64), default="legacy.v5", index=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
     findings: Mapped[list] = mapped_column(JSON, default=list)
     checks: Mapped[dict] = mapped_column(JSON, default=dict)
     evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
     artifact_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     artifact_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verification_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verification_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    key_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     verified_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
@@ -256,6 +333,9 @@ class CountryPack(Base):
     source_registry: Mapped[list] = mapped_column(JSON, default=list)
     disclaimer: Mapped[dict] = mapped_column(JSON)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    review_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    source_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 class TrainingModule(Base):
     __tablename__ = "training_modules"
@@ -278,6 +358,10 @@ class IntakeSubmission(Base):
     document matches the original submission."""
     __tablename__ = "intake_submissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     # Reference to the original input, not the input itself: "text:inline" for
     # a pasted notice, or the uploaded filename for a document.
     raw_input_ref: Mapped[str] = mapped_column(String(255))
@@ -296,6 +380,10 @@ class SourceDocument(Base):
     """
     __tablename__ = "source_documents"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
     intake_submission_id: Mapped[int] = mapped_column(ForeignKey("intake_submissions.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     file_type: Mapped[str] = mapped_column(String(16))
@@ -453,6 +541,27 @@ class AIQualityRun(Base):
     metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     dataset_version: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PilotMeasurement(Base):
+    """Evidence-linked baseline/assisted measure for an ROI shadow pilot."""
+    __tablename__ = "pilot_measurements"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    metric_name: Mapped[str] = mapped_column(String(80), index=True)
+    direction: Mapped[str] = mapped_column(String(16))
+    baseline_value: Mapped[float] = mapped_column(Float)
+    assisted_value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(32))
+    sample_size: Mapped[int] = mapped_column(Integer)
+    evidence_ref: Mapped[str] = mapped_column(String(255))
+    evidence_digest: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="RECORDED_UNVERIFIED", index=True)
+    recorded_by: Mapped[str] = mapped_column(String(120))
+    verified_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 # --- V2.0: Full-lifecycle Digital Twin --------------------------------------
 

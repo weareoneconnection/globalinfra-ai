@@ -12,10 +12,32 @@ from ..database import get_db
 from ..i18n import get_lang, localize
 from ..llm import LLMError
 from ..models import AgentTrace, Approval, Case, CaseInput, ExecutionReceipt, utc_now
-from ..security import Principal, require_roles
+from ..security import Principal, get_principal, require_project, require_roles
 from .cards import CARDS, GOVERNANCE_AGENTS
 
 router = APIRouter(tags=["agent-organization"])
+
+
+def _case_scope(principal: Principal) -> list:
+    scope = []
+    if "platform_admin" not in principal.roles:
+        scope.append(Case.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        scope.append(Case.project_id.in_(principal.project_ids))
+    return scope
+
+
+def _require_case_scope(db: Session, principal: Principal, case_id: str) -> Case:
+    case = db.get(Case, case_id)
+    if case is None:
+        raise HTTPException(404, "Case not found")
+    if "platform_admin" not in principal.roles and case.organization_id != principal.organization_id:
+        raise HTTPException(404, "Case not found")
+    if case.project_id is not None:
+        require_project(principal, case.project_id, db)
+    elif not principal.has_org_wide_project_access():
+        raise HTTPException(404, "Case not found")
+    return case
 
 
 @router.get("/agents/cards")
@@ -34,9 +56,8 @@ def _final_findings(traces: list[AgentTrace]) -> dict[str, AgentTrace]:
 
 
 @router.get("/cases/{case_id}/agent-run")
-def case_agent_run(case_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    if db.get(Case, case_id) is None:
-        raise HTTPException(404, "Case not found")
+def case_agent_run(case_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    _require_case_scope(db, principal, case_id)
     latest = db.scalar(select(AgentTrace.run_id).where(AgentTrace.case_id == case_id, AgentTrace.kind == "team").order_by(AgentTrace.id.desc()))
     traces = list(db.scalars(select(AgentTrace).where(AgentTrace.case_id == case_id, AgentTrace.run_id == latest).order_by(AgentTrace.id))) if latest else []
     by_kind = {t.kind: t for t in traces if t.kind != "specialist"}
@@ -81,6 +102,7 @@ async def answer_case_input(
     db: Session = Depends(get_db), lang: str = Depends(get_lang),
 ):
     """Record a human answer to an agent question, then re-run the analysis with it."""
+    _require_case_scope(db, principal, case_id)
     row = db.get(CaseInput, payload.input_id)
     if row is None or row.case_id != case_id:
         raise HTTPException(404, "Question not found for this case")
@@ -98,10 +120,13 @@ async def answer_case_input(
 
 
 @router.get("/agents/scorecards")
-def agent_scorecards(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def agent_scorecards(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     stats = defaultdict(lambda: {"runs": 0, "supported": 0, "gap": 0, "needs_input": 0, "llm": 0, "duration": 0, "cases": set()})
     latest_runs = {}
-    for trace in db.scalars(select(AgentTrace).where(AgentTrace.kind == "team").order_by(AgentTrace.id)):
+    team_stmt = select(AgentTrace).join(Case, AgentTrace.case_id == Case.id).where(
+        AgentTrace.kind == "team", *_case_scope(principal)
+    ).order_by(AgentTrace.id)
+    for trace in db.scalars(team_stmt):
         latest_runs[trace.case_id] = trace.run_id  # one (the latest) run per case
     for trace in db.scalars(select(AgentTrace).where(AgentTrace.kind == "specialist", AgentTrace.round == 1,
                                                       AgentTrace.run_id.in_(list(latest_runs.values()) or [""]))):
@@ -111,7 +136,11 @@ def agent_scorecards(db: Session = Depends(get_db), lang: str = Depends(get_lang
         s["llm"] += trace.method == "llm"
         s["duration"] += trace.duration_ms
         s["cases"].add(trace.case_id)
-    rejected = {row.case_id for row in db.scalars(select(Approval).where(Approval.status == "REJECTED"))}
+    rejected = {row.case_id for row in db.scalars(
+        select(Approval).join(Case, Approval.case_id == Case.id).where(
+            Approval.status == "REJECTED", *_case_scope(principal)
+        )
+    )}
     cards = []
     for agent_id, card in CARDS.items():
         if agent_id in GOVERNANCE_AGENTS:
@@ -132,8 +161,12 @@ def agent_scorecards(db: Session = Depends(get_db), lang: str = Depends(get_lang
 
 
 @router.get("/agents/runs")
-def agent_runs(limit: int = Query(default=20, ge=1, le=100), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    teams = list(db.scalars(select(AgentTrace).where(AgentTrace.kind == "team").order_by(AgentTrace.id.desc()).limit(limit)))
+def agent_runs(limit: int = Query(default=20, ge=1, le=100), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    teams = list(db.scalars(
+        select(AgentTrace).join(Case, AgentTrace.case_id == Case.id).where(
+            AgentTrace.kind == "team", *_case_scope(principal)
+        ).order_by(AgentTrace.id.desc()).limit(limit)
+    ))
     verifiers = {t.run_id: t for t in db.scalars(select(AgentTrace).where(AgentTrace.kind == "verifier", AgentTrace.run_id.in_([t.run_id for t in teams])))}
     rows = []
     for trace in teams:

@@ -16,3 +16,24 @@ dist/
 *.tfstate
 *.tfstate.*
 .terraform.tfplan
+
+# Local submission artifacts.
+.claude/
+*.png
+submission/**/*.md
+submission/**/*.srt
+submission/**/*.zip
+submission/**/*.docx
+submission/**/*.pdf
+submission/final/*/
+*报名表*.pdf
+
+# Keep the production configuration template trackable.
+!.env.production.example
+
+# V6 evidence protocol is source-controlled; generated/raw evidence remains
+# outside the repository or in CI artifacts.
+!submission/V6_EVIDENCE/
+!submission/V6_EVIDENCE/README.md
+!submission/final/DO_NOT_SUBMIT_V5.md
+services/api/evidence/*.json

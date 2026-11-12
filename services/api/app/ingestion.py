@@ -129,11 +129,8 @@ def record_ingestion_receipt(
 
 def _scoped_receipts(principal: Principal):
     stmt = select(IngestionReceipt).where(IngestionReceipt.organization_id == principal.organization_id)
-    if principal.project_ids:
-        stmt = stmt.where(
-            (IngestionReceipt.project_id.is_(None)) |
-            (IngestionReceipt.project_id.in_(principal.project_ids))
-        )
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(IngestionReceipt.project_id.in_(principal.project_ids))
     return stmt
 
 
@@ -159,7 +156,7 @@ def ingestion_receipts(
     if channel is not None and channel not in CHANNELS:
         raise HTTPException(422, "Unsupported ingestion channel")
     if project_id is not None:
-        require_project(principal, project_id)
+        require_project(principal, project_id, db)
     stmt = _scoped_receipts(principal)
     if channel:
         stmt = stmt.where(IngestionReceipt.channel == channel)
@@ -231,6 +228,7 @@ def ingest_project_master(
         raise HTTPException(409, "Project code already exists")
     country_code = payload.country_code.upper()
     row = Project(
+        organization_id=principal.organization_id,
         code=code, name=bi(payload.name), country_code=country_code,
         country_name=bi(payload.country_name or country_code), domain=bi(payload.domain),
         region=payload.region.upper(), status="ACTIVE", risk_level=payload.risk_level,

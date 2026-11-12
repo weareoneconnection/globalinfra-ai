@@ -32,7 +32,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from .database import get_db
@@ -235,14 +235,32 @@ async def _plan(payload: AssistantChatRequest, lang: str, project_codes: dict[st
     return plan, "llm"
 
 
-def _search(db: Session, *queries: str) -> list[tuple[float, KnowledgeDocument]]:
+def _search(
+    db: Session,
+    *queries: str,
+    principal: Principal,
+    project_id: int | None = None,
+) -> list[tuple[float, KnowledgeDocument]]:
     """Search with every query and keep each document's best score.
 
     The user's own words are always one of the queries, so a model-rewritten
     query (e.g. translated, or phrased differently from the corpus) can add
     hits but never lose the ones the original wording finds.
     """
-    docs = [doc for doc in db.scalars(select(KnowledgeDocument)) if doc.status == "CURRENT"]
+    project_scope = select(Project.id)
+    if "platform_admin" not in principal.roles:
+        project_scope = project_scope.where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        project_scope = project_scope.where(Project.id.in_(principal.project_ids))
+    if project_id is not None:
+        project_scope = project_scope.where(Project.id == project_id)
+    visible = or_(
+        and_(KnowledgeDocument.project_id.is_(None), KnowledgeDocument.confidentiality == "PUBLIC"),
+        KnowledgeDocument.project_id.in_(project_scope),
+    )
+    docs = list(db.scalars(select(KnowledgeDocument).where(
+        KnowledgeDocument.status == "CURRENT", visible
+    )))
     index = KnowledgeIndex(docs)
     best: dict[int, tuple[float, KnowledgeDocument]] = {}
     for query in dict.fromkeys(q for q in queries if q and q.strip()):
@@ -299,10 +317,20 @@ async def chat(
 ):
     reset_routing_trace()
     if payload.project_id is not None:
-        require_project(principal, payload.project_id)
-    project_codes = {code.upper(): pid for pid, code in db.execute(select(Project.id, Project.code))}
+        require_project(principal, payload.project_id, db)
+    project_stmt = select(Project.id, Project.code)
+    if "platform_admin" not in principal.roles:
+        project_stmt = project_stmt.where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        project_stmt = project_stmt.where(Project.id.in_(principal.project_ids))
+    project_codes = {code.upper(): pid for pid, code in db.execute(project_stmt)}
     mentioned = {m.upper() for m in _CASE_ID_RE.findall(" ".join([payload.message, *(t.content for t in payload.history)]))}
-    known_case_ids = set(db.scalars(select(Case.id).where(Case.id.in_(mentioned)))) if mentioned else set()
+    case_stmt = select(Case.id).where(Case.id.in_(mentioned))
+    if "platform_admin" not in principal.roles:
+        case_stmt = case_stmt.where(Case.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        case_stmt = case_stmt.where(Case.project_id.in_(principal.project_ids))
+    known_case_ids = set(db.scalars(case_stmt)) if mentioned else set()
 
     if payload.tool:
         plan = plan_rules(payload.message, project_codes, known_case_ids)
@@ -311,14 +339,18 @@ async def chat(
     else:
         plan, method = await _plan(payload, lang, project_codes, known_case_ids)
     if plan["project_id"] is not None:
-        require_project(principal, plan["project_id"])
+        require_project(principal, plan["project_id"], db)
     result = {
         "tool": plan["tool"], "method": method, "reply": plan["reply"], "case_id": plan["case_id"],
         "project_id": plan["project_id"] or payload.project_id, "query": None, "hits": None, "answer_method": None,
     }
     if plan["tool"] == "search_knowledge":
         query = plan["query"] or payload.message
-        hits = _search(db, query, payload.message)
+        hits = _search(
+            db, query, payload.message,
+            principal=principal,
+            project_id=plan["project_id"] or payload.project_id,
+        )
         answer = await _grounded_answer(payload.message, hits, lang, payload)
         result.update(
             query=query, hits=[_hit_payload(score, doc, lang) for score, doc in hits],

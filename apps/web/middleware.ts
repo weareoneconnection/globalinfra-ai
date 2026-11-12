@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { WEB_SESSION_COOKIE } from './lib/auth/constants';
+import { isPublicWebRequest } from './lib/auth/public-routes';
 
 export const SUPPORTED_LOCALES = ['en', 'zh'] as const;
 export const DEFAULT_LOCALE = 'en';
@@ -25,6 +27,25 @@ function pickLocale(acceptLanguage: string | null): string {
 // every subsequent request - and every server-side call into the API - uses
 // the same language without changing any URL.
 export function middleware(request: NextRequest) {
+  const authorization = request.headers.get('authorization');
+  const hasBearer = authorization?.toLowerCase().startsWith('bearer ') === true;
+  const hasSessionCookie = Boolean(request.cookies.get(WEB_SESSION_COOKIE)?.value);
+  const demoMode = process.env.API_AUTH_MODE === 'disabled';
+  const publicRequest = isPublicWebRequest(request.method, request.nextUrl.pathname);
+  if (!demoMode && !hasBearer && !hasSessionCookie && !publicRequest) {
+    if (request.method === 'GET' && !request.nextUrl.pathname.startsWith('/backend/')) {
+      const loginUrl = new URL('/auth/login', request.url);
+      loginUrl.searchParams.set(
+        'returnTo',
+        `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.json(
+      { detail: 'An authenticated OIDC browser session is required.' },
+      { status: 401 }
+    );
+  }
   const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   const locale = cookieLocale && (SUPPORTED_LOCALES as readonly string[]).includes(cookieLocale)
     ? cookieLocale

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from .models import AIQualityRun, Connector, Organization, Project, Case, KnowledgeDocument, TrainingModule, TwinSource
 from .i18n import bi
@@ -9,8 +9,24 @@ from .country_knowledge import seed_country_knowledge
 from .competition import seed_competition
 from .ingestion import seed_ingestion_receipts
 
+
+def _sync_project_identity_sequence(db: Session) -> None:
+    """Keep PostgreSQL identity allocation ahead of deterministic demo IDs."""
+
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+    db.execute(text("""
+        SELECT setval(
+            pg_get_serial_sequence('projects', 'id'),
+            COALESCE((SELECT MAX(id) FROM projects), 1),
+            EXISTS (SELECT 1 FROM projects)
+        )
+    """))
+    db.commit()
+
 def seed(db: Session):
     if db.scalar(select(Project.id).limit(1)) is not None:
+        _sync_project_identity_sequence(db)
         seed_twin(db)
         ensure_demo_twin_coverage(db)
         seed_phase7(db)
@@ -21,19 +37,19 @@ def seed(db: Session):
         seed_ingestion_receipts(db)
         return
     projects = [
-        Project(id=1, code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
+        Project(id=1, organization_id="globalinfra-demo", code="MY-RAIL-A", name=bi("Global Rail Project A", "全球轨道项目 A"), country_code="MY",
                 country_name=bi("Malaysia", "马来西亚"), domain=bi("Rail", "轨道交通"), region="APAC", status="ACTIVE",
                 risk_level="MEDIUM", languages=["English", "Bahasa Melayu", "中文"]),
-        Project(id=2, code="ID-HWY-B", name=bi("Trans-Nusantara Highway B", "跨努桑塔拉高速公路 B"), country_code="ID",
+        Project(id=2, organization_id="globalinfra-demo", code="ID-HWY-B", name=bi("Trans-Nusantara Highway B", "跨努桑塔拉高速公路 B"), country_code="ID",
                 country_name=bi("Indonesia", "印度尼西亚"), domain=bi("Highway", "高速公路"), region="APAC", status="ACTIVE",
                 risk_level="LOW", languages=["English", "Bahasa Indonesia"]),
-        Project(id=3, code="SA-METRO-C", name=bi("Gulf Metro Program C", "海湾地铁项目 C"), country_code="SA",
+        Project(id=3, organization_id="globalinfra-demo", code="SA-METRO-C", name=bi("Gulf Metro Program C", "海湾地铁项目 C"), country_code="SA",
                 country_name=bi("Saudi Arabia", "沙特阿拉伯"), domain=bi("Urban Rail", "城市轨道交通"), region="MEA", status="ACTIVE",
                 risk_level="HIGH", languages=["English", "العربية"]),
     ]
     db.add_all(projects)
     db.add_all([
-        Case(id="CASE-2026-0182", project_id=1,
+        Case(id="CASE-2026-0182", organization_id="globalinfra-demo", project_id=1,
              title=bi("Owner notice: access road, earthwork encroachment and structural crack",
                        "业主通知：施工便道、土方侵占及结构裂缝问题"),
              description=bi("Synthetic fixture owner notice requires a coordinated contractual and technical response within 48 hours.",
@@ -43,21 +59,21 @@ def seed(db: Session):
              detected_issues=[bi("Temporary access road damage", "施工便道损坏"),
                                bi("Earthwork encroachment", "土方侵占"),
                                bi("Structural crack", "结构裂缝")]),
-        Case(id="CASE-2026-0194", project_id=1,
+        Case(id="CASE-2026-0194", organization_id="globalinfra-demo", project_id=1,
              title=bi("Working-at-height control gap during facade access", "外立面作业高处作业管控缺口"),
              description=bi("Field observation indicates a potential temporary access and fall-protection control gap.",
                              "现场观察发现临时通道与坠落防护管控可能存在缺口。"),
              type=bi("HSE", "健康安全环保（HSE）"), risk="CRITICAL", status="NEW",
              deadline=bi("Immediate", "立即处理"), source_language=bi("Bahasa Melayu", "马来语"),
              detected_issues=[bi("Fall protection", "坠落防护"), bi("Access control", "通道管控")]),
-        Case(id="CASE-2026-0201", project_id=2,
+        Case(id="CASE-2026-0201", organization_id="globalinfra-demo", project_id=2,
              title=bi("Concrete surface defect at drainage structure", "排水结构混凝土表面缺陷"),
              description=bi("Quality observation requires classification and disposition workflow.",
                              "质量观察问题需要进行分类并走处置流程。"),
              type=bi("Quality", "质量"), risk="MEDIUM", status="NEW",
              deadline=bi("72 hours", "72 小时"), source_language=bi("Bahasa Indonesia", "印尼语"),
              detected_issues=[bi("Surface defect", "表面缺陷"), bi("Inspection record", "检验记录")]),
-        Case(id="CASE-2026-0209", project_id=3,
+        Case(id="CASE-2026-0209", organization_id="globalinfra-demo", project_id=3,
              title=bi("Subcontractor method statement requires local compliance review", "分包商施工方案需本地合规审查"),
              description=bi("Method statement requires engineering and local HSE compliance review before approval.",
                              "施工方案在批准前需完成工程与当地 HSE 合规审查。"),
@@ -115,6 +131,7 @@ def seed(db: Session):
                                  bi("Knowledge check", "知识测验")]),
     ])
     db.commit()
+    _sync_project_identity_sequence(db)
     seed_twin(db)
     ensure_demo_twin_coverage(db)
     seed_phase7(db)

@@ -8,7 +8,7 @@ from typing import Callable
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .config import settings
+from .config import VALID_AUTH_MODES, settings
 
 try:
     import jwt
@@ -18,9 +18,11 @@ except ImportError:  # pragma: no cover - only a misconfigured OIDC image.
     PyJWKClient = None
 
 EXEMPT_PATHS = {"/health", "/livez", "/readyz", "/metrics"}
+EXEMPT_PREFIXES = ("/integrations/webhooks/",)
 VALID_ROLES = {
     "platform_admin", "organization_admin", "project_manager", "engineer",
-    "field_user", "approver", "verifier", "viewer", "integration_service",
+    "hse_manager", "field_user", "approver", "verifier", "viewer",
+    "integration_service",
 }
 
 
@@ -34,8 +36,21 @@ class Principal:
     email: str | None = None
     issuer: str = "demo"
 
+    def has_org_wide_project_access(self) -> bool:
+        return bool(
+            {"platform_admin", "organization_admin"}.intersection(self.roles)
+            or self.issuer == "service-key"
+        )
+
     def can_access_project(self, project_id: int) -> bool:
-        return "platform_admin" in self.roles or not self.project_ids or project_id in self.project_ids
+        # An empty OIDC projects claim means "no project grant", not "all
+        # projects".  Only explicit organization-wide administrators and the
+        # separately authenticated server-to-server principal may fan out
+        # across an organization's projects.
+        return bool(
+            self.has_org_wide_project_access()
+            or project_id in self.project_ids
+        )
 
     def as_dict(self) -> dict:
         return {
@@ -54,7 +69,11 @@ DEMO_PRINCIPAL = Principal(
 def _service_principal() -> Principal:
     return Principal(
         subject="service:web", organization_id=settings.default_organization_id,
-        roles=frozenset({"viewer", "field_user", "engineer", "project_manager", "approver", "verifier", "integration_service"}),
+        # The SSR/BFF credential is deliberately read-only. Browser users must
+        # present their own OIDC bearer token for every business mutation;
+        # synthetic competition mutations are separately authorized by
+        # short-lived, session-bound role tickets.
+        roles=frozenset({"viewer", "integration_service"}),
         project_ids=frozenset(), display_name="GlobalInfra Web Service", issuer="service-key",
     )
 
@@ -110,9 +129,11 @@ async def api_key_gate(request: Request, call_next):
     mode = settings.auth_mode.lower().strip()
     if settings.require_api_key and mode == "disabled":
         mode = "api_key"
-    if request.url.path in EXEMPT_PATHS:
+    if request.url.path in EXEMPT_PATHS or request.url.path.startswith(EXEMPT_PREFIXES):
         request.state.principal = DEMO_PRINCIPAL
         return await call_next(request)
+    if mode not in VALID_AUTH_MODES:
+        return JSONResponse(status_code=503, content={"detail": f"Unsupported AUTH_MODE: {mode}"})
     try:
         if mode == "disabled":
             principal = DEMO_PRINCIPAL
@@ -136,8 +157,6 @@ async def api_key_gate(request: Request, call_next):
                 principal = _service_principal()
             else:
                 return JSONResponse(status_code=401, content={"detail": "Bearer token or trusted service credential required"})
-        else:
-            return JSONResponse(status_code=503, content={"detail": f"Unsupported AUTH_MODE: {mode}"})
     except Exception:
         return JSONResponse(status_code=401, content={"detail": "Invalid or expired identity token"})
     request.state.principal = principal
@@ -161,6 +180,18 @@ def require_roles(*allowed: str) -> Callable:
     return dependency
 
 
-def require_project(principal: Principal, project_id: int) -> None:
+def require_project(principal: Principal, project_id: int, db=None) -> None:
     if not principal.can_access_project(project_id):
         raise HTTPException(403, "Project is outside the current identity scope")
+    if db is not None:
+        from .models import Project
+
+        project = db.get(Project, project_id)
+        if project is None:
+            raise HTTPException(404, "Project not found")
+        if (
+            "platform_admin" not in principal.roles
+            and project.organization_id != principal.organization_id
+        ):
+            # Avoid leaking whether another tenant owns this identifier.
+            raise HTTPException(404, "Project not found")

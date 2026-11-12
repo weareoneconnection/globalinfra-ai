@@ -9,16 +9,19 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from .database import get_db
+from .config import settings
 from .i18n import bi, get_lang, localize
-from .models import CountryPack, KnowledgeDocument, Project
+from .models import CountryPack, KnowledgeDocument, Project, utc_now
 from .retrieval import KnowledgeIndex
+from .security import Principal, get_principal, require_roles
 
 router = APIRouter(tags=["country-packs", "knowledge-fabric"])
 
@@ -179,6 +182,22 @@ def _digest(content: dict, source_ref: str, version: str) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def _pack_source_digest(config: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "version": config["version"],
+                "authorities": config["authorities"],
+                "permits": config["permits"],
+                "data_policy": config["data_policy"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def seed_country_knowledge(db: Session) -> None:
     for code, config in COUNTRY_PACKS.items():
         pack = db.get(CountryPack, code)
@@ -189,6 +208,9 @@ def seed_country_knowledge(db: Session) -> None:
             data_policy=config["data_policy"], approval_policy={"external_correspondence": "project_manager", "contractual_position": "project_manager+evidence", "critical_hse_action": "human_mandatory", "legal_interpretation": "qualified_local_review"},
             source_registry=config["authorities"], disclaimer=LEGAL_DISCLAIMER,
             reviewed_at=datetime(2026, 10, 14),
+            reviewed_by="seed:synthetic-demo-not-expert",
+            review_due_at=datetime(2027, 4, 12),
+            source_digest=_pack_source_digest(config),
         )
         if pack is None:
             db.add(CountryPack(code=code, **values))
@@ -228,43 +250,134 @@ def seed_country_knowledge(db: Session) -> None:
     db.commit()
 
 
-def _pack_payload(pack: CountryPack, db: Session, include_detail: bool = False) -> dict:
-    project_count = db.scalar(select(func.count(Project.id)).where(Project.country_code == pack.code)) or 0
-    knowledge_count = db.scalar(select(func.count(KnowledgeDocument.id)).where(KnowledgeDocument.country_code == pack.code)) or 0
+def _project_scope(principal: Principal):
+    # Synthetic judge projects are an isolated proof surface and must never
+    # inflate tenant, country-pack or knowledge-fabric business statistics.
+    stmt = select(Project.id).where(Project.status != "SYNTHETIC_DEMO")
+    if "platform_admin" not in principal.roles:
+        stmt = stmt.where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(Project.id.in_(principal.project_ids))
+    return stmt
+
+
+def _knowledge_scope(principal: Principal):
+    return or_(
+        and_(
+            KnowledgeDocument.project_id.is_(None),
+            KnowledgeDocument.confidentiality == "PUBLIC",
+        ),
+        KnowledgeDocument.project_id.in_(_project_scope(principal)),
+    )
+
+
+def _pack_payload(pack: CountryPack, db: Session, principal: Principal, include_detail: bool = False) -> dict:
+    scoped_projects = _project_scope(principal).where(Project.country_code == pack.code)
+    project_count = db.scalar(select(func.count()).select_from(scoped_projects.subquery())) or 0
+    knowledge_count = db.scalar(select(func.count(KnowledgeDocument.id)).where(
+        KnowledgeDocument.country_code == pack.code, _knowledge_scope(principal)
+    )) or 0
     required = [pack.languages, pack.authorities, pack.permit_catalog, pack.compliance_topics, pack.glossary, pack.source_registry, pack.data_policy, pack.approval_policy]
+    review_expired = not pack.review_due_at or pack.review_due_at <= utc_now()
+    authenticated_review = bool(
+        pack.reviewed_by and not pack.reviewed_by.startswith("seed:")
+    )
+    release_gate = (
+        "OPEN"
+        if pack.status == "REVIEWED" and authenticated_review and not review_expired
+        else "CLOSED"
+    )
     payload = {
         "code": pack.code, "name": pack.name, "region": pack.region, "version": pack.version, "status": pack.status,
         "languages": pack.languages, "default_locale": pack.default_locale, "timezone": pack.timezone, "currency": pack.currency, "units": pack.units,
         "project_count": project_count, "knowledge_count": knowledge_count, "permit_count": len(pack.permit_catalog), "authority_count": len(pack.authorities),
-        "coverage_percent": round(sum(bool(item) for item in required) / len(required) * 100), "reviewed_at": pack.reviewed_at.isoformat(), "disclaimer": pack.disclaimer,
+        "coverage_percent": round(sum(bool(item) for item in required) / len(required) * 100), "reviewed_at": pack.reviewed_at.isoformat(),
+        "reviewed_by": pack.reviewed_by,
+        "review_due_at": pack.review_due_at.isoformat() if pack.review_due_at else None,
+        "review_expired": review_expired,
+        "source_digest": pack.source_digest,
+        "release_gate": release_gate,
+        "use_boundary": "LOCAL_PROFESSIONAL_REVIEW_REQUIRED" if release_gate != "OPEN" else "REVIEW_CURRENT",
+        "disclaimer": pack.disclaimer,
     }
     if include_detail:
-        projects = db.scalars(select(Project).where(Project.country_code == pack.code).order_by(Project.id)).all()
+        projects = db.scalars(select(Project).where(
+            Project.id.in_(scoped_projects)
+        ).order_by(Project.id)).all()
         payload.update({"supported_domains": pack.supported_domains, "authorities": pack.authorities, "permit_catalog": pack.permit_catalog, "compliance_topics": pack.compliance_topics, "glossary": pack.glossary, "data_policy": pack.data_policy, "approval_policy": pack.approval_policy, "source_registry": pack.source_registry, "projects": [{"id": p.id, "code": p.code, "name": p.name, "domain": p.domain, "status": p.status} for p in projects]})
     return payload
 
 
 @router.get("/country-packs")
-def country_packs(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def country_packs(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     rows = db.scalars(select(CountryPack).order_by(CountryPack.region, CountryPack.code)).all()
-    return localize([_pack_payload(row, db) for row in rows], lang)
+    return localize([_pack_payload(row, db, principal) for row in rows], lang)
 
 
 @router.get("/country-packs/{code}")
-def country_pack(code: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def country_pack(code: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     pack = db.get(CountryPack, code.upper())
     if not pack:
         raise HTTPException(404, "Country pack not found")
-    return localize(_pack_payload(pack, db, include_detail=True), lang)
+    return localize(_pack_payload(pack, db, principal, include_detail=True), lang)
+
+
+class CountryPackReviewIn(BaseModel):
+    source_digest: str = Field(min_length=64, max_length=64)
+    review_note: str = Field(min_length=10, max_length=1000)
+    valid_days: int = Field(default=180, ge=1, le=365)
+
+
+@router.post("/country-packs/{code}/review")
+def review_country_pack(
+    code: str,
+    payload: CountryPackReviewIn,
+    principal: Principal = Depends(require_roles("platform_admin")),
+    db: Session = Depends(get_db),
+):
+    if principal.issuer in {"demo", "service-key"}:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "AUTHENTICATED_EXPERT_REVIEW_REQUIRED",
+                "message": "Country-pack release requires a human OIDC identity.",
+            },
+        )
+    pack = db.get(CountryPack, code.upper())
+    if not pack:
+        raise HTTPException(404, "Country pack not found")
+    if payload.source_digest != pack.source_digest:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "COUNTRY_PACK_SOURCE_CHANGED",
+                "message": "Source digest changed; review the current pack before release.",
+            },
+        )
+    now = utc_now()
+    pack.status = "REVIEWED"
+    pack.reviewed_by = principal.subject
+    pack.reviewed_at = now
+    pack.review_due_at = now + timedelta(
+        days=min(payload.valid_days, settings.country_pack_review_max_age_days)
+    )
+    pack.approval_policy = {
+        **(pack.approval_policy or {}),
+        "last_review_note": payload.review_note,
+        "review_identity_issuer": principal.issuer,
+    }
+    db.commit()
+    return _pack_payload(pack, db, principal, include_detail=False)
 
 
 @router.get("/country-packs/{code}/applicability")
-def pack_applicability(code: str, stage: str | None = None, domain: str | None = None, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def pack_applicability(code: str, stage: str | None = None, domain: str | None = None, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     pack = db.get(CountryPack, code.upper())
     if not pack:
         raise HTTPException(404, "Country pack not found")
     permits = [item for item in pack.permit_catalog if not stage or stage.lower() in [value.lower() for value in item.get("stages", [])]]
-    return localize({"country_code": pack.code, "stage": stage, "domain": domain, "applicable_items": permits, "count": len(permits), "authority_review_required": True, "disclaimer": pack.disclaimer}, lang)
+    pack_status = _pack_payload(pack, db, principal)
+    return localize({"country_code": pack.code, "stage": stage, "domain": domain, "applicable_items": permits, "count": len(permits), "authority_review_required": True, "release_gate": pack_status["release_gate"], "review_due_at": pack_status["review_due_at"], "source_digest": pack.source_digest, "disclaimer": pack.disclaimer}, lang)
 
 
 def _document_payload(doc: KnowledgeDocument, score: float | None = None) -> dict:
@@ -282,8 +395,8 @@ def _document_payload(doc: KnowledgeDocument, score: float | None = None) -> dic
 
 
 @router.get("/knowledge/stats")
-def knowledge_stats(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    docs = db.scalars(select(KnowledgeDocument)).all()
+def knowledge_stats(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    docs = db.scalars(select(KnowledgeDocument).where(_knowledge_scope(principal))).all()
     countries = sorted({doc.country_code for doc in docs if doc.country_code})
     categories = Counter(str((doc.category or {}).get(lang) or (doc.category or {}).get("en") or doc.category) for doc in docs)
     current = sum(doc.status == "CURRENT" for doc in docs)
@@ -295,9 +408,11 @@ def knowledge_stats(db: Session = Depends(get_db), lang: str = Depends(get_lang)
 def knowledge_search(
     q: str = Query(default="", max_length=500), country_code: str | None = None, category: str | None = None,
     stage: str | None = None, status: str = "CURRENT", limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db), lang: str = Depends(get_lang),
+    principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang),
 ):
-    docs = list(db.scalars(select(KnowledgeDocument).order_by(KnowledgeDocument.updated_at.desc())))
+    docs = list(db.scalars(select(KnowledgeDocument).where(
+        _knowledge_scope(principal)
+    ).order_by(KnowledgeDocument.updated_at.desc())))
     filtered = [doc for doc in docs if (not country_code or doc.country_code == country_code.upper()) and (not status or doc.status == status.upper()) and (not category or category.lower() in json.dumps(doc.category, ensure_ascii=False).lower()) and (not stage or stage.lower() in [item.lower() for item in (doc.lifecycle_stages or [])])]
     if q.strip():
         ranked = KnowledgeIndex(filtered).search(q, top_k=limit)
@@ -314,8 +429,10 @@ def knowledge_search(
 
 
 @router.get("/knowledge/{document_id}")
-def knowledge_document(document_id: int, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    doc = db.get(KnowledgeDocument, document_id)
+def knowledge_document(document_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    doc = db.scalar(select(KnowledgeDocument).where(
+        KnowledgeDocument.id == document_id, _knowledge_scope(principal)
+    ))
     if not doc:
         raise HTTPException(404, "Knowledge document not found")
     payload = _document_payload(doc)

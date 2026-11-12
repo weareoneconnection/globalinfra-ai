@@ -1,19 +1,20 @@
 > **Language / 语言**: [English](README.md) · 简体中文
 
-# GlobalInfra AI V5.1
+# GlobalInfra AI V6.0
 
 **全球交通基础设施智能与可信执行平台**
 
-GlobalInfra AI V5.1 是一个面向海外交通基础设施项目的开源运营数字孪生与可信执行平台。它把工程全生命周期和 24 个专业域连接到项目控制、文档、BIM/GIS、遥测与证据化决策。参赛版提供六类数据接入、30 个受治理智能体、七步人工受控执行闭环、三套共 57/57 条通过的版本化评测，以及把 10 项评审标准逐项映射到可复现证据的评委工作台。
+GlobalInfra AI V6.0 是一个面向海外交通基础设施项目的开源运营数字孪生与受治理执行平台。它把工程全生命周期和 24 个专业域连接到项目控制、文档、BIM/GIS、遥测与证据化决策。参赛版提供六类数据接入、30 个受治理智能体、按评委隔离且采用不同审批/执行/核验身份的七步沙箱，以及与 commit 绑定的签名评测证据。缺失、未签名或版本不一致统一显示 `UNVERIFIED`；尚未具备真实盲测条件时显示 `NOT_RUN`。
 
-- 公网部署：https://globalinfra-ai-production.up.railway.app/
+- 参考部署目标（评审前须核对其 commit 与证据状态）：https://globalinfra-ai-production.up.railway.app/
 - 参赛证据中心：https://globalinfra-ai-production.up.railway.app/competition
-- 可复现证据 API：https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=zh
+- 失败关闭证据 API：https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=zh
 - 开源许可证：[Apache License 2.0](LICENSE)
 
 > 范围说明：本仓库是一个全新的独立代码库。它不依赖、不导入、不调用、也不暴露 TheOne 或任何 TheOne 品牌的运行时。
+> 仅有公网 URL 不构成发布证明；只有证据 API 对同一部署 commit 返回 `VERIFIED_PASSED` 时，才可将该环境称为 V6 已验证部署。
 
-## V5.1 中可运行的能力
+## V6.0 中可运行的能力
 
 - 智能助手对话入口（默认首页）
 - 全局指挥中心仪表盘
@@ -45,6 +46,10 @@ GlobalInfra AI V5.1 是一个面向海外交通基础设施项目的开源运营
 cp .env.example .env
 docker compose up --build
 ```
+
+Compose 启动门禁默认拒绝外部数据库主机，避免本机已有 `.env` 被静默当成迁移
+目标。请使用仓库提供的本地 PostgreSQL URL；确需连接外部数据库时，必须显式
+设置 `ALLOW_EXTERNAL_COMPOSE_DATABASE=true`。
 
 打开：
 
@@ -86,7 +91,9 @@ curl http://localhost:8001/i18n/translate \
 
 响应包含不带凭据的 `model_routing.trace`，记录每次提供方/模型尝试及成功状态。`POST /intake/text` 接受相同字段；文档接入和工单重新分析通过查询参数接受这两个字段。
 
-竞赛部署中有意跳过了演示登录环节。生产部署前请接入企业级 SSO。
+公开竞赛入口有意保持免登录；租户路由在 `API_AUTH_MODE=oidc` 时使用 Web
+层的 OIDC 授权码 + PKCE 与加密 HTTP-only 会话。生产环境仍须在真实企业 IdP
+中注册客户端并完成联调，详见 `docs/RAILWAY_DEPLOYMENT.md`。
 
 ## 快速开始：本地开发
 
@@ -119,16 +126,16 @@ API_INTERNAL_URL=http://localhost:8000 npm run dev
 
 ## 竞赛演示路径
 
-1. 打开 **工单（Cases）**。
-2. 选择 `CASE-2026-0182`。
-3. 点击 **运行 AI 分析（Run AI Analysis）**。
-4. 查看专家智能体运行记录。
-5. 查看证据链与核验状态。
-6. 前往 **审批（Approvals）**，批准受管控的对外回复。
-7. 打开 **智能体组织（Agent Organization）**，展示动态专家团队组建过程。
-8. 打开 **架构（Architecture）**，追溯一个工程事件在数字主线上的完整轨迹。
+1. 打开 `/competition`，创建评委专属隔离会话。
+2. 对合成的 V-12/P47 现场事件运行有证据支撑的分析。
+3. 使用项目经理角色票据审批。
+4. 使用不同的 HSE 经理角色票据会签。
+5. 由第三名主体执行，并检查与内容摘要绑定的签名回执。
+6. 由第四名主体独立核验。
+7. 由第五名主体关闭，并检查完整证据链。
 
-种子工单数据完全是模拟且已脱敏的。
+每个会话都有 TTL 和独立的合成项目/孪生状态；角色票据不能跨会话
+重放。最终产物保持 `DRAFT_ONLY_NOT_SENT`，不会执行任何外部发送。
 
 ## 通用接入（Universal Intake，V1.3 M1 + M2 + M3 + M4 + M5）
 
@@ -179,11 +186,11 @@ V2.1 将候选决策演示升级为受管控的执行生命周期。分析阶段
 
 阶段 8 新增原生 WebGL/GLTF 孪生查看、模型版本与转换任务、一键生成六格式项目孪生、时序遥测与 SSE 实时流、4D 进度与 5D 健康/成本着色，以及带 Twin ID、事件、模型版本和时间戳引用的 Twin Copilot。能力矩阵与真实接入边界见[阶段 8：运营级数字孪生](docs/PHASE8_OPERATIONAL_TWIN.zh-CN.md)。
 
-## V5.1 参赛黄金主线与提交证据
+## V6.0 参赛黄金主线与签名证据
 
-`/competition` 把双语接入、国家与生命周期路由、国家包、知识证据、多智能体分析、数字孪生上下文、明确人工审批、受控执行和独立核验串成一条七步 AI 出海黄金主线。提交证据 API 实时计算 30 条 AI 出海评测，并关联 12 条智能体组织评测、15 条总调度评测、数据集摘要、版本化 CI 快照和部署提交。详见[阶段 9.1：参赛黄金主线与评测证据](docs/PHASE9_COMPETITION_GOLDEN_THREAD.zh-CN.md)。
+`/competition` 把双语接入、国家与生命周期路由、国家包、知识证据、多智能体分析、数字孪生上下文、明确人工审批、受控执行和独立核验串成一条七步 AI 出海黄金主线。每位评委获得全新合成会话和签名角色票据，旧一键代审批路径已退役。提交证据 API 只接受 commit 与数据集摘要均匹配部署版本的签名 CI envelope。详见 [V6 证据协议](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md)。
 
-V5.1 证据中心进一步汇总三套共 57/57 条通过的评测、可追溯的 265 项测试发布快照及三项发布门禁、六类数据与智能能力、10 项评审标准映射，以及模型路由、数据血缘、哈希和人工权限边界。评分卡仅用于定位证据，不代表自评得分。
+V6 证据中心从 envelope 动态读取套件结果、测试总数、CI 地址和发布门禁，并区分 `VERIFIED_PASSED`、`VERIFIED_FAILED` 与 `UNVERIFIED`，不再按数据集行数推导通过。固定合成回归只证明可复现性，不代表真实项目准确率；评分卡仅用于定位证据，不代表自评得分。
 
 ## V2.0 阶段 6 数字孪生
 
@@ -196,7 +203,7 @@ V5.1 证据中心进一步汇总三套共 57/57 条通过的评测、可追溯�
 3. **4D/5D 项控：** WBS/活动映射、计划与实际对比、进度偏差和预测成本敞口。
 4. **调试与移交：** 系统/试验包准备度、Punch 遗留项和文件完整度。
 5. **运营孪生：** 实时传感器边界、健康阈值、异常状态和预测性维护工单。
-6. **AI 场景实验室：** 以经核验的孪生数据运行工期恢复、预测性维护和能耗方案；所有运营结果保持 `AWAITING_APPROVAL`，不会直接修改资产状态。
+6. **AI 场景实验室：** 以可追溯的合成孪生数据运行工期恢复、预测性维护和能耗方案；所有运营结果保持 `AWAITING_APPROVAL`，不会直接修改资产状态。
 
 主要接口：`GET /twin/summary`、`/twin/scene`、`/twin/objects/{twin_id}`、`/twin/controls`、`/twin/commissioning`、`/twin/operations`、`/twin/scenarios`、`/twin/agents`；`POST /twin/scenarios/{scenario_id}/run`。
 
@@ -319,7 +326,7 @@ docs                      架构、安全、治理与演示文档
 
 ## 生产环境仍需加固的事项
 
-V5.1 是可参赛发布的参考实现和受控试点基础，但并不代表已经取得生产认证。在企业级上线前，需要完成 SSO、密钥管理、加密对象存储、完整文档解析、区域化部署、隐私影响评估、威胁建模、漏洞管理、备份/恢复演练，以及针对各司法辖区的法律审查。
+V6.0 是参赛参考实现和受控试点基础，并不代表已经取得生产认证。生产配置已对身份、数据库、存储、队列、数据驻留、职责分离和证据签名实行失败关闭；企业上线仍须取得供应商回执，完成隐私与威胁评估、备份恢复演练、SLO 观测及属地专业审查。详见 [V6 生产就绪说明](docs/V6_PRODUCTION_READINESS.zh-CN.md)。
 
 ## 开源贡献
 

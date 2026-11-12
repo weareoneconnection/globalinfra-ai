@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session
 from .database import Base, SessionLocal, engine, get_db
 from .models import (
@@ -28,18 +29,20 @@ from .llm_classify import classify_text_llm
 from .llm_extract import extract_fields_llm
 from .documents import extract_text, UnsupportedDocument
 from .security import Principal, api_key_gate, get_principal, require_project, require_roles
-from .config import settings
-from .operations import metrics_response, production_controls
-from .phase7 import router as phase7_router
+from .config import is_production_environment, settings
+from .operations import audit_health_snapshot, metrics_response, production_controls
+from .phase7 import production_readiness, router as phase7_router
 from .reply_draft import compose_reply
 from .governed_execution import (
-    GovernedExecutionError, artifact_payload, close_action, execute_action, verify_action,
+    GovernedExecutionError, approval_is_complete, artifact_payload, close_action,
+    execute_action, record_approval_decision, verify_action,
 )
 from .twin import router as twin_router
 from .twin_demo import router as twin_demo_router
 from .phase8 import router as phase8_router
 from .country_knowledge import router as country_knowledge_router
 from .competition import router as competition_router
+from .competition_sandbox import router as competition_sandbox_router
 from .ingestion import receipt_payload, record_ingestion_receipt, router as ingestion_router
 from .assistant import router as assistant_router
 from .dispatcher import router as dispatcher_router
@@ -54,13 +57,13 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="5.1.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="6.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-API-Key", "Accept-Language"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Competition-Role-Ticket", "Accept-Language"],
 )
 # Off by default (see app.security / app.config.settings.require_api_key);
 # turning it on in a pilot deployment needs only an env var, no code change.
@@ -72,6 +75,7 @@ app.include_router(phase8_router)
 app.include_router(phase7_router)
 app.include_router(country_knowledge_router)
 app.include_router(competition_router)
+app.include_router(competition_sandbox_router)
 app.include_router(ingestion_router)
 app.include_router(assistant_router)
 app.include_router(dispatcher_router)
@@ -79,7 +83,7 @@ app.include_router(agent_org_router)
 app.include_router(field_media_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"5.1.0","product_version":"V5.1","architecture":"agent-dispatch"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"6.0.0","product_version":"V6.0","architecture":"governed-evidence-action"}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}
@@ -87,7 +91,23 @@ def livez(): return {"status": "alive"}
 @app.get('/readyz')
 def readyz(db: Session = Depends(get_db)):
     db.execute(select(1))
-    return {"status": "ready", "database": "ok", "auth_mode": settings.auth_mode, "llm_mode": settings.llm_mode}
+    audit = audit_health_snapshot()
+    production = is_production_environment(
+        settings.environment, settings.railway_environment
+    )
+    release = production_readiness() if production else None
+    ready = audit["status"] == "ok" and (
+        not production or release["status"] == "READY"
+    )
+    payload = {
+        "status": "ready" if ready else "not_ready",
+        "database": "ok",
+        "audit": audit,
+        "auth_mode": settings.auth_mode,
+        "llm_mode": settings.llm_mode,
+        "release": None if release is None else release["status"],
+    }
+    return payload if ready else JSONResponse(payload, status_code=503)
 
 @app.get('/metrics', include_in_schema=False)
 def metrics(): return metrics_response()
@@ -152,14 +172,24 @@ class IntakeTextRequest(BaseModel):
     model_route: Literal["local", "openai", "auto"] | None = None
     data_classification: Literal["public", "internal", "restricted"] = "internal"
 
-def _select_project_id(db: Session, country_code: str | None) -> tuple[int | None, float]:
+def _select_project_id(
+    db: Session, country_code: str | None, organization_id: str
+) -> tuple[int | None, float]:
     """Route only when the detected country resolves to a real project.
 
     There is intentionally no lowest-id fallback: an unidentified intake must
     remain unassigned until a human confirms its project.
     """
     if country_code:
-        pid = db.scalar(select(Project.id).where(Project.country_code == country_code).order_by(Project.id).limit(1))
+        pid = db.scalar(
+            select(Project.id)
+            .where(
+                Project.country_code == country_code,
+                Project.organization_id == organization_id,
+            )
+            .order_by(Project.id)
+            .limit(1)
+        )
         if pid:
             return pid, 0.95
     return None, 0.0
@@ -227,7 +257,9 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
         project_id, project_routing_confidence = project_id_override, 1.0
         project_routing_source = "USER_CONFIRMED"
     else:
-        project_id, project_routing_confidence = _select_project_id(db, result["country"])
+        project_id, project_routing_confidence = _select_project_id(
+            db, result["country"], organization_id
+        )
         project_routing_source = "COUNTRY_AUTO_ROUTE" if project_id is not None else "NEEDS_CONFIRMATION"
     case_id = f"CASE-INTAKE-{uuid.uuid4().hex[:8].upper()}"
     title = _case_title(text)
@@ -237,7 +269,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
     result["project_routing_confidence"] = project_routing_confidence
     result["project_routing_source"] = project_routing_source
     case = Case(
-        id=case_id, project_id=project_id,
+        id=case_id, organization_id=organization_id, project_id=project_id,
         title=bi(title), description=bi(text[:600] + ("…" if len(text) > 600 else "")),
         type=result["case_type_label"], risk=result["risk"], status="NEW" if project_id is not None else routing_status,
         deadline=result["deadline"] or bi("Not specified", "未指定"),
@@ -254,6 +286,8 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
         else hashlib.sha256(text.encode("utf-8")).hexdigest()
     )
     submission = IntakeSubmission(
+        organization_id=organization_id,
+        project_id=project_id,
         raw_input_ref=raw_input_ref,
         input_hash=input_hash,
         parsed_text=text, detected_language=detected_lang, case_id=case_id,
@@ -263,6 +297,7 @@ async def _intake_pipeline(db: Session, text: str, lang: str, raw_input_ref: str
 
     if source_file is not None:
         db.add(SourceDocument(
+            organization_id=organization_id, project_id=project_id,
             intake_submission_id=submission.id, filename=source_file.filename,
             file_type=source_file.file_type, storage_ref=source_file.storage_ref,
             parse_status="PARSED", content_type=source_file.content_type,
@@ -329,6 +364,8 @@ def _queue_document_for_ocr(
     reset_routing_trace()
     checksum = source_file.storage_ref.removeprefix("sha256:")
     submission = IntakeSubmission(
+        organization_id=organization_id,
+        project_id=None,
         raw_input_ref=source_file.filename,
         input_hash=checksum,
         parsed_text="",
@@ -338,6 +375,8 @@ def _queue_document_for_ocr(
     db.add(submission)
     db.flush()
     document = SourceDocument(
+        organization_id=organization_id,
+        project_id=None,
         intake_submission_id=submission.id,
         filename=source_file.filename,
         file_type=source_file.file_type,
@@ -409,15 +448,19 @@ def _queue_document_for_ocr(
 @app.post('/intake/text')
 async def intake_text(
     payload: IntakeTextRequest, db: Session = Depends(get_db),
-    lang: str = Depends(get_lang), principal: Principal = Depends(get_principal),
+    lang: str = Depends(get_lang),
+    principal: Principal = Depends(
+        require_roles("field_user", "engineer", "project_manager", "hse_manager")
+    ),
 ):
     """Universal intake for free-text field observations / owner notices /
     letters. Classifies deterministically (Layer 1), creates a Case, and runs
     the real retrieval-grounded analysis workflow, returning the Case id and
     the specialist team that was selected for it."""
     if payload.project_id is not None:
-        require_project(principal, payload.project_id)
-        if not db.get(Project, payload.project_id):
+        require_project(principal, payload.project_id, db)
+        project = db.get(Project, payload.project_id)
+        if not project or (project.organization_id != principal.organization_id and "platform_admin" not in principal.roles):
             raise HTTPException(404, "Project not found")
     return await _intake_pipeline(
         db, payload.text, lang,
@@ -436,7 +479,9 @@ async def intake_document(
     note: str | None = Query(default=None, max_length=1000, description="The user's request about the document, e.g. 'how should we reply?'; recorded as lineage, never as document text."),
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(
+        require_roles("field_user", "engineer", "project_manager", "hse_manager")
+    ),
 ):
     """Universal intake for an uploaded PDF / DOCX / TXT document.
 
@@ -480,18 +525,26 @@ async def intake_document(
     )
 
 @app.get('/dashboard/summary')
-def dashboard(db: Session = Depends(get_db)):
-    projects = db.scalar(select(func.count(Project.id))) or 0
-    countries = db.scalar(select(func.count(func.distinct(Project.country_code)))) or 0
-    open_cases = db.scalar(select(func.count(Case.id)).where(Case.status != 'CLOSED')) or 0
-    critical = db.scalar(select(func.count(Case.id)).where(Case.risk.in_(['HIGH','CRITICAL']))) or 0
-    pending = db.scalar(select(func.count(Approval.id)).where(Approval.status == 'PENDING')) or 0
-    verified = db.scalar(select(func.count(VerificationReceipt.id)).where(VerificationReceipt.status == "VERIFIED")) or 0
+def dashboard(principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project_scope = [Project.organization_id == principal.organization_id]
+    case_scope = [Case.organization_id == principal.organization_id]
+    if not principal.has_org_wide_project_access():
+        project_scope.append(Project.id.in_(principal.project_ids))
+        case_scope.append(Case.project_id.in_(principal.project_ids))
+    projects = db.scalar(select(func.count(Project.id)).where(*project_scope)) or 0
+    countries = db.scalar(select(func.count(func.distinct(Project.country_code))).where(*project_scope)) or 0
+    open_cases = db.scalar(select(func.count(Case.id)).where(*case_scope, Case.status != 'CLOSED')) or 0
+    critical = db.scalar(select(func.count(Case.id)).where(*case_scope, Case.risk.in_(['HIGH','CRITICAL']))) or 0
+    pending = db.scalar(select(func.count(Approval.id)).join(Case, Approval.case_id == Case.id).where(*case_scope, Approval.status == 'PENDING')) or 0
+    verified = db.scalar(select(func.count(VerificationReceipt.id)).join(Case, VerificationReceipt.case_id == Case.id).where(*case_scope, VerificationReceipt.status == "VERIFIED")) or 0
     return {"projects":projects,"countries":countries,"open_cases":open_cases,"critical_risks":critical,"pending_approvals":pending,"verified_decisions":verified}
 
 @app.get('/projects')
-def projects(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    rows = [dict(id=p.id,code=p.code,name=p.name,country_code=p.country_code,country_name=p.country_name,domain=p.domain,region=p.region,status=p.status,risk_level=p.risk_level,languages=p.languages,**PROJECT_INTELLIGENCE.get(p.id, {})) for p in db.scalars(select(Project).order_by(Project.id))]
+def projects(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    stmt = select(Project).where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(Project.id.in_(principal.project_ids))
+    rows = [dict(id=p.id,code=p.code,name=p.name,country_code=p.country_code,country_name=p.country_name,domain=p.domain,region=p.region,status=p.status,risk_level=p.risk_level,languages=p.languages,**PROJECT_INTELLIGENCE.get(p.id, {})) for p in db.scalars(stmt.order_by(Project.id))]
     return localize(rows, lang)
 
 @app.get('/lifecycle')
@@ -506,10 +559,14 @@ def domains(lang: str = Depends(get_lang)):
 def domains_professional(lang: str = Depends(get_lang)): return localize(professional_domains(), lang)
 
 @app.get('/projects/{project_id}/workspace')
-def project_workspace(project_id: int, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def project_workspace(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     project = db.get(Project, project_id)
-    if not project: raise HTTPException(404, 'Project not found')
-    project_cases = list(db.scalars(select(Case).where(Case.project_id == project_id).order_by(Case.created_at.desc())))
+    if not project or (project.organization_id != principal.organization_id and "platform_admin" not in principal.roles): raise HTTPException(404, 'Project not found')
+    project_cases = list(db.scalars(select(Case).where(
+        Case.project_id == project_id,
+        Case.organization_id == principal.organization_id,
+    ).order_by(Case.created_at.desc())))
     base = PROJECT_INTELLIGENCE.get(project_id, PROJECT_INTELLIGENCE[1])
     domain_rows = []
     for index, domain in enumerate(INTELLIGENCE_DOMAINS):
@@ -544,15 +601,20 @@ DIGITAL_THREAD = {
 def digital_thread(lang: str = Depends(get_lang)): return localize(DIGITAL_THREAD, lang)
 
 @app.get('/cases')
-def cases(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    rows = db.execute(select(Case, Project.name).join(Project, Case.project_id==Project.id, isouter=True).order_by(Case.created_at.desc())).all()
+def cases(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    stmt = select(Case, Project.name).join(Project, Case.project_id==Project.id, isouter=True).where(Case.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(Case.project_id.in_(principal.project_ids))
+    rows = db.execute(stmt.order_by(Case.created_at.desc())).all()
     result = [dict(id=c.id,title=c.title,type=c.type,risk=c.risk,status=c.status,project_name=project_name,deadline=c.deadline,detected_issues=c.detected_issues,routing_status=c.routing_status,project_routing_confidence=c.project_routing_confidence) for c, project_name in rows]
     return localize(result, lang)
 
 @app.get('/cases/{case_id}')
-def case_detail(case_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def case_detail(case_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     c = db.get(Case, case_id)
-    if not c: raise HTTPException(404, 'Case not found')
+    if not c or (c.organization_id != principal.organization_id and "platform_admin" not in principal.roles): raise HTTPException(404, 'Case not found')
+    if c.project_id:
+        require_project(principal, c.project_id, db)
     project = db.get(Project, c.project_id) if c.project_id is not None else None
     evidence = list(db.scalars(select(Evidence).where(Evidence.case_id==case_id).order_by(Evidence.id)))
     claims = list(db.scalars(select(Claim).where(Claim.case_id==case_id).order_by(Claim.id)))
@@ -581,9 +643,15 @@ async def analyze(
     case_id: str,
     model_route: Literal["local", "openai", "auto"] | None = Query(default=None),
     data_classification: Literal["public", "internal", "restricted"] = Query(default="internal"),
+    principal: Principal = Depends(require_roles("engineer", "project_manager", "hse_manager")),
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
 ):
+    case = db.get(Case, case_id)
+    if not case or (case.organization_id != principal.organization_id and "platform_admin" not in principal.roles):
+        raise HTTPException(404, 'Case not found')
+    if case.project_id:
+        require_project(principal, case.project_id, db)
     reset_routing_trace()
     try: result = await analyze_case(db, case_id, model_route, data_classification)
     except KeyError: raise HTTPException(404, 'Case not found')
@@ -615,11 +683,12 @@ async def confirm_project(
     approval gates.
     """
     case = db.get(Case, case_id)
-    if not case: raise HTTPException(404, 'Case not found')
+    if not case or (case.organization_id != principal.organization_id and "platform_admin" not in principal.roles): raise HTTPException(404, 'Case not found')
     if case.routing_status != "NEEDS_PROJECT_CONFIRMATION":
         raise HTTPException(409, "Case project is already confirmed.")
-    require_project(principal, payload.project_id)
-    if not db.get(Project, payload.project_id): raise HTTPException(404, "Project not found")
+    require_project(principal, payload.project_id, db)
+    project = db.get(Project, payload.project_id)
+    if not project or (project.organization_id != principal.organization_id and "platform_admin" not in principal.roles): raise HTTPException(404, "Project not found")
     case.project_id = payload.project_id
     case.project_routing_confidence = 1.0
     db.commit()
@@ -631,14 +700,23 @@ async def confirm_project(
     return localize(result, lang)
 
 @app.get('/knowledge')
-def knowledge(query: str = Query(default=''), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    stmt = select(KnowledgeDocument)
+def knowledge(query: str = Query(default=''), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    project_scope = select(Project.id)
+    if "platform_admin" not in principal.roles:
+        project_scope = project_scope.where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        project_scope = project_scope.where(Project.id.in_(principal.project_ids))
+    visible = or_(
+        and_(KnowledgeDocument.project_id.is_(None), KnowledgeDocument.confidentiality == "PUBLIC"),
+        KnowledgeDocument.project_id.in_(project_scope),
+    )
+    stmt = select(KnowledgeDocument).where(visible)
     if query:
         q = f"%{query.lower()}%"
         stmt = stmt.where(or_(func.lower(cast(KnowledgeDocument.title, String)).like(q), func.lower(cast(KnowledgeDocument.content, String)).like(q), func.lower(cast(KnowledgeDocument.category, String)).like(q)))
     rows = list(db.scalars(stmt.limit(20)))
     if not rows and query:
-        rows = list(db.scalars(select(KnowledgeDocument).limit(20)))
+        rows = list(db.scalars(select(KnowledgeDocument).where(visible).limit(20)))
     result = [{"id":d.id,"title":d.title,"category":d.category,"jurisdiction":d.jurisdiction,"language":d.language,"source_ref":d.source_ref,"summary":d.summary} for d in rows]
     return localize(result, lang)
 
@@ -646,24 +724,33 @@ def knowledge(query: str = Query(default=''), db: Session = Depends(get_db), lan
 def agents(lang: str = Depends(get_lang)): return localize(AGENTS, lang)
 
 @app.get('/approvals')
-def approvals(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    rows = list(db.scalars(select(Approval).order_by(Approval.created_at.desc())))
-    result = [{"id":a.id,"case_id":a.case_id,"action_id":a.action_id,"title":a.title,"approver_role":a.approver_role,"status":a.status,"risk":a.risk,"created_at":a.created_at.isoformat()} for a in rows]
+def approvals(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    stmt = select(Approval).join(Case, Approval.case_id == Case.id).join(Project, Case.project_id == Project.id).where(
+        Project.organization_id == principal.organization_id,
+        Case.organization_id == principal.organization_id,
+    )
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(Case.project_id.in_(principal.project_ids))
+    rows = list(db.scalars(stmt.order_by(Approval.created_at.desc())))
+    result = [{"id":a.id,"case_id":a.case_id,"action_id":a.action_id,"title":a.title,"approver_role":a.approver_role,"required_role":a.required_role,"policy_version":a.policy_version,"status":a.status,"risk":a.risk,"decided_by":a.decided_by,"decision_digest":a.decision_digest,"created_at":a.created_at.isoformat()} for a in rows]
     return localize(result, lang)
 
 @app.post('/approvals/{approval_id}/approve')
-def approve(approval_id: int, principal: Principal = Depends(require_roles("approver")), db: Session = Depends(get_db)):
+def approve(approval_id: int, principal: Principal = Depends(require_roles("approver", "project_manager", "hse_manager")), db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
+    case = db.get(Case, a.case_id)
+    if not case or (case.organization_id != principal.organization_id and "platform_admin" not in principal.roles):
+        raise HTTPException(404, "Approval not found")
+    if case and case.project_id:
+        require_project(principal, case.project_id, db)
     if a.status == "REJECTED":
         raise HTTPException(409, "Rejected approval requires rework before it can be approved.")
-    a.status = "APPROVED"
-    a.decided_by = principal.subject
-    a.decided_at = utc_now()
-    action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
-    case = db.get(Case, a.case_id)
-    approvals_for_case = list(db.scalars(select(Approval).where(Approval.case_id == a.case_id)))
-    if action and all(item.status == "APPROVED" for item in approvals_for_case):
+    try:
+        action = record_approval_decision(db, a, subject=principal.subject, roles=principal.roles, decision="APPROVED")
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
+    if action and approval_is_complete(db, action):
         action.status = "APPROVED"
         action.approved_at = utc_now()
         case.status = "APPROVED"
@@ -673,14 +760,18 @@ def approve(approval_id: int, principal: Principal = Depends(require_roles("appr
     return {"status": "APPROVED", "case_status": case.status, "action_id": None if action is None else action.id, "action_status": None if action is None else action.status}
 
 @app.post('/approvals/{approval_id}/reject')
-def reject(approval_id: int, principal: Principal = Depends(require_roles("approver")), db: Session = Depends(get_db)):
+def reject(approval_id: int, principal: Principal = Depends(require_roles("approver", "project_manager", "hse_manager")), db: Session = Depends(get_db)):
     a = db.get(Approval, approval_id)
     if not a: raise HTTPException(404, 'Approval not found')
-    a.status = 'REJECTED'
-    a.decided_by = principal.subject
-    a.decided_at = utc_now()
-    action = db.get(Action, a.action_id) if a.action_id else db.scalar(select(Action).where(Action.case_id == a.case_id))
     c = db.get(Case, a.case_id)
+    if not c or (c.organization_id != principal.organization_id and "platform_admin" not in principal.roles):
+        raise HTTPException(404, "Approval not found")
+    if c and c.project_id:
+        require_project(principal, c.project_id, db)
+    try:
+        action = record_approval_decision(db, a, subject=principal.subject, roles=principal.roles, decision="REJECTED")
+    except GovernedExecutionError as exc:
+        raise _governed_error(exc) from exc
     c.status = 'REJECTED'
     if action:
         action.status = 'REJECTED'
@@ -720,22 +811,50 @@ def _action_row(action: Action, db: Session) -> dict:
         "input_digest": action.input_digest,
         "output_digest": action.output_digest,
         "artifact_ref": action.artifact_ref,
+        "policy_version": action.policy_version,
+        "proposed_by": action.proposed_by,
+        "proposal_digest": action.proposal_digest,
+        "closed_by": action.closed_by,
+        "closed_at": action.closed_at.isoformat() if action.closed_at else None,
+        "closure_digest": action.closure_digest,
         "execution_receipt_id": None if execution is None else execution.id,
         "verification_receipt_id": None if verification is None else verification.id,
         "created_at": action.created_at.isoformat(),
     }
 
 
+def _require_action_scope(principal: Principal, action: Action, db: Session) -> Case:
+    case = db.get(Case, action.case_id)
+    if case is None or (
+        "platform_admin" not in principal.roles
+        and case.organization_id != principal.organization_id
+    ):
+        raise HTTPException(404, "Case not found")
+    if case.project_id:
+        require_project(principal, case.project_id, db)
+        project = db.get(Project, case.project_id)
+        if project and project.organization_id != principal.organization_id and "platform_admin" not in principal.roles:
+            raise HTTPException(404, "Action not found")
+    return case
+
+
 @app.get('/actions')
-def actions(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    return localize([_action_row(action, db) for action in db.scalars(select(Action).order_by(Action.created_at.desc()))], lang)
+def actions(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    stmt = select(Action).join(Case, Action.case_id == Case.id).join(Project, Case.project_id == Project.id).where(
+        Project.organization_id == principal.organization_id,
+        Case.organization_id == principal.organization_id,
+    )
+    if not principal.has_org_wide_project_access():
+        stmt = stmt.where(Case.project_id.in_(principal.project_ids))
+    return localize([_action_row(action, db) for action in db.scalars(stmt.order_by(Action.created_at.desc()))], lang)
 
 
 @app.get('/actions/{action_id}')
-def action_detail(action_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def action_detail(action_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     action = db.get(Action, action_id)
     if not action:
         raise HTTPException(404, "Action not found")
+    _require_action_scope(principal, action, db)
     return localize(_action_row(action, db), lang)
 
 
@@ -745,8 +864,12 @@ async def execute(
     principal: Principal = Depends(require_roles("engineer", "project_manager")),
     db: Session = Depends(get_db),
 ):
+    action = db.get(Action, action_id)
+    if not action:
+        raise HTTPException(404, "Action not found")
+    _require_action_scope(principal, action, db)
     try:
-        return execute_action(db, action_id, payload.executor if payload else principal.subject, await _composed_reply(db, action_id))
+        return execute_action(db, action_id, principal.subject, await _composed_reply(db, action_id), executor_roles=principal.roles)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
@@ -760,8 +883,9 @@ async def execute_case(
     action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
     if not action:
         raise HTTPException(404, "No governed action exists for case")
+    _require_action_scope(principal, action, db)
     try:
-        result = execute_action(db, action.id, payload.executor if payload else principal.subject, await _composed_reply(db, action.id))
+        result = execute_action(db, action.id, principal.subject, await _composed_reply(db, action.id), executor_roles=principal.roles)
         result["case_id"] = case_id
         return result
     except GovernedExecutionError as exc:
@@ -773,8 +897,12 @@ def verify(
     action_id: str, payload: VerificationRequest | None = None,
     principal: Principal = Depends(require_roles("verifier")), db: Session = Depends(get_db),
 ):
+    action = db.get(Action, action_id)
+    if not action:
+        raise HTTPException(404, "Action not found")
+    _require_action_scope(principal, action, db)
     try:
-        return verify_action(db, action_id, payload.verifier if payload else principal.subject)
+        return verify_action(db, action_id, principal.subject, verifier_roles=principal.roles)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
@@ -787,8 +915,9 @@ def verify_case(
     action = db.scalar(select(Action).where(Action.case_id == case_id).order_by(Action.created_at.desc()))
     if not action:
         raise HTTPException(404, "No governed action exists for case")
+    _require_action_scope(principal, action, db)
     try:
-        return verify_action(db, action.id, payload.verifier if payload else principal.subject)
+        return verify_action(db, action.id, principal.subject, verifier_roles=principal.roles)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
@@ -798,49 +927,72 @@ def close(
     action_id: str, principal: Principal = Depends(require_roles("project_manager")),
     db: Session = Depends(get_db),
 ):
+    action = db.get(Action, action_id)
+    if not action:
+        raise HTTPException(404, "Action not found")
+    _require_action_scope(principal, action, db)
     try:
-        return close_action(db, action_id)
+        return close_action(db, action_id, principal.subject, closer_roles=principal.roles)
     except GovernedExecutionError as exc:
         raise _governed_error(exc) from exc
 
 
 @app.get('/artifacts/{artifact_id}')
-def artifact(artifact_id: str, db: Session = Depends(get_db)):
+def artifact(artifact_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     artifact_row = db.get(Artifact, artifact_id)
     if not artifact_row:
         raise HTTPException(404, "Artifact not found")
+    action = db.get(Action, artifact_row.action_id)
+    if not action:
+        raise HTTPException(404, "Artifact not found")
+    _require_action_scope(principal, action, db)
     return artifact_payload(artifact_row)
 
 
 @app.get('/execution-receipts/{receipt_id}')
-def execution_receipt(receipt_id: str, db: Session = Depends(get_db)):
+def execution_receipt(receipt_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     receipt = db.get(ExecutionReceipt, receipt_id)
     if not receipt:
         raise HTTPException(404, "Execution receipt not found")
+    action = db.get(Action, receipt.action_id)
+    if not action:
+        raise HTTPException(404, "Execution receipt not found")
+    _require_action_scope(principal, action, db)
     artifact_row = db.scalar(select(Artifact).where(Artifact.action_id == receipt.action_id))
     return {
         "id": receipt.id, "case_id": receipt.case_id, "action_id": receipt.action_id,
         "approval_id": receipt.approval_id, "executor": receipt.executor,
+        "executor_role": receipt.executor_role, "policy_version": receipt.policy_version,
         "action_type": receipt.action_type, "started_at": receipt.started_at.isoformat(),
         "completed_at": receipt.completed_at.isoformat() if receipt.completed_at else None,
         "status": receipt.status, "evidence_refs": receipt.evidence_refs,
         "input_digest": receipt.input_digest, "output_digest": receipt.output_digest,
-        "artifact_ref": receipt.artifact_ref,
+        "artifact_ref": receipt.artifact_ref, "receipt_digest": receipt.receipt_digest,
+        "receipt_signature": receipt.receipt_signature,
         "artifact": None if artifact_row is None else artifact_payload(artifact_row),
     }
 
 
 @app.get('/verification-receipts/{receipt_id}')
-def verification_receipt(receipt_id: str, db: Session = Depends(get_db)):
+def verification_receipt(receipt_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     receipt = db.get(VerificationReceipt, receipt_id)
     if not receipt:
         raise HTTPException(404, "Verification receipt not found")
+    action = db.get(Action, receipt.action_id)
+    if not action:
+        raise HTTPException(404, "Verification receipt not found")
+    _require_action_scope(principal, action, db)
     return {
         "id": receipt.id, "case_id": receipt.case_id, "action_id": receipt.action_id,
         "execution_receipt_id": receipt.execution_receipt_id, "approval_id": receipt.approval_id,
-        "status": receipt.status, "findings": receipt.findings, "checks": receipt.checks,
+        "status": receipt.status, "verified_by": receipt.verified_by,
+        "verifier_role": receipt.verifier_role, "policy_version": receipt.policy_version,
+        "findings": receipt.findings, "checks": receipt.checks,
         "evidence_refs": receipt.evidence_refs, "artifact_ref": receipt.artifact_ref,
-        "artifact_digest": receipt.artifact_digest, "verified_at": receipt.verified_at.isoformat(),
+        "artifact_digest": receipt.artifact_digest,
+        "verification_digest": receipt.verification_digest,
+        "signature": receipt.verification_signature, "key_id": receipt.key_id,
+        "verified_at": receipt.verified_at.isoformat(),
     }
 
 

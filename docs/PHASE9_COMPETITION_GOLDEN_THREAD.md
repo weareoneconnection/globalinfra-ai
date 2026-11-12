@@ -2,7 +2,7 @@
 
 Phase 9.1 turns existing product capabilities into one jury-verifiable AI-outbound story instead of adding a separate scripted demo.
 
-V5.0 retains the seven-step golden thread and turns the page into a dynamic evidence center. Release time and deployment commit come from the runtime environment; three suites contribute 57 versioned cases; the last verified CI snapshot records 263 API tests plus web build, migration and full-stack smoke gates; six platform capabilities, ten judging criteria, model routing, lineage, hashes and human authority boundaries are all inspectable.
+V6.0 retains the seven-step story but replaces the shared one-click demo with a fresh synthetic session per judge and five distinct human identities. Three suites contribute 57 versioned cases; test totals, source commit, dataset digests, web build, migration and full-stack smoke gates are read only from the signed release artifact rather than hard-coded into this document.
 
 ## Positioning
 
@@ -16,9 +16,9 @@ The `/competition` surface demonstrates all three AI-outbound directions:
 
 ## Seven-step golden thread
 
-The synthetic `MY-RAIL-A` scenario runs through bilingual intake, Malaysia routing, a versioned country pack, live evidence retrieval, Twin-ID/4D/5D context, multi-agent planning with two human gates for critical HSE, and finally the existing governed document tool plus independent verification.
+The isolated `COMP-SYNTH-MY-P47` scenario runs through bilingual intake, Malaysia routing, a versioned country pack, allowlisted synthetic evidence, Twin-ID context, multi-agent planning with two human gates for critical HSE, governed document execution, independent verification and separate closure.
 
-The operator must explicitly click the approval action. The resulting artifact remains `DRAFT_ONLY_NOT_SENT`; `external_delivery_performed` is always false.
+Project manager, HSE manager, executor, verifier and closer each act with a different short-lived role ticket. The resulting artifact remains `DRAFT_ONLY_NOT_SENT`; `external_delivery_performed` is always false.
 
 ## Reproducible benchmark
 
@@ -31,7 +31,10 @@ python evals/run_competition_eval.py
 curl 'http://localhost:8001/competition/evaluation?include_cases=true'
 ```
 
-The same suite is a CI gate. Metrics shown in the UI are computed from that function; they are not authored presentation values.
+The same suite is a CI gate. The live evaluation endpoint is diagnostic only;
+release status and published suite metrics in the UI come from the
+commit-bound, signature-verified release artifact. They are never authored
+presentation values.
 
 The ten judging cards map published criteria to inspectable system evidence. They are not self-awarded scores.
 

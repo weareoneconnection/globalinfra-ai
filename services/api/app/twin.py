@@ -14,8 +14,9 @@ from .database import get_db
 from .i18n import bi, get_lang, localize
 from .models import (
     CommissioningItem, MaintenanceRecord, TwinEvent, TwinObject, TwinRelation,
-    TwinScenario, TwinScheduleLink, TwinSensor, TwinStateHistory, utc_now,
+    Project, TwinScenario, TwinScheduleLink, TwinSensor, TwinStateHistory, utc_now,
 )
+from .security import Principal, get_principal, require_project
 
 router = APIRouter(prefix="/twin", tags=["digital-twin"])
 
@@ -39,9 +40,20 @@ def _object(row: TwinObject) -> dict:
 
 
 @router.get("/summary")
-def summary(project_id: int | None = Query(default=None), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    condition = TwinObject.project_id == project_id if project_id else True
-    objects = list(db.scalars(select(TwinObject).where(condition)))
+def summary(
+    project_id: int | None = Query(default=None),
+    principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db), lang: str = Depends(get_lang),
+):
+    if project_id is not None:
+        require_project(principal, project_id, db)
+        object_stmt = select(TwinObject).where(TwinObject.project_id == project_id)
+    else:
+        project_stmt = select(Project.id).where(Project.organization_id == principal.organization_id)
+        if not principal.has_org_wide_project_access():
+            project_stmt = project_stmt.where(Project.id.in_(principal.project_ids))
+        object_stmt = select(TwinObject).where(TwinObject.project_id.in_(project_stmt))
+    objects = list(db.scalars(object_stmt))
     ids = [obj.id for obj in objects]
     events = list(db.scalars(select(TwinEvent).where(TwinEvent.twin_id.in_(ids)))) if ids else []
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids)))) if ids else []
@@ -70,7 +82,8 @@ def summary(project_id: int | None = Query(default=None), db: Session = Depends(
 
 
 @router.get("/scene")
-def scene(project_id: int = Query(default=1), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def scene(project_id: int = Query(default=1), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     objects = list(db.scalars(select(TwinObject).where(TwinObject.project_id == project_id).order_by(TwinObject.id)))
     ids = [obj.id for obj in objects]
     events = list(db.scalars(select(TwinEvent).where(TwinEvent.twin_id.in_(ids)).order_by(TwinEvent.occurred_at.desc()))) if ids else []
@@ -89,11 +102,17 @@ def scene(project_id: int = Query(default=1), db: Session = Depends(get_db), lan
 
 
 @router.get("/objects/{twin_id}")
-def object_detail(twin_id: str, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def object_detail(twin_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     obj = db.get(TwinObject, twin_id)
     if not obj:
         raise HTTPException(404, "Twin object not found")
-    relations = list(db.scalars(select(TwinRelation).where((TwinRelation.source_id == twin_id) | (TwinRelation.target_id == twin_id))))
+    require_project(principal, obj.project_id, db)
+    project_objects = select(TwinObject.id).where(TwinObject.project_id == obj.project_id)
+    relations = list(db.scalars(select(TwinRelation).where(
+        (TwinRelation.source_id == twin_id) | (TwinRelation.target_id == twin_id),
+        TwinRelation.source_id.in_(project_objects),
+        TwinRelation.target_id.in_(project_objects),
+    )))
     states = list(db.scalars(select(TwinStateHistory).where(TwinStateHistory.twin_id == twin_id).order_by(TwinStateHistory.effective_at.desc())))
     events = list(db.scalars(select(TwinEvent).where(TwinEvent.twin_id == twin_id).order_by(TwinEvent.occurred_at.desc())))
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id == twin_id)))
@@ -109,7 +128,8 @@ def object_detail(twin_id: str, db: Session = Depends(get_db), lang: str = Depen
 
 
 @router.get("/controls")
-def controls(project_id: int = Query(default=1), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def controls(project_id: int = Query(default=1), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     rows = db.execute(select(TwinScheduleLink, TwinObject).join(TwinObject, TwinScheduleLink.twin_id == TwinObject.id).where(TwinObject.project_id == project_id)).all()
     payload = [{"twin_id": obj.id, "name": obj.name, "wbs_code": link.wbs_code, "activity_id": link.activity_id,
                 "planned_progress": link.planned_progress, "actual_progress": link.actual_progress,
@@ -120,7 +140,8 @@ def controls(project_id: int = Query(default=1), db: Session = Depends(get_db), 
 
 
 @router.get("/commissioning")
-def commissioning(project_id: int = Query(default=1), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def commissioning(project_id: int = Query(default=1), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     rows = db.execute(select(CommissioningItem, TwinObject).join(TwinObject, CommissioningItem.twin_id == TwinObject.id).where(TwinObject.project_id == project_id)).all()
     payload = [{"id": item.id, "twin_id": obj.id, "asset": obj.name, "system": item.system, "test_pack": item.test_pack,
                 "stage": item.stage, "punch_open": item.punch_open, "document_completeness": item.document_completeness,
@@ -129,7 +150,8 @@ def commissioning(project_id: int = Query(default=1), db: Session = Depends(get_
 
 
 @router.get("/operations")
-def operations(project_id: int = Query(default=1), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def operations(project_id: int = Query(default=1), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     assets = {o.id: o for o in db.scalars(select(TwinObject).where(TwinObject.project_id == project_id))}
     ids = list(assets)
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids)))) if ids else []
@@ -145,7 +167,8 @@ def operations(project_id: int = Query(default=1), db: Session = Depends(get_db)
 
 
 @router.get("/scenarios")
-def scenarios(project_id: int = Query(default=1), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def scenarios(project_id: int = Query(default=1), principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+    require_project(principal, project_id, db)
     rows = list(db.scalars(select(TwinScenario).where(TwinScenario.project_id == project_id).order_by(TwinScenario.id)))
     return localize([{"id": s.id, "name": s.name, "type": s.scenario_type, "status": s.status,
                       "assumptions": s.assumptions, "result": s.result, "requires_approval": s.requires_approval,
@@ -157,10 +180,11 @@ class ScenarioRunRequest(BaseModel):
 
 
 @router.post("/scenarios/{scenario_id}/run")
-def run_scenario(scenario_id: str, payload: ScenarioRunRequest, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
+def run_scenario(scenario_id: str, payload: ScenarioRunRequest, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     scenario = db.get(TwinScenario, scenario_id)
     if not scenario:
         raise HTTPException(404, "Twin scenario not found")
+    require_project(principal, scenario.project_id, db)
     factor = 1 + payload.adjustment_percent / 100
     result = dict(scenario.result)
     for key, value in list(result.items()):

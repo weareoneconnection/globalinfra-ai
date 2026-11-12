@@ -412,7 +412,7 @@ async def agent_intake(step: Step, run: Dispatch, db: Session) -> dict:
     project_id = run.payload.project_id or step.project_id
     try:
         if project_id is not None:
-            require_project(run.principal, project_id)
+            require_project(run.principal, project_id, db)
         body = await _intake_pipeline(
             db, step.query, run.lang, raw_input_ref="assistant:dispatch", language_hint=None, source_file=None,
             model_route=run.payload.model_route, data_classification=run.payload.data_classification,
@@ -444,7 +444,11 @@ async def agent_intake(step: Step, run: Dispatch, db: Session) -> dict:
 
 
 async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
-    hits = _search(db, step.query, run.payload.message)
+    hits = _search(
+        db, step.query, run.payload.message,
+        principal=run.principal,
+        project_id=step.project_id or run.payload.project_id,
+    )
     answer = None
     if hits and run.knowledge_answers < MAX_KNOWLEDGE_ANSWERS:
         run.knowledge_answers += 1
@@ -480,10 +484,15 @@ def open_questions(db: Session, case_id: str) -> dict[int, str]:
 async def agent_case(step: Step, run: Dispatch, db: Session) -> dict:
     case_id = await _resolve_case(step, run)
     case = db.get(Case, case_id)
-    if case is None:
+    if case is None or (
+        "platform_admin" not in run.principal.roles
+        and case.organization_id != run.principal.organization_id
+    ):
         raise StepFailed(_t(run.lang, "Work order not found.", "未找到该工单。"))
     if case.project_id is not None:
-        require_project(run.principal, case.project_id)
+        require_project(run.principal, case.project_id, db)
+    elif not run.principal.has_org_wide_project_access():
+        raise StepFailed(_t(run.lang, "Work order not found.", "未找到该工单。"))
     actions = [s for s in _latest_plan(db, case_id) if not str(s.get("source", "")).startswith("governance")]
     questions = localize(open_questions(db, case_id), run.lang)
     pending = db.scalars(select(Approval).where(Approval.case_id == case_id, Approval.status == "PENDING")).all()
@@ -512,6 +521,16 @@ async def agent_answer(step: Step, run: Dispatch, db: Session) -> dict:
     row = db.get(CaseInput, step.question_id)
     if row is None or row.case_id != step.case_id or row.status != "OPEN":
         raise StepFailed(_t(run.lang, "That question is no longer open.", "该问题已不在待答状态。"))
+    case = db.get(Case, row.case_id)
+    if case is None or (
+        "platform_admin" not in run.principal.roles
+        and case.organization_id != run.principal.organization_id
+    ):
+        raise StepFailed(_t(run.lang, "Work order not found.", "未找到该工单。"))
+    if case.project_id is not None:
+        require_project(run.principal, case.project_id, db)
+    elif not run.principal.has_org_wide_project_access():
+        raise StepFailed(_t(run.lang, "Work order not found.", "未找到该工单。"))
     row.answer, row.status = step.answer, "ANSWERED"
     row.answered_by, row.answered_at = run.principal.subject, utc_now()
     db.commit()
@@ -532,7 +551,14 @@ async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
     project_id = step.project_id or run.payload.project_id
     rows = []
     for project in db.scalars(select(Project).order_by(Project.id)):
-        if (project_id and project.id != project_id) or not run.principal.can_access_project(project.id):
+        if (
+            (project_id and project.id != project_id)
+            or not run.principal.can_access_project(project.id)
+            or (
+                "platform_admin" not in run.principal.roles
+                and project.organization_id != run.principal.organization_id
+            )
+        ):
             continue
         info = PROJECT_INTELLIGENCE.get(project.id, {})
         rows.append(localize({
@@ -550,7 +576,14 @@ async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
 
 
 async def agent_approvals(step: Step, run: Dispatch, db: Session) -> dict:
-    rows = [a for a in db.scalars(select(Approval).where(Approval.status == "PENDING").order_by(Approval.created_at.desc()))]
+    stmt = select(Approval).join(Case, Approval.case_id == Case.id).where(
+        Approval.status == "PENDING"
+    )
+    if "platform_admin" not in run.principal.roles:
+        stmt = stmt.where(Case.organization_id == run.principal.organization_id)
+    if not run.principal.has_org_wide_project_access():
+        stmt = stmt.where(Case.project_id.in_(run.principal.project_ids))
+    rows = list(db.scalars(stmt.order_by(Approval.created_at.desc())))
     top = [localize({"id": a.id, "case_id": a.case_id, "title": a.title, "approver_role": a.approver_role, "risk": a.risk}, run.lang)
            for a in rows[:5]]
     critical = sum(1 for a in rows if a.risk in {"HIGH", "CRITICAL"})
@@ -664,13 +697,23 @@ def load_session(db: Session, session_id: str | None, principal: Principal) -> A
     return session
 
 
-def build_context(db: Session, payload: DispatchRequest, session: AssistantSession, history: list[dict]) -> PlanContext:
-    project_codes = {code.upper(): pid for pid, code in db.execute(select(Project.id, Project.code))}
+def build_context(db: Session, payload: DispatchRequest, session: AssistantSession, history: list[dict], principal: Principal) -> PlanContext:
+    project_stmt = select(Project.id, Project.code)
+    if "platform_admin" not in principal.roles:
+        project_stmt = project_stmt.where(Project.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        project_stmt = project_stmt.where(Project.id.in_(principal.project_ids))
+    project_codes = {code.upper(): pid for pid, code in db.execute(project_stmt)}
     current = (session.context or {}).get("case_id")
     mentioned = {m.upper() for m in _CASE_ID_RE.findall(" ".join([payload.message, *(t["content"] for t in history)]))}
     if current:
         mentioned.add(current)
-    known = set(db.scalars(select(Case.id).where(Case.id.in_(mentioned)))) if mentioned else set()
+    case_stmt = select(Case.id).where(Case.id.in_(mentioned))
+    if "platform_admin" not in principal.roles:
+        case_stmt = case_stmt.where(Case.organization_id == principal.organization_id)
+    if not principal.has_org_wide_project_access():
+        case_stmt = case_stmt.where(Case.project_id.in_(principal.project_ids))
+    known = set(db.scalars(case_stmt)) if mentioned else set()
     current = current if current in known else None
     questions = {k: localize(v, "en") for k, v in open_questions(db, current).items()} if current else {}
     return PlanContext(project_codes=project_codes, known_case_ids=known, case_id=current, open_questions=questions,
@@ -710,7 +753,7 @@ async def dispatch(payload: DispatchRequest, lang: str, principal: Principal, em
     try:
         session = load_session(db, payload.session_id, principal)
         history = list(session.turns or []) or [t.model_dump() for t in payload.history]
-        ctx = build_context(db, payload, session, history)
+        ctx = build_context(db, payload, session, history, principal)
         session_id = session.id
         db.commit()
     finally:
@@ -747,9 +790,10 @@ async def dispatch(payload: DispatchRequest, lang: str, principal: Principal, em
 @router.post("/dispatch")
 async def dispatch_endpoint(
     payload: DispatchRequest, lang: str = Depends(get_lang), principal: Principal = Depends(get_principal),
+    db: Session = Depends(get_db),
 ):
     if payload.project_id is not None:
-        require_project(principal, payload.project_id)
+        require_project(principal, payload.project_id, db)
     queue: asyncio.Queue = asyncio.Queue()
 
     async def emit(event: dict) -> None:

@@ -8,7 +8,7 @@ GlobalInfra AI V3.0 将阶段 6 数字孪生产品升级为生产试点运行平
 
 ## 7.2 身份与授权
 
-`AUTH_MODE` 支持 `disabled`、`api_key` 和 `oidc`。OIDC 通过签发方 JWKS 验证 JWT，并将组织、角色和项目范围标准化为 `Principal`。生产变更接口执行 RBAC；请求 ID 与租户级审计事件记录每一次变更。服务端渲染 Web 层可使用独立服务凭据，浏览器/API 客户端使用 OIDC Bearer Token。公开演示默认 `disabled`，生产环境必须使用 `oidc`。
+`AUTH_MODE` 支持 `disabled`、`api_key` 和 `oidc`。OIDC 通过签发方 JWKS 验证 JWT，并将组织、角色和项目范围标准化为 `Principal`。生产变更接口执行 RBAC；请求 ID 与租户级审计事件记录每一次变更。OIDC 模式下，Web 层在 `/auth/login` 与 `/auth/callback` 完成授权码 + PKCE 流程，通过签发方 JWKS 验证 ID Token 签名与绑定声明，把 Access Token 保存在加密的 HTTP-only session 中，并以当前用户的 Bearer Token 访问租户接口。独立服务凭据仅用于明确公开的竞赛接口，不能代替人的身份。公开演示默认 `disabled`，生产环境必须使用 `oidc`。
 
 ## 7.3 现场作业
 
@@ -28,11 +28,11 @@ GlobalInfra AI V3.0 将阶段 6 数字孪生产品升级为生产试点运行平
 
 ## 7.7 运行与安全
 
-API 提供 `/livez`、`/readyz` 和 Prometheus 兼容 `/metrics`；所有响应带请求 ID；运行时具备基础限流和变更审计。Kubernetes 分离存活/就绪探针。CI 覆盖 API 测试、评测、迁移、依赖一致性、Web 生产构建和全栈冒烟测试。
+API 提供 `/livez`、`/readyz` 和 Prometheus 兼容 `/metrics`；所有响应带请求 ID；运行时具备基础限流和变更审计。Web 提供无需认证的 `/healthz` 作为进程存活探针，并以 `/readyz` 对认证/会话静态配置执行失败关闭的就绪检查；受保护业务页不得充当健康检查。Kubernetes 分离存活/就绪探针。CI 覆盖 API 测试、评测、迁移、依赖一致性、Web 生产构建和全栈冒烟测试。
 
 ## 生产启用清单
 
-1. 设置 `AUTH_MODE=oidc` 及签发方、受众和声明映射。
+1. API 设置 `AUTH_MODE=oidc` 及签发方、受众和声明映射；Web 设置 `API_AUTH_MODE=oidc`、OAuth 客户端/端点/回调和高熵 `WEB_SESSION_SECRET`，详见 `RAILWAY_DEPLOYMENT.md`。
 2. 为现场媒体配置对象存储和病毒扫描。
 3. 在密钥管理器中配置连接器凭据，禁止写入连接器 JSON。
 4. 用客户受控 URI 替换样例孪生数据源。

@@ -54,6 +54,7 @@ from .config import settings
 from .i18n import bi
 from .llm import is_llm_configured
 from .models import Action, AgentRun, Approval, Case, Claim, Evidence, ExecutionReceipt, KnowledgeDocument, Project, Verification
+from .governed_execution import V6_POLICY_VERSION, action_proposal_digest
 from .retrieval import case_query_text
 from .agent_org.orchestrator import coordinator_summary, persist as persist_organization, run_organization, team_summary
 
@@ -217,18 +218,21 @@ async def analyze_case(
             ),
         }
 
-    required_roles = [APPROVER_ROLE]
+    governance_policy = V6_POLICY_VERSION if settings.sod_enforced else "legacy.v5"
+    required_roles = [("project_manager", APPROVER_ROLE)]
     if case_type_en == "HSE" and case.risk == "CRITICAL":
-        required_roles.append(bi("HSE Manager sign-off", "HSE 经理会签"))
+        required_roles.append(("hse_manager", bi("HSE Manager sign-off", "HSE 经理会签")))
     approvals = list(db.scalars(select(Approval).where(Approval.case_id == case_id).order_by(Approval.id)))
     if not approvals:
         approvals = [Approval(
             case_id=case_id,
             title=bi("Approve owner-response draft / governed action", "审批业主回复草案 / 受管控行动"),
-            approver_role=role,
+            approver_role=label,
+            required_role=role,
+            policy_version=governance_policy,
             status="PENDING",
             risk=case.risk,
-        ) for role in required_roles]
+        ) for role, label in required_roles]
         db.add_all(approvals)
         db.flush()
     elif existing_action is not None:
@@ -237,7 +241,14 @@ async def analyze_case(
         for approval in approvals:
             approval.status = "PENDING"
             approval.decided_by = None
+            approval.decided_role = None
             approval.decided_at = None
+            approval.decision_digest = None
+            approval.decision_signature = None
+        for approval, (role, label) in zip(approvals, required_roles):
+            approval.required_role = role
+            approval.approver_role = label
+            approval.policy_version = governance_policy
     if existing_action is None:
         action = Action(
             id=f"ACT-{uuid.uuid4().hex.upper()}",
@@ -246,6 +257,8 @@ async def analyze_case(
             action_type="document.generate",
             status="AWAITING_APPROVAL",
             evidence_refs=refs,
+            policy_version=governance_policy,
+            proposed_by="agent:planning",
         )
         db.add(action)
         db.flush()
@@ -255,8 +268,11 @@ async def analyze_case(
         action.action_type = "document.generate"
         action.status = "AWAITING_APPROVAL"
         action.evidence_refs = refs
+        action.policy_version = governance_policy
+        action.proposed_by = "agent:planning"
     for approval in approvals:
         approval.action_id = action.id
+    action.proposal_digest = action_proposal_digest(db, action)
 
     # --- verification: checks and scores computed from this run ---
     t0 = perf_counter()

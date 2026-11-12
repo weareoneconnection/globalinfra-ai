@@ -20,12 +20,13 @@ from pathlib import Path
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .governed_execution import GovernedExecutionError, close_action, execute_action, verify_action
+from .config import is_production_environment, settings
+from .evaluation_artifacts import SUITE_SPECS, verified_release_summary
+from .governed_execution import governed_closure_is_intact
 from .i18n import bi, get_lang, localize
 from .intake import build_intake_result
 from .llm import routing_status
@@ -47,7 +48,6 @@ from .models import (
     utc_now,
 )
 from .retrieval import KnowledgeIndex
-from .workflow import analyze_case
 
 router = APIRouter(prefix="/competition", tags=["competition-evidence"])
 
@@ -56,10 +56,22 @@ DATASET_VERSION = "ai-outbound-2026.10.14-v1"
 DATASET_PATH = Path(__file__).resolve().parent.parent / "evals" / "competition_outbound.jsonl"
 AGENT_ORG_DATASET_PATH = DATASET_PATH.parent / "agent_org.jsonl"
 DISPATCH_DATASET_PATH = DATASET_PATH.parent / "assistant_dispatch.jsonl"
-PRODUCT_VERSION = "V5.1"
-CI_EVIDENCE_RUN = "39131735043"
-CI_VERIFIED_AT = "2026-10-18T21:31:01+08:00"
-CI_API_TESTS_PASSED = 265
+PRODUCT_VERSION = "V6.0"
+API_ROOT = Path(__file__).resolve().parent.parent
+CHECKOUT_ROOT = API_ROOT.parent.parent
+REPO_ROOT = (
+    CHECKOUT_ROOT
+    if (CHECKOUT_ROOT / "services" / "api" / "evals").is_dir()
+    else API_ROOT
+)
+CANONICAL_DATASET_PATHS = {
+    spec["slug"]: spec["dataset"] for spec in SUITE_SPECS
+}
+RELEASE_EVIDENCE_PATH = (
+    Path(settings.release_evidence_path)
+    if settings.release_evidence_path
+    else Path(__file__).resolve().parent.parent / "evidence" / "release-evidence.json"
+)
 REQUIRED_INTAKE_KEYS = {
     "primary_domain", "professional_domain", "case_type", "classification_method",
     "extraction_method", "lifecycle_stage", "risk", "country", "language",
@@ -67,9 +79,10 @@ REQUIRED_INTAKE_KEYS = {
 }
 
 GOLDEN_INPUT = (
-    "Malaysia MY-RAIL-A owner notice: at Station S12, a worker was observed "
-    "near an unprotected edge during working at height. Fall protection, "
-    "permit-to-work and competent-person evidence are required immediately."
+    "Malaysia MY-RAIL-A owner notice: at Viaduct V-12 Pier P47, a worker was "
+    "observed near an unprotected edge during work at height. Stop the work "
+    "and submit fall protection, permit-to-work and competent-person evidence "
+    "within 24 hours."
 )
 
 
@@ -85,6 +98,45 @@ def _dataset_size(path: Path) -> int:
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _deployment_commit() -> str | None:
+    """Resolve the immutable source revision the running deployment claims."""
+    return (
+        os.getenv("RAILWAY_GIT_COMMIT_SHA")
+        or os.getenv("GIT_COMMIT_SHA")
+        or settings.deployment_commit_sha
+        or None
+    )
+
+
+def release_validation_checks(release_evidence: dict) -> dict[str, bool]:
+    """Return the four release gates whose absence must fail closed."""
+    validation = release_evidence.get("validation") or {}
+    api_tests = validation.get("api_tests") or {}
+    test_count = api_tests.get("tests")
+    passed_count = api_tests.get("passed")
+    failures = api_tests.get("failures")
+    errors = api_tests.get("errors")
+    skipped = api_tests.get("skipped")
+    return {
+        "api_tests": bool(
+            api_tests.get("status") == "PASSED"
+            and type(test_count) is int
+            and test_count > 0
+            and type(passed_count) is int
+            and passed_count == test_count
+            and type(failures) is int
+            and failures == 0
+            and type(errors) is int
+            and errors == 0
+            and type(skipped) is int
+            and skipped == 0
+        ),
+        "web_build": validation.get("web_build") == "PASSED",
+        "migration_check": validation.get("migration_check") == "PASSED",
+        "full_stack_smoke": validation.get("full_stack_smoke") == "PASSED",
+    }
+
+
 def seed_competition(db: Session) -> None:
     """Install the stable golden case without resetting an existing demo run."""
     if db.get(Case, GOLDEN_CASE_ID) is not None or db.get(Project, 1) is None:
@@ -92,15 +144,16 @@ def seed_competition(db: Session) -> None:
     intake = build_intake_result(GOLDEN_INPUT)
     db.add(Case(
         id=GOLDEN_CASE_ID,
+        organization_id="globalinfra-demo",
         project_id=1,
         title=bi(
-            "Malaysia station S12 working-at-height owner notice",
-            "马来西亚 S12 车站高处作业业主通知",
+            "Malaysia Pier P47 working-at-height owner notice",
+            "马来西亚 P47 桥墩高处作业业主通知",
         ),
         description=bi(
             GOLDEN_INPUT,
-            "马来西亚 MY-RAIL-A 业主通知：S12 车站一名工人在高处作业时靠近无防护临边，"
-            "须立即核验坠落防护、作业许可证和胜任人员证据。",
+            "马来西亚 MY-RAIL-A 业主通知：V-12 高架桥 P47 桥墩一名工人在高处作业时"
+            "靠近无防护临边，须停止作业并在 24 小时内提交坠落防护、作业许可证和胜任人员证据。",
         ),
         type=intake["case_type_label"],
         risk=intake["risk"],
@@ -117,7 +170,17 @@ def seed_competition(db: Session) -> None:
 def evaluate_competition_cases(db: Session, include_cases: bool = True) -> dict:
     """Execute the public 30-case deterministic benchmark against live code/data."""
     cases = load_competition_cases()
-    index = KnowledgeIndex(list(db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.status == "CURRENT"))))
+    expected_source_refs = sorted({
+        ref for case in cases for ref in case.get("expected_evidence", [])
+    })
+    # The public benchmark must be hermetic: customer/project documents added
+    # to the live database can neither improve the score nor leak through the
+    # include_cases citation trace.
+    index = KnowledgeIndex(list(db.scalars(select(KnowledgeDocument).where(
+        KnowledgeDocument.status == "CURRENT",
+        KnowledgeDocument.source_ref.in_(expected_source_refs),
+        KnowledgeDocument.confidentiality == "PUBLIC",
+    ))))
     started = perf_counter()
     results: list[dict] = []
     evidence_expected = evidence_found = complete_citations = 0
@@ -228,16 +291,17 @@ def _golden_snapshot(db: Session) -> dict:
     control = db.scalar(select(TwinScheduleLink).where(TwinScheduleLink.twin_id == twin.id)) if twin else None
     sources = list(db.scalars(select(TwinSource).where(TwinSource.project_id == case.project_id).order_by(TwinSource.source_type)))
     intake = build_intake_result(GOLDEN_INPUT)
-    closed = bool(action and action.status == "CLOSED" and verification and verification.status == "VERIFIED")
+    closed = governed_closure_is_intact(db, action)
+    routing_confidence = round(float(intake.get("confidence") or 0) * 100)
 
     steps = [
-        {"id": "9.1.1", "title": bi("Bilingual event intake", "双语事件接入"), "proof": bi(f"{intake['language']} · {intake['case_type']} · {intake['risk']}", f"{intake['language']} · {intake['case_type_label']['zh']} · {intake['risk_label']['zh']}"), "status": "VERIFIED"},
-        {"id": "9.1.2", "title": bi("Country and lifecycle routing", "国家与生命周期路由"), "proof": bi(f"{project.code if project else '—'} · {intake['lifecycle_stage']['id']} · 98%", f"{project.code if project else '—'} · {intake['lifecycle_stage']['name']['zh']} · 98%"), "status": "VERIFIED"},
-        {"id": "9.1.3", "title": bi("Malaysia country pack", "马来西亚国家包"), "proof": bi(f"{pack.version if pack else '—'} · {len(pack.permit_catalog) if pack else 0} gates", f"{pack.version if pack else '—'} · {len(pack.permit_catalog) if pack else 0} 个关卡"), "status": "VERIFIED" if pack else "PENDING"},
-        {"id": "9.1.4", "title": bi("Grounded knowledge evidence", "知识证据检索"), "proof": bi(f"{len(evidence)} cited sources", f"{len(evidence)} 条已引用来源"), "status": "VERIFIED" if evidence else "READY"},
-        {"id": "9.1.5", "title": bi("Twin impact context", "数字孪生影响定位"), "proof": bi(f"{twin.id if twin else '—'} · {control.schedule_variance_days if control else 0}d · {round((control.forecast-control.budget), 2) if control else 0}M", f"{twin.id if twin else '—'} · {control.schedule_variance_days if control else 0}天 · {round((control.forecast-control.budget), 2) if control else 0}M"), "status": "VERIFIED" if twin else "PENDING"},
-        {"id": "9.1.6", "title": bi("Multi-agent plan and human gate", "多智能体计划与人工关卡"), "proof": bi(f"{len(runs)} agent runs · {len(approvals)} approval(s)", f"{len(runs)} 次智能体运行 · {len(approvals)} 项审批"), "status": "VERIFIED" if approvals and all(item.status == "APPROVED" for item in approvals) else "READY"},
-        {"id": "9.1.7", "title": bi("Trusted execution and independent verification", "可信执行与独立核验"), "proof": bi(verification.id if verification else "Awaiting explicit human approval", verification.id if verification else "等待明确人工审批"), "status": "VERIFIED" if closed else "READY"},
+        {"id": "9.1.1", "title": bi("Bilingual event intake", "双语事件接入"), "proof": bi(f"{intake['language']} · {intake['case_type']} · {intake['risk']}", f"{intake['language']} · {intake['case_type_label']['zh']} · {intake['risk_label']['zh']}"), "status": "DETERMINISTIC_REFERENCE"},
+        {"id": "9.1.2", "title": bi("Country and lifecycle routing", "国家与生命周期路由"), "proof": bi(f"{project.code if project else '—'} · {intake['lifecycle_stage']['id']} · {routing_confidence}%", f"{project.code if project else '—'} · {intake['lifecycle_stage']['name']['zh']} · {routing_confidence}%"), "status": "DETERMINISTIC_REFERENCE"},
+        {"id": "9.1.3", "title": bi("Malaysia country pack", "马来西亚国家包"), "proof": bi(f"{pack.version if pack else '—'} · {len(pack.permit_catalog) if pack else 0} gates", f"{pack.version if pack else '—'} · {len(pack.permit_catalog) if pack else 0} 个关卡"), "status": "REVIEWED" if pack and pack.status == "REVIEWED" and pack.review_due_at and pack.review_due_at > utc_now() else "LOCAL_REVIEW_REQUIRED" if pack else "PENDING"},
+        {"id": "9.1.4", "title": bi("Grounded knowledge evidence", "知识证据检索"), "proof": bi(f"{len(evidence)} cited sources", f"{len(evidence)} 条已引用来源"), "status": "AVAILABLE" if evidence else "NOT_RUN"},
+        {"id": "9.1.5", "title": bi("Twin impact context", "数字孪生影响定位"), "proof": bi(f"{twin.id if twin else '—'} · {control.schedule_variance_days if control else 0}d · {round((control.forecast-control.budget), 2) if control else 0}M", f"{twin.id if twin else '—'} · {control.schedule_variance_days if control else 0}天 · {round((control.forecast-control.budget), 2) if control else 0}M"), "status": "SYNTHETIC_AVAILABLE" if twin else "PENDING"},
+        {"id": "9.1.6", "title": bi("Multi-agent plan and human gate", "多智能体计划与人工关卡"), "proof": bi(f"{len(runs)} agent runs · {len(approvals)} approval(s)", f"{len(runs)} 次智能体运行 · {len(approvals)} 项审批"), "status": "RECORDED" if approvals and all(item.status == "APPROVED" for item in approvals) else "AWAITING_ACTION"},
+        {"id": "9.1.7", "title": bi("Trusted execution and independent verification", "可信执行与独立核验"), "proof": bi(verification.id if verification else "Awaiting explicit human approval", verification.id if verification else "等待明确人工审批"), "status": "VERIFIED" if closed else "AWAITING_ACTION"},
     ]
     return {
         "phase": "9.1",
@@ -277,63 +341,30 @@ def _golden_snapshot(db: Session) -> dict:
     }
 
 
-class GoldenRunRequest(BaseModel):
-    human_approval_confirmed: bool = False
-    approver: str = Field(default="Competition demo operator", min_length=2, max_length=120)
-
-
 @router.get("/golden-thread")
 def golden_thread(db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     return localize(_golden_snapshot(db), lang)
 
 
-@router.post("/golden-thread/run")
-async def run_golden_thread(payload: GoldenRunRequest, db: Session = Depends(get_db), lang: str = Depends(get_lang)):
-    if not payload.human_approval_confirmed:
-        raise HTTPException(409, detail={"code": "HUMAN_APPROVAL_REQUIRED", "message": "Explicit human approval is required."})
-    started = perf_counter()
-    case = db.get(Case, GOLDEN_CASE_ID)
-    if case is None:
-        raise HTTPException(404, "Golden competition case is not seeded")
-    action = db.scalar(select(Action).where(Action.case_id == case.id).order_by(Action.created_at.desc()))
+@router.post("/golden-thread/run", deprecated=True)
+def retired_golden_thread_autorun():
+    """The V5 one-click path is intentionally non-operational in V6.
 
-    try:
-        if not action:
-            # Competition mode is deliberately reproducible and network-free;
-            # the normal intake/API routes remain available for live models.
-            await analyze_case(db, case.id, model_route="mock", data_classification="public")
-            action = db.scalar(select(Action).where(Action.case_id == case.id).order_by(Action.created_at.desc()))
-        if action and action.status != "CLOSED":
-            approvals = list(db.scalars(select(Approval).where(Approval.case_id == case.id)))
-            for approval in approvals:
-                if approval.status != "APPROVED":
-                    approval.status = "APPROVED"
-                    approval.decided_by = payload.approver
-                    approval.decided_at = utc_now()
-            if approvals and all(item.status == "APPROVED" for item in approvals):
-                action.status = "APPROVED"
-                action.approved_at = utc_now()
-                case.status = "APPROVED"
-                db.commit()
-            if action.status == "APPROVED":
-                execute_action(db, action.id, executor="competition.governed.document.generate")
-            action = db.get(Action, action.id)
-            if action.status in {"EXECUTED", "VERIFICATION_FAILED"}:
-                verify_action(db, action.id, verifier="competition.independent.verifier")
-            action = db.get(Action, action.id)
-            if action.status == "VERIFIED":
-                close_action(db, action.id)
-    except GovernedExecutionError as exc:
-        raise HTTPException(exc.status_code, detail={"code": exc.code, "message": exc.message}) from exc
-
-    result = _golden_snapshot(db)
-    result["run"] = {
-        "status": "COMPLETED" if result["complete"] else "INCOMPLETE",
-        "elapsed_ms": round((perf_counter() - started) * 1000, 2),
-        "human_approval_recorded": True,
-        "external_delivery_performed": False,
-    }
-    return localize(result, lang)
+    A boolean and a free-text name can never stand in for independent human
+    identities. Judges must use the isolated, role-ticketed session endpoints.
+    """
+    raise HTTPException(
+        410,
+        detail={
+            "code": "LEGACY_AUTORUN_REMOVED",
+            "message": (
+                "One-click approval/execution was removed in V6. Create a "
+                "competition session and complete every governed step with "
+                "a distinct role ticket."
+            ),
+            "next": "/competition/sessions",
+        },
+    )
 
 
 @router.get("/evaluation")
@@ -342,6 +373,123 @@ def competition_evaluation(
     db: Session = Depends(get_db),
 ):
     return evaluate_competition_cases(db, include_cases=include_cases)
+
+
+def _release_evidence(deployment_commit: str | None, dataset_hashes: dict[str, str]) -> dict:
+    """Load the CI artifact fail-closed; absence or tampering never becomes PASS."""
+    if not RELEASE_EVIDENCE_PATH.is_file():
+        return {
+            "verification": {
+                "status": "UNVERIFIED",
+                "reasons": [
+                    "RELEASE_EVIDENCE_MISSING",
+                    *([] if deployment_commit else ["DEPLOYMENT_COMMIT_MISSING"]),
+                ],
+                "commit": None,
+                "key_id": None,
+            },
+            "generated_at": None,
+            "source": {"commit": None, "dirty": None},
+            "ci": {"url": None},
+            "model_configuration": routing_status(),
+            "totals": {
+                "expected_suite_count": 3,
+                "complete_suite_count": 0,
+                "case_count": sum(
+                    _dataset_size(path)
+                    for path in (
+                        DATASET_PATH,
+                        AGENT_ORG_DATASET_PATH,
+                        DISPATCH_DATASET_PATH,
+                    )
+                ),
+                "evidence_completeness": "INCOMPLETE",
+            },
+            "validation": {},
+            "suites": [
+                {
+                    "id": suite_id,
+                    "slug": slug,
+                    "evidence_status": "UNVERIFIED",
+                    "verification_errors": ["RUNNER_OUTPUT_MISSING"],
+                    "reported_status": "NOT_RUN",
+                    "case_count": _dataset_size(path),
+                    "metrics": {},
+                    "gates": {},
+                    "dataset": {
+                        "path": CANONICAL_DATASET_PATHS[slug],
+                        "records": _dataset_size(path),
+                        "sha256": dataset_hashes[slug],
+                    },
+                    "runner_output": {"filename": None, "sha256": None},
+                }
+                for suite_id, slug, path in (
+                    ("AI_OUTBOUND_COMPETITION_EVIDENCE", "ai_outbound", DATASET_PATH),
+                    ("AGENT_ORGANIZATION", "agent_organization", AGENT_ORG_DATASET_PATH),
+                    ("ASSISTANT_DISPATCH", "assistant_dispatch", DISPATCH_DATASET_PATH),
+                )
+            ],
+        }
+    try:
+        summary = verified_release_summary(
+            RELEASE_EVIDENCE_PATH,
+            expected_commit=deployment_commit,
+            ed25519_public_key=(
+                settings.evidence_verification_public_key or None
+            ),
+            hmac_key=(
+                settings.evidence_signing_key or None
+                if settings.evidence_allow_legacy_hmac
+                or not is_production_environment(
+                    settings.environment, settings.railway_environment
+                )
+                else None
+            ),
+            repo_root=REPO_ROOT,
+        )
+        if not deployment_commit:
+            summary["verification"]["status"] = "UNVERIFIED"
+            summary["verification"]["reasons"] = sorted({
+                *(summary["verification"].get("reasons") or []),
+                "DEPLOYMENT_COMMIT_MISSING",
+            })
+        return summary
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "verification": {
+                "status": "UNVERIFIED",
+                "reasons": [
+                    "RELEASE_EVIDENCE_INVALID",
+                    type(exc).__name__,
+                    *([] if deployment_commit else ["DEPLOYMENT_COMMIT_MISSING"]),
+                ],
+            },
+            "generated_at": None,
+            "source": {},
+            "ci": {},
+            "model_configuration": routing_status(),
+            "totals": {"case_count": 0, "evidence_completeness": "INCOMPLETE"},
+            "validation": {},
+            "suites": [],
+        }
+
+
+def current_release_evidence() -> dict:
+    """Verify the installed artifact against this deployment and its datasets.
+
+    This is the single runtime trust decision used by the competition surface
+    and production-readiness endpoint.  Callers must never infer readiness
+    merely from a configured key or an existing file.
+    """
+    datasets = {
+        "ai_outbound": DATASET_PATH,
+        "agent_organization": AGENT_ORG_DATASET_PATH,
+        "assistant_dispatch": DISPATCH_DATASET_PATH,
+    }
+    return _release_evidence(
+        _deployment_commit(),
+        {name: _dataset_digest(path) for name, path in datasets.items()},
+    )
 
 
 @router.get("/submission-evidence")
@@ -353,93 +501,117 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
         "assistant_dispatch": DISPATCH_DATASET_PATH,
     }
     dataset_hashes = {name: _dataset_digest(path) for name, path in datasets.items()}
-    evidence_digest = hashlib.sha256(json.dumps({
-        "release": PRODUCT_VERSION,
-        "ci_run": CI_EVIDENCE_RUN,
-        "datasets": dataset_hashes,
-    }, sort_keys=True).encode("utf-8")).hexdigest()
     model_routing = routing_status()
-    deployment_commit = (
-        os.getenv("RAILWAY_GIT_COMMIT_SHA")
-        or os.getenv("GIT_COMMIT_SHA")
-        or "local-source"
-    )
-    evaluation_suites = [
-        {
-            "id": "ai-outbound",
-            "label": bi("AI outbound", "AI 出海"),
-            "status": evaluation["status"],
-            "passed_cases": evaluation["passed_cases"],
-            "total_cases": evaluation["total_cases"],
-            "dataset_version": evaluation["dataset_version"],
-            "verification_mode": bi("Live request + CI gate", "实时运行 + CI 门禁"),
-            "runner": "python evals/run_competition_eval.py",
-            "digest": dataset_hashes["ai_outbound"],
-            "metrics": {
-                "country_accuracy": evaluation["metrics"]["country_accuracy"],
-                "evidence_recall": evaluation["metrics"]["top3_evidence_recall"],
-                "abstention": evaluation["metrics"]["unsupported_query_abstention"],
-            },
-            "evidence_url": "/backend/competition/evaluation?include_cases=true",
-        },
-        {
-            "id": "agent-organization",
-            "label": bi("Agent organization 2.0", "智能体组织 2.0"),
-            "status": "PASSED",
-            "passed_cases": _dataset_size(AGENT_ORG_DATASET_PATH),
-            "total_cases": _dataset_size(AGENT_ORG_DATASET_PATH),
-            "dataset_version": "agent-org-2026.10.15-v1",
-            "verification_mode": bi("Versioned CI snapshot", "版本化 CI 核验快照"),
-            "runner": "python evals/run_agent_org_eval.py",
-            "digest": dataset_hashes["agent_organization"],
-            "metrics": {
-                "team_accuracy": 100.0,
-                "escalation_accuracy": 100.0,
-                "plan_traceability": 100.0,
-                "grounded_findings": 100.0,
-            },
-            "evidence_url": "/agents",
-        },
-        {
-            "id": "assistant-dispatch",
-            "label": bi("Dispatcher", "总调度智能体"),
-            "status": "PASSED",
-            "passed_cases": _dataset_size(DISPATCH_DATASET_PATH),
-            "total_cases": _dataset_size(DISPATCH_DATASET_PATH),
-            "dataset_version": "assistant-dispatch-2026.10.15-v1",
-            "verification_mode": bi("Versioned CI snapshot", "版本化 CI 核验快照"),
-            "runner": "python evals/run_dispatch_eval.py",
-            "digest": dataset_hashes["assistant_dispatch"],
-            "metrics": {
-                "plan_accuracy": 100.0,
-                "step_completion": 100.0,
-                "summary_coverage": 100.0,
-            },
-            "evidence_url": "/",
-        },
-    ]
+    deployment_commit = _deployment_commit()
+    release_evidence = current_release_evidence()
+    release_verified = release_evidence["verification"]["status"] == "VERIFIED"
+    suite_presentation = {
+        "AI_OUTBOUND_COMPETITION_EVIDENCE": (
+            "ai-outbound",
+            bi("AI outbound", "AI 出海"),
+            "python evals/run_competition_eval.py",
+            "/backend/competition/evaluation?include_cases=true",
+        ),
+        "AGENT_ORGANIZATION": (
+            "agent-organization",
+            bi("Agent organization 2.0", "智能体组织 2.0"),
+            "python evals/run_agent_org_eval.py",
+            "/agents",
+        ),
+        "ASSISTANT_DISPATCH": (
+            "assistant-dispatch",
+            bi("Dispatcher", "总调度智能体"),
+            "python evals/run_dispatch_eval.py",
+            "/",
+        ),
+    }
+    evaluation_suites = []
+    for suite in release_evidence.get("suites") or []:
+        display = suite_presentation.get(
+            suite.get("id"),
+            (suite.get("slug", "unknown"), bi("Unknown suite", "未知评测"), "", "#"),
+        )
+        suite_gates = suite.get("gates") or {}
+        suite_gates_valid = bool(suite_gates) and all(
+            type(value) is bool for value in suite_gates.values()
+        )
+        suite_verified = (
+            release_verified
+            and suite.get("evidence_status") == "VERIFIED"
+            and suite_gates_valid
+        )
+        reported_pass = (
+            suite.get("reported_status") == "PASSED"
+            and all(suite_gates.values())
+        )
+        total = int(suite.get("case_count") or 0)
+        evaluation_suites.append(
+            {
+                "id": display[0],
+                "label": display[1],
+                "status": (
+                    "VERIFIED_PASSED"
+                    if suite_verified and reported_pass
+                    else "VERIFIED_FAILED"
+                    if suite_verified
+                    else "UNVERIFIED"
+                ),
+                "passed_cases": total if suite_verified and reported_pass else 0,
+                "total_cases": total,
+                "dataset_version": suite.get("dataset", {}).get("sha256", "")[:16],
+                "verification_mode": bi(
+                    "Signed CI artifact bound to source commit",
+                    "与源码提交绑定的签名 CI 证据包",
+                ),
+                "runner": display[2],
+                "digest": suite.get("dataset", {}).get("sha256") or "",
+                "metrics": suite.get("metrics") or {},
+                "evidence_url": display[3],
+                "verification_errors": suite.get("verification_errors") or [],
+            }
+        )
     total_cases = sum(item["total_cases"] for item in evaluation_suites)
     passed_cases = sum(item["passed_cases"] for item in evaluation_suites)
+    validation = release_evidence.get("validation") or {}
+    api_tests = validation.get("api_tests") or {}
+    required_validation = release_validation_checks(release_evidence)
+    validation_passed = all(required_validation.values())
+    evidence_digest = release_evidence.get("artifact_sha256") or hashlib.sha256(
+        json.dumps(dataset_hashes, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    ci_url = (release_evidence.get("ci") or {}).get("url")
+    release_status = (
+        "UNVERIFIED"
+        if not release_verified
+        else "VERIFIED_PASSED"
+        if total_cases > 0 and passed_cases == total_cases and validation_passed
+        else "VERIFIED_FAILED"
+    )
+    suite_status = {row["id"]: row["status"] for row in evaluation_suites}
+    performance_evidence = bi(
+        f"{passed_cases}/{total_cases} cases are backed by a commit-bound signed artifact; status {release_status}.",
+        f"{passed_cases}/{total_cases} 条案例具有与提交绑定的签名证据；状态为 {release_status}。",
+    )
     payload = {
         "track": bi("AI Outbound", "AI 出海赛道"),
         "phase": PRODUCT_VERSION,
         "release": {
             "product_version": PRODUCT_VERSION,
-            "architecture": "agent-dispatch",
-            "generated_at": utc_now().isoformat(),
-            "deployment_commit": deployment_commit[:12],
+            "architecture": "governed-evidence-action",
+            "generated_at": release_evidence.get("generated_at") or utc_now().isoformat(),
+            "deployment_commit": deployment_commit[:12] if deployment_commit else "NOT_ATTESTED",
             "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "runtime-not-exposed"),
-            "evidence_status": "PASSED" if passed_cases == total_cases else "FAILED",
+            "evidence_status": release_status,
             "passed_cases": passed_cases,
             "total_cases": total_cases,
             "ci": {
                 "provider": "GitHub Actions",
-                "run_id": CI_EVIDENCE_RUN,
-                "verified_at": CI_VERIFIED_AT,
-                "api_tests_passed": CI_API_TESTS_PASSED,
-                "web_build": "PASSED",
-                "migration_check": "PASSED",
-                "full_stack_smoke": "PASSED",
+                "run_id": ci_url or "NOT_ATTESTED",
+                "verified_at": release_evidence.get("generated_at"),
+                "api_tests_passed": api_tests.get("passed"),
+                "web_build": validation.get("web_build", "NOT_ATTESTED"),
+                "migration_check": validation.get("migration_check", "NOT_ATTESTED"),
+                "full_stack_smoke": validation.get("full_stack_smoke", "NOT_ATTESTED"),
             },
         },
         "three_routes": [
@@ -448,23 +620,23 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
             {"id": "capability-export", "label": bi("Capability export", "能力输出"), "proof": bi("Operational digital twin with six interoperable interfaces", "具备六类互操作接口的运营数字孪生")},
         ],
         "capabilities": [
-            {"id": "ingestion", "label": bi("Six-channel ingestion", "六通道数据接入"), "proof": bi("Work orders, documents, master data, enterprise systems, BIM/GIS/twins and IoT keep domain semantics", "工单、文档、主数据、企业系统、BIM/GIS/孪生与 IoT 保留专业语义"), "href": "/data-ingestion", "status": "VERIFIED"},
-            {"id": "dispatcher", "label": bi("Dispatcher", "总调度智能体"), "proof": bi("Multi-intent decomposition, parallel specialist dispatch and citation-checked synthesis", "多意图拆解、专业智能体并行调度与引用核验汇总"), "href": "/", "status": "VERIFIED"},
-            {"id": "organization", "label": bi("Agent organization 2.0", "智能体组织 2.0"), "proof": bi("Dynamic expert teams, governed tools, questions and traceable action plans", "动态专家组、受治理工具、补充提问与可追溯行动计划"), "href": "/agents", "status": "VERIFIED"},
-            {"id": "field", "label": bi("Field operations 2.0", "现场作业 2.0"), "proof": bi("Text, voice and validated media intake with risk-only-up AI assessment", "文字、语音、受校验媒体接入与风险只升不降的 AI 研判"), "href": "/field", "status": "VERIFIED"},
-            {"id": "twin", "label": bi("Operational digital twin", "运营数字孪生"), "proof": bi("IFC, glTF, 3D Tiles, GeoJSON, WMS and IoT-linked operational context", "IFC、glTF、3D Tiles、GeoJSON、WMS 与 IoT 运营上下文"), "href": "/twin", "status": "VERIFIED"},
-            {"id": "execution", "label": bi("Governed execution", "受控执行与独立核验"), "proof": bi("AI recommends; named humans approve; tools execute; independent receipts verify", "AI 建议、具名人工审批、工具执行、独立回执核验"), "href": "#golden-thread", "status": "VERIFIED"},
+            {"id": "ingestion", "label": bi("Six-channel ingestion", "六通道数据接入"), "proof": bi("Work orders, documents, master data, enterprise systems, BIM/GIS/twins and IoT keep domain semantics", "工单、文档、主数据、企业系统、BIM/GIS/孪生与 IoT 保留专业语义"), "href": "/data-ingestion", "status": "CODE_PRESENT"},
+            {"id": "dispatcher", "label": bi("Dispatcher", "总调度智能体"), "proof": bi("Multi-intent decomposition, parallel specialist dispatch and citation-checked synthesis", "多意图拆解、专业智能体并行调度与引用核验汇总"), "href": "/", "status": suite_status.get("assistant-dispatch", "UNVERIFIED")},
+            {"id": "organization", "label": bi("Agent organization 2.0", "智能体组织 2.0"), "proof": bi("Dynamic expert teams, governed tools, questions and traceable action plans", "动态专家组、受治理工具、补充提问与可追溯行动计划"), "href": "/agents", "status": suite_status.get("agent-organization", "UNVERIFIED")},
+            {"id": "field", "label": bi("Field operations 2.0", "现场作业 2.0"), "proof": bi("Text, voice and validated media intake with risk-only-up AI assessment", "文字、语音、受校验媒体接入与风险只升不降的 AI 研判"), "href": "/field", "status": "CODE_PRESENT"},
+            {"id": "twin", "label": bi("Operational digital twin", "运营数字孪生"), "proof": bi("IFC, glTF, 3D Tiles, GeoJSON, WMS and IoT-linked operational context", "IFC、glTF、3D Tiles、GeoJSON、WMS 与 IoT 运营上下文"), "href": "/twin", "status": "SYNTHETIC_DEMO_AVAILABLE"},
+            {"id": "execution", "label": bi("Governed execution", "受控执行与独立核验"), "proof": bi("AI recommends; distinct humans approve, execute, verify, close and sign receipts", "AI 建议，不同人员审批、执行、核验、关闭并签署回执"), "href": "#golden-thread", "status": "POLICY_ENABLED" if settings.sod_enforced else "SANDBOX_ONLY"},
         ],
         "scorecard": [
-            {"id": "industry-pain", "category": bi("Innovation", "创新性"), "criterion": bi("Industry pain", "行业痛点解决能力"), "max_score": 15, "evidence": bi("A seven-step overseas-project closure with evidence at every handoff", "海外项目七步闭环，每次交接均产生证据"), "href": "#golden-thread", "evidence_ids": ["CASE-GOLDEN-MY-001", "VR-132090E44B5A478AB51712C7DB6B4934"]},
+            {"id": "industry-pain", "category": bi("Innovation", "创新性"), "criterion": bi("Industry pain", "行业痛点解决能力"), "max_score": 15, "evidence": bi("A seven-step overseas-project closure with signed evidence at every governed handoff", "海外项目七步闭环，每个受管控交接均产生签名证据"), "href": "#golden-thread", "evidence_ids": ["ISOLATED-SESSION", "RUNTIME-RECEIPT"]},
             {"id": "technology-fusion", "category": bi("Innovation", "创新性"), "criterion": bi("Technology fusion", "技术融合创新性"), "max_score": 10, "evidence": bi("LLM routing, knowledge retrieval, multi-agent coordination, MCP and operational twin", "大模型路由、知识检索、多智能体、MCP 与运营孪生融合"), "href": "/architecture", "evidence_ids": [PRODUCT_VERSION, "agent-dispatch"]},
             {"id": "business-model", "category": bi("Innovation", "创新性"), "criterion": bi("Business model", "业务模式突破性"), "max_score": 5, "evidence": bi("Reusable country packs and governed capability delivery", "可复用国家包与受治理能力输出"), "href": "/country-packs", "evidence_ids": ["MY", "ID", "SA", "AE"]},
-            {"id": "technical-route", "category": bi("Practicality", "实用性"), "criterion": bi("Technical route", "技术路线合理性"), "max_score": 10, "evidence": bi("Layered architecture with deterministic fallbacks and human authority gates", "分层架构、确定性降级与人工责任关卡"), "href": "/architecture", "evidence_ids": [f"{CI_API_TESTS_PASSED}-tests", "full-stack-smoke"]},
+            {"id": "technical-route", "category": bi("Practicality", "实用性"), "criterion": bi("Technical route", "技术路线合理性"), "max_score": 10, "evidence": bi("Layered architecture with deterministic fallbacks and human authority gates", "分层架构、确定性降级与人工责任关卡"), "href": "/architecture", "evidence_ids": [f"{api_tests.get('passed') or 'NOT-ATTESTED'}-tests", validation.get("full_stack_smoke", "NOT_ATTESTED")]},
             {"id": "data-support", "category": bi("Practicality", "实用性"), "criterion": bi("Data support", "数据支撑有效性"), "max_score": 10, "evidence": bi("Six typed ingestion channels, lineage receipts and three hashed datasets", "六类专业数据入口、血缘回执与三套哈希数据集"), "href": "/data-ingestion", "evidence_ids": ["6-channels", evidence_digest[:16]]},
-            {"id": "model-performance", "category": bi("Practicality", "实用性"), "criterion": bi("Model and algorithm performance", "模型/算法性能"), "max_score": 10, "evidence": bi(f"{passed_cases}/{total_cases} benchmark cases plus model-route transparency", f"{passed_cases}/{total_cases} 条评测通过，并公开模型路由状态"), "href": "#evaluation-suites", "evidence_ids": ["30/30", "12/12", "15/15"]},
+            {"id": "model-performance", "category": bi("Practicality", "实用性"), "criterion": bi("Model and algorithm performance", "模型/算法性能"), "max_score": 10, "evidence": performance_evidence, "href": "#evaluation-suites", "evidence_ids": [row["status"] for row in evaluation_suites]},
             {"id": "report-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Design report", "设计报告规范性"), "max_score": 10, "evidence": bi(f"{PRODUCT_VERSION} architecture, implementation, validation and limitations are version-aligned", f"{PRODUCT_VERSION} 架构、实施、验证和局限采用同一版本口径"), "href": "/architecture", "evidence_ids": [f"{PRODUCT_VERSION}-report"]},
             {"id": "scenario-fit", "category": bi("Completeness", "方案完整性"), "criterion": bi("Scenario fit", "场景适配性"), "max_score": 10, "evidence": bi("Overseas transport lifecycle, localization and controlled execution", "海外交通全生命周期、属地化与受控执行"), "href": "#golden-thread", "evidence_ids": ["MY-RAIL-A"]},
-            {"id": "demo-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Demo and reproducibility", "演示/录屏/开源材料质量"), "max_score": 10, "evidence": bi("Public deployment, runnable APIs, CI runners and downloadable JSON evidence", "公网部署、可运行 API、CI 脚本与可下载 JSON 证据"), "href": "/backend/competition/evaluation?include_cases=true", "evidence_ids": [CI_EVIDENCE_RUN, evidence_digest[:16]]},
+            {"id": "demo-quality", "category": bi("Completeness", "方案完整性"), "criterion": bi("Demo and reproducibility", "演示/录屏/开源材料质量"), "max_score": 10, "evidence": bi("Isolated judge sandbox, runnable APIs, CI runners and downloadable signed JSON evidence", "隔离评委沙箱、可运行 API、CI 脚本与可下载签名 JSON 证据"), "href": "/backend/competition/evaluation?include_cases=true", "evidence_ids": [ci_url or "NOT_ATTESTED", evidence_digest[:16]]},
             {"id": "scalability", "category": bi("Completeness", "方案完整性"), "criterion": bi("Scalability", "可扩展性"), "max_score": 10, "evidence": bi("Country packs, domain agents and six twin interfaces are independently extensible", "国家包、领域智能体与六类孪生接口均可独立扩展"), "href": "/platform", "evidence_ids": ["24-domains", "6-interfaces"]},
         ],
         "evaluation": evaluation,
@@ -472,7 +644,7 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
         "governance": {
             "model_routing": model_routing,
             "data_boundary": bi("Synthetic competition data only; no customer or personal data is included", "仅使用参赛合成数据，不含客户数据或个人数据"),
-            "authority_boundary": bi("AI may recommend and draft; named humans retain approval, execution and closure authority", "AI 可以建议与起草；审批、执行和关闭权保留给具名人员"),
+            "authority_boundary": bi("AI may recommend and draft; named, separated humans retain approval, execution, verification and closure authority", "AI 可以建议与起草；审批、执行、核验和关闭权保留给相互分离的具名人员"),
             "external_delivery_performed": False,
             "lineage": {
                 "source": "services/api/evals/*.jsonl",
@@ -481,6 +653,17 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
             },
             "dataset_hashes": dataset_hashes,
             "evidence_digest": evidence_digest,
+            "evidence_verification": release_evidence["verification"],
+            "release_validation": {
+                "status": (
+                    "UNVERIFIED"
+                    if not release_verified
+                    else "PASSED"
+                    if validation_passed
+                    else "FAILED"
+                ),
+                "checks": required_validation,
+            },
             "limitations": bi(
                 "Results establish reproducibility on fixed synthetic suites; they are not production accuracy claims or a substitute for local professional review.",
                 "结果仅证明固定合成评测集上的可复现性，不代表真实项目准确率，也不替代属地专业审查。",
@@ -490,7 +673,60 @@ def submission_evidence(db: Session = Depends(get_db), lang: str = Depends(get_l
             "api": "/competition/evaluation?include_cases=true",
             "dataset": "services/api/evals/competition_outbound.jsonl",
             "runner": "python evals/run_competition_eval.py",
-            "ci_run": CI_EVIDENCE_RUN,
+            "ci_run": ci_url or "NOT_ATTESTED",
         },
     }
     return localize(payload, lang)
+
+
+@router.get("/evaluation-artifacts/latest")
+def latest_evaluation_artifact():
+    return current_release_evidence()
+
+
+@router.get("/evidence-bundle")
+def evidence_bundle():
+    if not RELEASE_EVIDENCE_PATH.is_file():
+        raise HTTPException(
+            404,
+            detail={
+                "code": "RELEASE_EVIDENCE_MISSING",
+                "message": "No CI release-evidence artifact is installed on this deployment.",
+            },
+        )
+    release_evidence = current_release_evidence()
+    verification = release_evidence.get("verification") or {}
+    if verification.get("status") != "VERIFIED":
+        raise HTTPException(
+            409,
+            detail={
+                "code": "RELEASE_EVIDENCE_UNVERIFIED",
+                "message": "The installed release-evidence artifact did not verify.",
+                "reasons": verification.get("reasons") or [],
+            },
+        )
+    try:
+        raw = RELEASE_EVIDENCE_PATH.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != release_evidence.get("artifact_sha256"):
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "RELEASE_EVIDENCE_CHANGED",
+                    "message": "The release-evidence artifact changed after verification.",
+                },
+            )
+        envelope = json.loads(raw)
+    except HTTPException:
+        raise
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "RELEASE_EVIDENCE_INVALID",
+                "message": "The installed release-evidence artifact is invalid.",
+            },
+        ) from exc
+    return {
+        "artifact_sha256": release_evidence["artifact_sha256"],
+        "envelope": envelope,
+    }

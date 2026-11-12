@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import Project, TwinObject, TwinProfile, TwinSensor, TwinSource
+from .security import Principal, get_principal, require_project
 
 router = APIRouter(prefix="/twin/demo-pack", tags=["synthetic-digital-twin"])
 
@@ -46,7 +47,8 @@ LEGACY_SOURCE_IDS = {
 }
 
 
-def _context(project_id: int, db: Session) -> tuple[Project, list[TwinObject], dict]:
+def _context(project_id: int, db: Session, principal: Principal) -> tuple[Project, list[TwinObject], dict]:
+    require_project(principal, project_id, db)
     project = db.get(Project, project_id)
     profile = db.get(TwinProfile, project_id)
     config = ({"slug": profile.slug, "center": profile.center, "kind": profile.kind, "version": profile.version}
@@ -184,7 +186,7 @@ def seed_synthetic_twin_sources(db: Session) -> None:
             source_id = LEGACY_SOURCE_IDS.get((project_id, source_type), f"TS-{project.code}-{source_type.replace('_', '')}")
             row = db.get(TwinSource, source_id)
             if row is None:
-                row = TwinSource(id=source_id, organization_id="globalinfra-demo", project_id=project_id, source_type=source_type, name=f"{project.code} · {source_type.replace('_', ' ')} synthetic instance", uri="", version=config["version"], coordinate_reference_system=None, status="SYNTHETIC_DEMO", checksum=None, metadata_json={})
+                row = TwinSource(id=source_id, organization_id=project.organization_id, project_id=project_id, source_type=source_type, name=f"{project.code} · {source_type.replace('_', ' ')} synthetic instance", uri="", version=config["version"], coordinate_reference_system=None, status="SYNTHETIC_DEMO", checksum=None, metadata_json={})
                 db.add(row)
             row.name = f"{project.code} · {source_type.replace('_', ' ')} synthetic instance"
             row.uri = f"/backend/twin/demo-pack/{project_id}/{path}"
@@ -197,8 +199,8 @@ def seed_synthetic_twin_sources(db: Session) -> None:
 
 
 @router.get("/{project_id}/manifest")
-def manifest(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def manifest(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     payloads = artifact_payloads(project, objects, config)
     base = f"/backend/twin/demo-pack/{project_id}"
     artifacts = [{"type": kind, "url": f"{base}/{FORMAT_PATHS[kind]}", "sha256": _sha(data), "bytes": len(data)} for kind, data in payloads.items()]
@@ -207,40 +209,40 @@ def manifest(project_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{project_id}/model.ifc")
-def ifc(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def ifc(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     return Response(build_ifc(project, objects, config), media_type="application/x-step", headers={"Content-Disposition": f'inline; filename="{config["slug"]}.ifc"', "X-Data-Provenance": "SYNTHETIC_DEMO"})
 
 
 @router.get("/{project_id}/model.gltf")
-def gltf(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def gltf(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     return Response(build_gltf(project, objects, config), media_type="model/gltf+json", headers={"X-Data-Provenance": "SYNTHETIC_DEMO"})
 
 
 @router.get("/{project_id}/tileset.json")
-def tileset(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def tileset(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     return Response(build_tileset(project, objects, config), media_type="application/json", headers={"X-Data-Provenance": "SYNTHETIC_DEMO"})
 
 
 @router.get("/{project_id}/features.geojson")
-def geojson(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def geojson(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     return Response(build_geojson(project, objects, config), media_type="application/geo+json", headers={"X-Data-Provenance": "SYNTHETIC_DEMO"})
 
 
 @router.get("/{project_id}/wms")
-def wms(project_id: int, request: str = Query(default="GetCapabilities"), db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def wms(project_id: int, request: str = Query(default="GetCapabilities"), principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     if request.lower() == "getmap":
         return Response(build_wms_map(project, objects, config), media_type="image/svg+xml", headers={"X-Data-Provenance": "SYNTHETIC_DEMO"})
     return Response(build_wms_capabilities(project, config), media_type="application/xml", headers={"X-Data-Provenance": "SYNTHETIC_DEMO"})
 
 
 @router.get("/{project_id}/iot/telemetry")
-def iot(project_id: int, db: Session = Depends(get_db)):
-    project, objects, config = _context(project_id, db)
+def iot(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    project, objects, config = _context(project_id, db, principal)
     ids = [obj.id for obj in objects]
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids))))
     now = datetime.now(UTC)

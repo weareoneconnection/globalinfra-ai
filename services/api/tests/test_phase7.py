@@ -1,6 +1,32 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+import hashlib
+import hmac
+import json
 from uuid import uuid4
+
+from sqlalchemy import func, select
+from starlette.requests import Request
+
+from app.database import SessionLocal
+from app.main import app
+from app.config import settings
+from app.models import (
+    AIQualityRun,
+    Connector,
+    FieldObservation,
+    IngestionReceipt,
+    PilotMeasurement,
+    Project,
+    TwinModelVersion,
+    TwinObject,
+    TwinSensor,
+    TwinSource,
+    TwinTelemetryReading,
+)
+from app.security import Principal, get_principal
+from app.phase7 import _connector_webhook_key
+from app import operations
 
 
 def test_phase7_capabilities_and_identity(client):
@@ -15,11 +41,142 @@ def test_phase7_capabilities_and_identity(client):
     assert "field_user" in identity["roles"]
 
 
+def test_platform_capability_counts_are_tenant_and_project_scoped(client):
+    baseline = client.get("/platform/capabilities").json()["counts"]
+    suffix = uuid4().hex
+    project_id = 1_000_000 + int(suffix[:6], 16)
+    organization_id = f"foreign-{suffix[:12]}"
+    now = datetime.now(UTC).replace(tzinfo=None)
+    project = Project(
+        id=project_id,
+        organization_id=organization_id,
+        code=f"FOREIGN-{suffix[:12]}",
+        name={"en": "Foreign project"},
+        country_code="ZZ",
+        country_name={"en": "Synthetic"},
+        domain={"en": "Test"},
+        region="isolated",
+        languages=["English"],
+    )
+    twin = TwinObject(
+        id=f"TWIN-{suffix}", project_id=project_id,
+        object_type="asset", name={"en": "Foreign asset"},
+        lifecycle_stage="construction", status="ACTIVE",
+    )
+    sensor = TwinSensor(
+        id=f"SNS-{suffix[:24]}", twin_id=twin.id, sensor_type="test",
+        unit="u", threshold_warning=1.0, threshold_critical=2.0,
+        latest_value=0.5,
+    )
+    rows = [
+        FieldObservation(
+            id=f"FO-{suffix}", client_id=f"foreign:{suffix}",
+            organization_id=organization_id, project_id=project_id,
+            event_type="inspection", severity="LOW", description="Foreign tenant",
+            reporter_id="foreign:user", captured_at=now,
+        ),
+        TwinSource(
+            id=f"TS-{suffix}", organization_id=organization_id,
+            project_id=project_id, source_type="IFC", name="Foreign source",
+            uri="s3://foreign/model.ifc", version="1",
+        ),
+        Connector(
+            id=f"CON-{suffix}", organization_id=organization_id,
+            project_id=project_id, connector_type="primavera_p6",
+            name="Foreign connector",
+        ),
+        AIQualityRun(
+            id=f"AIQ-{suffix}", organization_id=organization_id,
+            suite="foreign", model_provider="mock", model_name="mock",
+            status="PASSED", score=1.0, dataset_version="test",
+        ),
+        TwinModelVersion(
+            id=f"TMV-{suffix}", project_id=project_id, version="1",
+            format="GLTF", status="READY", checksum="a" * 64,
+            uri="s3://foreign/model.gltf",
+        ),
+        TwinTelemetryReading(
+            project_id=project_id, sensor_id=sensor.id, twin_id=twin.id,
+            value=0.5, unit="u", sampled_at=now,
+        ),
+        IngestionReceipt(
+            id=f"IR-{suffix}", organization_id=organization_id,
+            project_id=project_id, channel="test", source_type="test",
+            status="ACCEPTED", target_type="test",
+        ),
+        PilotMeasurement(
+            id=f"PM-{suffix}", organization_id=organization_id,
+            project_id=project_id, metric_name="test", direction="lower",
+            baseline_value=2.0, assisted_value=1.0, unit="u", sample_size=1,
+            evidence_ref="test", evidence_digest="b" * 64,
+            recorded_by="foreign:user",
+        ),
+    ]
+    db = SessionLocal()
+    db.add_all([project, twin, sensor, *rows])
+    db.commit()
+    try:
+        # A row in every counted table belonging to another tenant must not
+        # move any statistic visible to the demo tenant.
+        assert client.get("/platform/capabilities").json()["counts"] == baseline
+
+        scoped = Principal(
+            subject="project-one:user",
+            organization_id="globalinfra-demo",
+            roles=frozenset({"viewer"}),
+            project_ids=frozenset({1}),
+            issuer="test-oidc",
+        )
+        app.dependency_overrides[get_principal] = lambda: scoped
+        counts = client.get("/platform/capabilities").json()["counts"]
+        expected = {
+            "field_observations": db.scalar(select(func.count(FieldObservation.id)).where(
+                FieldObservation.organization_id == "globalinfra-demo",
+                FieldObservation.project_id == 1,
+            )) or 0,
+            "twin_sources": db.scalar(select(func.count(TwinSource.id)).where(
+                TwinSource.organization_id == "globalinfra-demo", TwinSource.project_id == 1,
+            )) or 0,
+            "connectors": db.scalar(select(func.count(Connector.id)).where(
+                Connector.organization_id == "globalinfra-demo", Connector.project_id == 1,
+            )) or 0,
+            "ai_quality_runs": db.scalar(select(func.count(AIQualityRun.id)).where(
+                AIQualityRun.organization_id == "globalinfra-demo",
+            )) or 0,
+            "model_versions": db.scalar(select(func.count(TwinModelVersion.id)).join(
+                Project, Project.id == TwinModelVersion.project_id,
+            ).where(Project.organization_id == "globalinfra-demo", TwinModelVersion.project_id == 1)) or 0,
+            "telemetry_readings": db.scalar(select(func.count(TwinTelemetryReading.id)).join(
+                Project, Project.id == TwinTelemetryReading.project_id,
+            ).where(Project.organization_id == "globalinfra-demo", TwinTelemetryReading.project_id == 1)) or 0,
+            "ingestion_receipts": db.scalar(select(func.count(IngestionReceipt.id)).where(
+                IngestionReceipt.organization_id == "globalinfra-demo", IngestionReceipt.project_id == 1,
+            )) or 0,
+            "pilot_measurements": db.scalar(select(func.count(PilotMeasurement.id)).where(
+                PilotMeasurement.organization_id == "globalinfra-demo", PilotMeasurement.project_id == 1,
+            )) or 0,
+        }
+        assert counts == expected
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+        for row in reversed(rows):
+            db.delete(row)
+        db.delete(sensor)
+        db.delete(twin)
+        db.delete(project)
+        db.commit()
+        db.close()
+
+
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"field-photo"
 
 
 def test_field_sync_is_idempotent_and_creates_case(client):
-    upload = client.post("/field/media", files={"file": ("p47.jpg", JPEG, "image/jpeg")}).json()
+    upload = client.post(
+        "/field/media",
+        data={"project_id": "1"},
+        files={"file": ("p47.jpg", JPEG, "image/jpeg")},
+    ).json()
     payload = {
         "client_id": "mobile-device-001:event-001",
         "project_id": 1,
@@ -163,6 +320,47 @@ def test_connector_plane_rejects_secrets_and_tracks_sync(client):
     assert sync.json()["records_rejected"] == 1
 
 
+def test_connector_webhook_signature_is_scoped_to_one_connector(client, monkeypatch):
+    monkeypatch.setattr(
+        settings, "connector_webhook_secret", "connector-root-secret-at-least-32-bytes"
+    )
+    connector_ids = []
+    for name in ("P6 A", "P6 B"):
+        response = client.post("/integrations/connectors", json={
+            "connector_type": "primavera_p6", "name": name, "project_id": 1,
+            "config": {"endpoint_alias": name.replace(" ", "_")},
+        })
+        assert response.status_code == 201
+        connector_ids.append(response.json()["id"])
+    payload = {
+        "cursor": "2026-11-10T00:00:00Z",
+        "records": [{
+            "external_id": "ACT-WEBHOOK", "object_type": "activity",
+            "updated_at": "2026-11-10T00:00:00Z", "payload": {},
+        }],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    signature = hmac.new(
+        _connector_webhook_key(connector_ids[0]), body, hashlib.sha256
+    ).hexdigest()
+    monkeypatch.setattr(settings, "auth_mode", "oidc")
+    monkeypatch.setattr(settings, "require_api_key", True)
+    try:
+        accepted = client.post(
+            f"/integrations/webhooks/{connector_ids[0]}", content=body,
+            headers={"content-type": "application/json", "x-globalinfra-signature": f"sha256={signature}"},
+        )
+        cross_connector = client.post(
+            f"/integrations/webhooks/{connector_ids[1]}", content=body,
+            headers={"content-type": "application/json", "x-globalinfra-signature": f"sha256={signature}"},
+        )
+        assert accepted.status_code == 200
+        assert cross_connector.status_code == 401
+    finally:
+        monkeypatch.setattr(settings, "auth_mode", "disabled")
+        monkeypatch.setattr(settings, "require_api_key", False)
+
+
 def test_ai_quality_gate_and_operational_endpoints(client):
     blocked = client.post("/ai/quality-runs", json={
         "suite": "engineering-grounding", "model_provider": "openai",
@@ -184,6 +382,74 @@ def test_mutation_writes_audit_event(client):
     assert response.status_code == 200
     events = client.get("/audit/events").json()
     assert any(event["action"].startswith("POST /identity/register") for event in events)
+
+
+def test_audit_failure_is_counted_and_sent_to_durable_outbox(monkeypatch):
+    class BrokenSession:
+        def __enter__(self):
+            raise RuntimeError("primary audit database unavailable")
+
+        def __exit__(self, *_args):
+            return False
+
+    queued = []
+    monkeypatch.setattr(operations, "SessionLocal", lambda: BrokenSession())
+    monkeypatch.setattr(
+        operations, "_enqueue_audit_outbox", lambda event: queued.append(event) is None
+    )
+    monkeypatch.setattr(operations, "_audit_consecutive_failures", 0)
+    monkeypatch.setattr(operations, "_audit_write_failures_total", 0)
+    monkeypatch.setattr(operations, "_audit_outbox_enqueued_total", 0)
+    monkeypatch.setattr(operations, "_audit_outbox_failures_total", 0)
+    request = Request({
+        "type": "http", "method": "POST", "path": "/cases/classify",
+        "headers": [], "query_string": b"", "server": ("test", 80),
+        "client": ("test", 1234), "scheme": "http",
+    })
+    request.state.principal = Principal(
+        subject="audit:test", organization_id="globalinfra-demo",
+        roles=frozenset({"viewer"}), project_ids=frozenset({1}),
+    )
+
+    operations._write_audit(request, "request-audit-failure", 201, 4.2)
+
+    health = operations.audit_health_snapshot()
+    assert health["status"] == "degraded"
+    assert health["failures_total"] == 1
+    assert health["outbox_enqueued_total"] == 1
+    assert health["outbox_failures_total"] == 0
+    assert queued[0]["request_id"] == "request-audit-failure"
+
+
+def test_redis_audit_outbox_writes_replayable_event(monkeypatch):
+    import redis
+
+    calls = []
+
+    class FakeRedis:
+        def xadd(self, stream, values, **options):
+            calls.append((stream, values, options))
+
+        def close(self):
+            calls.append(("closed", {}, {}))
+
+    monkeypatch.setattr(settings, "queue_url", "redis://audit-queue.test/0")
+    monkeypatch.setattr(redis.Redis, "from_url", lambda *_args, **_kwargs: FakeRedis())
+
+    assert operations._enqueue_audit_outbox({"id": "AUD-1", "detail": {"status_code": 201}})
+    assert calls[0][0] == "globalinfra:audit-outbox:v1"
+    assert json.loads(calls[0][1]["event"])["id"] == "AUD-1"
+    assert calls[0][2]["maxlen"] == 100_000
+
+
+def test_audit_failure_degrades_production_readiness(client, monkeypatch):
+    monkeypatch.setattr(operations, "_audit_consecutive_failures", 1)
+
+    readiness = client.get("/platform/production-readiness").json()
+
+    assert readiness["controls"]["audit_persistence"] is False
+    assert readiness["audit"]["status"] == "degraded"
+    assert readiness["status"] == "NOT_READY"
 
 
 def test_rate_limit_returns_429(client, monkeypatch):

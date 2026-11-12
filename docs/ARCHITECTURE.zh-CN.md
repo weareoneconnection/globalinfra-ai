@@ -144,5 +144,5 @@ V1.0 使用关系型的模拟知识记录。生产环境的演进方向：
 
 - `infra/terraform/` 现在是一套可运行的（AWS）起始代码，覆盖试点阶段所需的托管 PostgreSQL/Redis/对象存储/专用网络——但不是经过认证的生产基线（具体覆盖范围与边界见其 README）。
 - `infra/kubernetes/` 清单补充了存活/就绪探针、资源请求/限制、`HorizontalPodAutoscaler`、示例 `Secret` 与示例 `Ingress`，补上了通往企业阶段 Kubernetes 这一项的部分落差；区域化数据面拆分、集中式控制面、KMS/HSM/SIEM 仍是未完成事项。
-- `services/api/app/security.py` 新增了一个默认关闭、可按环境开启的共享密钥 API 网关，作为过渡性的网络边界控制。需要明确的是，它并不是 SSO/OIDC——身份认证仍然是试点阶段尚待补齐的事项。
+- `services/api/app/security.py` 已验证 OIDC Access Token、组织/角色/项目声明与租户授权；Web 层补充授权码 + PKCE 登录、加密 HTTP-only 会话与用户令牌转发，服务密钥仅用于精确列出的公开竞赛接口。真实 IdP 注册与生产联调仍属于外部试点证据。
 - `evals/run_eval.py` 现在会用一个真实（虽然刻意简单、基于规则）的分类器对数据集跑断言，出现回归会让构建失败；`services/api/tests/` 新增了 pytest 套件（覆盖 i18n、翻译回退表、分类器、鉴权网关，以及验证 `analyze_case` 幂等性的端到端用例），并在 CI 中与一次 `docker compose up --wait` 冒烟测试一起跑——完整清单见 RELEASE_NOTES.md。

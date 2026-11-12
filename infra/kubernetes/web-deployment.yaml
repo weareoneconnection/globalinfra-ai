@@ -17,21 +17,72 @@ spec:
           env:
             - name: API_INTERNAL_URL
               value: http://globalinfra-api
+            - name: API_AUTH_MODE
+              value: oidc
             - name: API_SERVICE_KEY
               valueFrom:
                 secretKeyRef:
                   name: globalinfra-api-secrets
                   key: API_KEY
+            # Keep issuer/audience identical to the API verifier. Web-specific
+            # OAuth client and session values live in a separate Secret so the
+            # browser-facing service never receives API signing/audit keys.
+            - name: OIDC_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-api-secrets
+                  key: OIDC_ISSUER
+            - name: OIDC_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-api-secrets
+                  key: OIDC_AUDIENCE
+            - name: OIDC_JWKS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-api-secrets
+                  key: OIDC_JWKS_URL
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: OIDC_CLIENT_ID
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: OIDC_CLIENT_SECRET
+                  optional: true
+            - name: OIDC_AUTHORIZATION_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: OIDC_AUTHORIZATION_ENDPOINT
+            - name: OIDC_TOKEN_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: OIDC_TOKEN_ENDPOINT
+            - name: OIDC_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: OIDC_REDIRECT_URI
+            - name: WEB_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: globalinfra-web-secrets
+                  key: WEB_SESSION_SECRET
           resources:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "500m", memory: "512Mi" }
           readinessProbe:
-            httpGet: { path: /, port: 3000 }
+            httpGet: { path: /readyz, port: 3000 }
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /, port: 3000 }
+            httpGet: { path: /healthz, port: 3000 }
             initialDelaySeconds: 20
             periodSeconds: 20
             failureThreshold: 3

@@ -74,7 +74,7 @@ async function uploadPending(observation: QueuedObservation): Promise<QueuedObse
   const attachments: Attachment[] = [];
   for (const item of observation.attachments) {
     if (item.storage_ref || !item.blob) { attachments.push(item); continue; }
-    const form=new FormData(); form.append('file', item.blob, item.name);
+    const form=new FormData(); form.append('project_id', String(observation.project_id)); form.append('file', item.blob, item.name);
     const response=await fetch('/backend/field/media',{method:'POST',body:form});
     if(!response.ok) throw new Error(`media ${response.status}`);
     const body=await response.json();
@@ -153,7 +153,9 @@ export function FieldCapture({projects,labels,eventLabels,severityLabels}:{proje
     try {
       const ready:QueuedObservation[]=[];
       for(const observation of queued) ready.push(await uploadPending(observation));
-      const observations=ready.map(o=>({...o,attachments:o.attachments.map(({blob,...rest})=>rest)}));
+      const observations=ready.map(o=>({...o,attachments:o.attachments.map(item=>({
+        name:item.name,media_type:item.media_type,size:item.size,sha256:item.sha256,storage_ref:item.storage_ref,
+      }))}));
       const response=await fetch('/backend/field/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({observations})});
       if(!response.ok) throw new Error();
       const body=await response.json(); await removeQueued(body.results.map((x:{client_id:string})=>x.client_id));
@@ -162,18 +164,7 @@ export function FieldCapture({projects,labels,eventLabels,severityLabels}:{proje
     } catch { setStatus(labels.offlineQueued); } finally { setBusy(false); }
   },[labels,refreshPending]);
 
-  useEffect(()=>{
-    setOnline(navigator.onLine); setCanScan('BarcodeDetector' in window && !!navigator.mediaDevices?.getUserMedia);
-    // Pick the nearest project silently only when location access was already granted.
-    navigator.permissions?.query({name:'geolocation' as PermissionName}).then(p=>{if(p.state==='granted')locate()}).catch(()=>undefined);
-    const offline=()=>setOnline(false);
-    refreshPending(); const goOnline=()=>{setOnline(true); sync();};
-    const message=(event:MessageEvent)=>{if(event.data?.type==='GLOBALINFRA_FIELD_SYNC')sync()};
-    window.addEventListener('online',goOnline); window.addEventListener('offline',offline); navigator.serviceWorker?.addEventListener('message',message);
-    return()=>{window.removeEventListener('online',goOnline);window.removeEventListener('offline',offline);navigator.serviceWorker?.removeEventListener('message',message)};
-  },[refreshPending,sync]);
-
-  function locate(){
+  const locate=useCallback(()=>{
     if(!navigator.geolocation){setStatus(labels.locationUnavailable);return}
     navigator.geolocation.getCurrentPosition(
       p=>{
@@ -189,7 +180,18 @@ export function FieldCapture({projects,labels,eventLabels,severityLabels}:{proje
       },
       ()=>setStatus(labels.locationUnavailable),{enableHighAccuracy:true,timeout:12000}
     );
-  }
+  },[labels,projectId,projects]);
+
+  useEffect(()=>{
+    setOnline(navigator.onLine); setCanScan('BarcodeDetector' in window && !!navigator.mediaDevices?.getUserMedia);
+    // Pick the nearest project silently only when location access was already granted.
+    navigator.permissions?.query({name:'geolocation' as PermissionName}).then(p=>{if(p.state==='granted')locate()}).catch(()=>undefined);
+    const offline=()=>setOnline(false);
+    refreshPending(); const goOnline=()=>{setOnline(true); sync();};
+    const message=(event:MessageEvent)=>{if(event.data?.type==='GLOBALINFRA_FIELD_SYNC')sync()};
+    window.addEventListener('online',goOnline); window.addEventListener('offline',offline); navigator.serviceWorker?.addEventListener('message',message);
+    return()=>{window.removeEventListener('online',goOnline);window.removeEventListener('offline',offline);navigator.serviceWorker?.removeEventListener('message',message)};
+  },[locate,refreshPending,sync]);
 
   async function scan(){
     const Detector=(window as unknown as {BarcodeDetector:new(o:{formats:string[]})=>BarcodeDetectorLike}).BarcodeDetector;

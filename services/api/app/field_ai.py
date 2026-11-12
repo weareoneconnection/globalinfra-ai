@@ -62,6 +62,8 @@ def prepare_case(db: Session, case: Case, observation: FieldObservation, text: s
     observation.ai_risk = result["risk"]
     observation.analysis_status = "PENDING"
     db.add(IntakeSubmission(
+        organization_id=case.organization_id,
+        project_id=case.project_id,
         raw_input_ref=f"field:{observation.client_id}",
         input_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
         parsed_text=text, detected_language=result["language"], case_id=case.id,

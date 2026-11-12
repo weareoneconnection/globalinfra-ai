@@ -1,19 +1,20 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V5.1
+# GlobalInfra AI V6.0
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V5.1 is an open-source operational digital-twin and trusted-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The competition release adds a six-channel ingestion control plane, 30 governed agents, a seven-step human-controlled execution loop, three versioned evaluation suites with 57/57 cases passing, and a judge-facing evidence center that maps every scoring criterion to reproducible proof.
+GlobalInfra AI V6.0 is an open-source operational digital-twin and governed-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The competition release adds a six-channel ingestion plane, 30 governed agents, an isolated judge sandbox with five distinct approval/execution/verification/closure identities, and commit-bound signed evaluation evidence. Missing, unsigned or mismatched evidence is displayed as `UNVERIFIED`; unavailable real-model blind evaluation is displayed as `NOT_RUN`.
 
-- Public deployment: https://globalinfra-ai-production.up.railway.app/
+- Reference deployment target (verify its commit and evidence status before judging): https://globalinfra-ai-production.up.railway.app/
 - Competition evidence center: https://globalinfra-ai-production.up.railway.app/competition
-- Reproducible evidence API: https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=en
+- Fail-closed evidence API: https://globalinfra-ai-production.up.railway.app/backend/competition/submission-evidence?lang=en
 - License: [Apache License 2.0](LICENSE)
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
+> A URL alone is not release proof. Treat the deployment as V6 only when the evidence API reports `VERIFIED_PASSED` for the same deployed commit.
 
-## What is runnable in V5.1
+## What is runnable in V6.0
 
 - Conversational Assistant entry point (default home)
 - Global Command Center dashboard
@@ -45,6 +46,11 @@ Requirements: Docker Desktop.
 cp .env.example .env
 docker compose up --build
 ```
+
+The Compose startup guard refuses external database hosts by default so an
+unrelated local `.env` cannot silently become a migration target. Use the
+shipped local PostgreSQL URL. An intentional external target requires the
+explicit `ALLOW_EXTERNAL_COMPOSE_DATABASE=true` opt-in.
 
 Open:
 
@@ -97,7 +103,10 @@ provider/model attempt and whether it succeeded. The same fields are accepted by
 `POST /intake/text`; document intake and case re-analysis accept them as query
 parameters.
 
-Demo login is intentionally skipped in the competition deployment. Add enterprise SSO before production deployment.
+The public competition surface intentionally needs no login. Tenant routes use
+the Web tier's OIDC authorization-code + PKCE flow and encrypted HTTP-only
+session when `API_AUTH_MODE=oidc`. Production still requires registering and
+testing a real enterprise IdP client; see `docs/RAILWAY_DEPLOYMENT.md`.
 
 ## Quick start: local development
 
@@ -130,16 +139,17 @@ The web app follows the browser's `Accept-Language` automatically (English or Ch
 
 ## Competition demo path
 
-1. Open **Cases**.
-2. Select `CASE-2026-0182`.
-3. Click **Run AI Analysis**.
-4. Review specialist agent runs.
-5. Open the evidence chain and verification status.
-6. Go to **Approvals** and approve the governed external response.
-7. Open **Agent Organization** to show dynamic specialist-team assembly.
-8. Open **Architecture** to trace one engineering event across the digital thread.
+1. Open `/competition` and create an isolated judge session.
+2. Run the evidence-grounded analysis for its synthetic V-12/P47 field event.
+3. Approve with the project-manager role ticket.
+4. Countersign with the distinct HSE-manager role ticket.
+5. Execute with a third actor and inspect the signed, content-bound receipt.
+6. Independently verify with a fourth actor.
+7. Close with a fifth actor and inspect the complete evidence chain.
 
-The seed case is fully synthetic and sanitized.
+Each session has a TTL and separate synthetic project/twin state. Role tickets
+cannot be replayed across sessions, and the resulting artifact remains
+`DRAFT_ONLY_NOT_SENT`; no external delivery is performed.
 
 ## Universal Intake (V1.3 M1 + M2 + M3 + M4 + M5)
 
@@ -192,11 +202,11 @@ Phase 8 adds a native WebGL GLTF workspace with Twin-ID picking, traceable model
 
 For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
 
-## V5.1 Competition Golden Thread and Submission Evidence
+## V6.0 Competition Golden Thread and Signed Evidence
 
-`/competition` composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. The submission evidence API calculates the live 30-case AI-outbound result and binds it to the 12-case agent-organization and 15-case dispatcher suites, dataset digests, a versioned CI snapshot and the deployed commit. See [Phase 9.1 Competition Golden Thread](docs/PHASE9_COMPETITION_GOLDEN_THREAD.md).
+`/competition` composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. Each judge receives a fresh synthetic session with signed, role-bound tickets; the former one-click approval path is retired. The submission-evidence API accepts results only from a signed CI envelope whose commit and dataset digests match the deployment. See [V6 Evidence Protocol](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md).
 
-The V5.1 evidence center consolidates three suites with 57/57 passing cases, a traceable 265-test release snapshot and three release gates, six data/intelligence capabilities, ten judging-criterion mappings, plus model-routing, lineage, hash and human-authority proofs. Criterion cards locate evidence; they do not claim self-awarded scores.
+The V6 evidence center reads suite outcomes, test totals, CI URL and release gates dynamically from that envelope. It reports `VERIFIED_PASSED`, `VERIFIED_FAILED` or `UNVERIFIED` instead of inferring success from dataset size. Fixed synthetic regressions establish reproducibility only; they are not production-accuracy claims. Criterion cards locate evidence and do not claim self-awarded scores.
 
 ## V2.0 Phase 6 Digital Twin
 
@@ -209,7 +219,7 @@ The six delivered phases are:
 3. **4D/5D controls:** WBS/activity mapping, planned-vs-actual progress, schedule variance and forecast cost exposure.
 4. **Commissioning & handover:** system/test-pack readiness, punch items and document completeness.
 5. **Operational twin:** live sensor boundary, health thresholds, anomaly state and predictive maintenance work orders.
-6. **AI scenario lab:** schedule-recovery, predictive-maintenance and energy scenarios using verified twin inputs; every operational result remains `AWAITING_APPROVAL` and changes no asset state directly.
+6. **AI scenario lab:** schedule-recovery, predictive-maintenance and energy scenarios using traceable synthetic twin inputs; every operational result remains `AWAITING_APPROVAL` and changes no asset state directly.
 
 Primary APIs: `GET /twin/summary`, `/twin/scene`, `/twin/objects/{twin_id}`, `/twin/controls`, `/twin/commissioning`, `/twin/operations`, `/twin/scenarios`, `/twin/agents`; `POST /twin/scenarios/{scenario_id}/run`.
 
@@ -333,7 +343,7 @@ See `docs/ARCHITECTURE.md` (Chinese: `docs/ARCHITECTURE.zh-CN.md`) for the compl
 
 ## Production hardening still required
 
-V5.1 is a competition-ready reference implementation and controlled-pilot foundation, not a claim of production certification. Before enterprise rollout, complete SSO, secrets management, encrypted object storage, full document parsing, regional deployment, privacy impact assessment, threat modeling, vulnerability management, backup/restore drills, and jurisdiction-specific legal review.
+V6.0 is a competition reference implementation and controlled-pilot foundation, not a claim of production certification. Production configuration now fails closed on identity, database, storage, queue, residency, separation-of-duties and evidence-signing requirements; enterprise rollout still requires provider receipts, privacy and threat reviews, backup/restore drills, SLO evidence and jurisdiction-specific professional review. See [V6 Production Readiness](docs/V6_PRODUCTION_READINESS.zh-CN.md).
 
 ## Open-source contribution
 

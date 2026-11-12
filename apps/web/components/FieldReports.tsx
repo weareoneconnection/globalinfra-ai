@@ -84,6 +84,9 @@ export function FieldReports() {
         </header>
         <p className="field-report-text">{report.description}</p>
         {report.attachments.some(a => a.url) && <div className="field-report-media">{report.attachments.filter(a => a.url).map(a =>
+          // Authenticated, content-addressed field evidence is intentionally
+          // not sent through the Next image-optimization proxy.
+          // eslint-disable-next-line @next/next/no-img-element
           a.media_type.startsWith('image/') ? <a key={a.sha256} href={a.url!} target="_blank" rel="noopener noreferrer"><img src={a.url!} alt={a.name} loading="lazy" /></a>
           : a.media_type.startsWith('audio/') ? <audio key={a.sha256} controls preload="none" src={a.url!} />
           : <a key={a.sha256} href={a.url!} target="_blank" rel="noopener noreferrer">{a.name}</a>)}</div>}

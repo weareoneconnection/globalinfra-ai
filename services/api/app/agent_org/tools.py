@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..domain import PROJECT_INTELLIGENCE
@@ -56,9 +56,21 @@ class ToolContext:
 
     def knowledge_index(self) -> KnowledgeIndex:
         if self.index is None:
-            # The whole corpus keeps relevance scores stable; jurisdiction is
-            # filtered on the ranked results instead.
-            self.index = KnowledgeIndex(list(self.db.scalars(select(KnowledgeDocument))))
+            # Shared knowledge must be explicitly public. Project material is
+            # visible only to the project being analysed, never to a different
+            # tenant merely because it exists in the same database.
+            scope = KnowledgeDocument.project_id.is_(None)
+            if self.project is not None:
+                scope = or_(scope, KnowledgeDocument.project_id == self.project.id)
+            self.index = KnowledgeIndex(list(self.db.scalars(
+                select(KnowledgeDocument).where(
+                    scope,
+                    or_(
+                        KnowledgeDocument.project_id.is_not(None),
+                        KnowledgeDocument.confidentiality == "PUBLIC",
+                    ),
+                )
+            )))
         return self.index
 
     def in_jurisdiction(self, doc) -> bool:
@@ -103,7 +115,11 @@ def case_precedents(ctx: ToolContext, card: AgentCard) -> ToolResult:
     case_type = _text(ctx.case.type)
     own = set(tokenize(ctx.base_query))
     candidates = []
-    for other in ctx.db.scalars(select(Case).where(Case.id != ctx.case.id, Case.status.in_(RESOLVED_STATUSES))):
+    for other in ctx.db.scalars(select(Case).where(
+        Case.id != ctx.case.id,
+        Case.organization_id == ctx.case.organization_id,
+        Case.status.in_(RESOLVED_STATUSES),
+    )):
         if _text(other.type) != case_type:
             continue
         theirs = set(tokenize(" ".join([_text(other.title), _text(other.description)])))
