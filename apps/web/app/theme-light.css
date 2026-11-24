@@ -163,6 +163,81 @@
 :root[data-theme="light"] .map-coordinates{color:rgba(36,90,104,.58)}
 :root[data-theme="light"] .map-coordinates i{background:rgba(29,131,150,.25)}
 :root[data-theme="light"] .globe-project-detail{background:radial-gradient(circle at 50% 4%,rgba(46,146,168,.13),transparent 29%),linear-gradient(180deg,rgba(246,249,250,.98),rgba(240,245,247,.99))}
+:root[data-theme="light"] .jury-control-room{color:#040f12;background:radial-gradient(circle at 18% 0,rgba(47,139,167,.15),transparent 26%),
+  radial-gradient(circle at 86% 16%,rgba(122,0,0,.07),transparent 22%),
+  linear-gradient(145deg,#eef3f7,#f2f6f8 55%,#f1f5f8)}
+:root[data-theme="light"] .jury-control-room:before{background-image:linear-gradient(rgba(5,127,157,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(5,127,157,.025) 1px,transparent 1px);mask-image:linear-gradient(90deg,#f0f0f0,transparent 92%)}
+:root[data-theme="light"] .jury-header{border-bottom:1px solid rgba(55,94,110,.17);background:rgba(238,244,247,.88)}
+:root[data-theme="light"] .jury-brand>span{background:linear-gradient(135deg,#0989a6,#2349b3);box-shadow:0 0 28px rgba(5,127,157,.2)}
+:root[data-theme="light"] .jury-release>span{color:#64838e}
+:root[data-theme="light"] .jury-release>b.verified{background:rgba(32,153,95,.08);border:1px solid rgba(32,153,95,.25)}
+:root[data-theme="light"] .jury-release>b.unverified{background:rgba(146,89,0,.07);border:1px solid rgba(146,89,0,.24)}
+:root[data-theme="light"] .jury-release code{color:#83a1ac}
+:root[data-theme="light"] .jury-clock{border:1px solid rgba(5,127,157,.16);background:rgba(5,127,157,.035)}
+:root[data-theme="light"] .jury-clock span{color:#698792}
+:root[data-theme="light"] .jury-clock strong{color:#001b20}
+:root[data-theme="light"] .jury-header-actions button,:root[data-theme="light"] .jury-header-actions a,:root[data-theme="light"] .jury-footer button{background:rgba(0,0,0,.025);color:#273d45}
+:root[data-theme="light"] .jury-header-actions button:hover,:root[data-theme="light"] .jury-header-actions a:hover,:root[data-theme="light"] .jury-footer button:hover{border-color:rgba(5,127,157,.42);color:#001216}
+:root[data-theme="light"] .jury-control-room button:focus-visible,:root[data-theme="light"] .jury-control-room a:focus-visible{outline:2px solid #000000}
+:root[data-theme="light"] .jury-flow{border-bottom:1px solid rgba(55,94,110,.13);background:rgba(242,246,248,.62)}
+:root[data-theme="light"] .jury-flow li{border:1px solid rgba(55,94,110,.12);background:rgba(0,0,0,.012)}
+:root[data-theme="light"] .jury-flow li:last-child{border-right:1px solid rgba(55,94,110,.12)}
+:root[data-theme="light"] .jury-flow li>span{color:#76949f}
+:root[data-theme="light"] .jury-flow li>b{color:#5a747e}
+:root[data-theme="light"] .jury-flow li>i{color:#96b4be}
+:root[data-theme="light"] .jury-flow li.active{background:linear-gradient(90deg,rgba(5,127,157,.11),rgba(5,127,157,.025))}
+:root[data-theme="light"] .jury-flow li.active>span{color:#000000;box-shadow:0 0 15px rgba(5,127,157,.15)}
+:root[data-theme="light"] .jury-flow li.active>b{color:#00191f}
+:root[data-theme="light"] .jury-flow li.done{background:rgba(32,153,95,.035)}
+:root[data-theme="light"] .jury-flow li.done>span{border-color:rgba(32,153,95,.35);background:rgba(32,153,95,.07)}
+:root[data-theme="light"] .jury-incident,:root[data-theme="light"] .jury-live,:root[data-theme="light"] .jury-role-panel{border:1px solid rgba(55,94,110,.16);background:linear-gradient(145deg,rgba(245,248,250,.94),rgba(241,245,248,.96));box-shadow:0 20px 60px rgba(20,51,69,.077)}
+:root[data-theme="light"] .jury-risk{border:1px solid rgba(122,0,0,.31);color:#4a0000;background:rgba(122,0,0,.07)}
+:root[data-theme="light"] .jury-subtitle{color:#4e6a74}
+:root[data-theme="light"] .jury-incident blockquote{background:rgba(146,89,0,.035);color:#29383e}
+:root[data-theme="light"] .jury-context-grid article{border:1px solid rgba(55,94,110,.11);background:rgba(0,0,0,.015)}
+:root[data-theme="light"] .jury-context-grid span{color:#7895a0}
+:root[data-theme="light"] .jury-context-grid b{color:#022026}
+:root[data-theme="light"] .jury-context-grid small{color:#839fa9}
+:root[data-theme="light"] .jury-citations article{border-top:1px solid rgba(55,94,110,.08)}
+:root[data-theme="light"] .jury-citations article>p{color:#526b74}
+:root[data-theme="light"] .jury-live>header>i{color:#708d97}
+:root[data-theme="light"] .jury-live>header>i.live{border-color:rgba(32,153,95,.25);background:rgba(32,153,95,.04)}
+:root[data-theme="light"] .jury-action-stage{background:radial-gradient(circle at 50% 45%,rgba(5,127,157,.09),transparent 38%)}
+:root[data-theme="light"] .jury-action-stage p{color:#627d87}
+:root[data-theme="light"] .jury-action-stage button,:root[data-theme="light"] .jury-tamper-proof button{border:1px solid rgba(5,127,157,.42);background:linear-gradient(180deg,rgba(5,127,157,.18),rgba(5,127,157,.07));color:#00161a}
+:root[data-theme="light"] .jury-action-stage button:hover,:root[data-theme="light"] .jury-tamper-proof button:hover{background:rgba(5,127,157,.19)}
+:root[data-theme="light"] .jury-boundary-proof{background:rgba(146,89,0,.025)}
+:root[data-theme="light"] .jury-boundary-proof>b{color:#546c75}
+:root[data-theme="light"] .jury-boundary-proof>small{color:#86a3ad}
+:root[data-theme="light"] .jury-boundary-proof.passed{background:rgba(32,153,95,.035)}
+:root[data-theme="light"] .jury-role-list article{border-bottom:1px solid rgba(55,94,110,.08)}
+:root[data-theme="light"] .jury-role-list article>span{color:#718d97}
+:root[data-theme="light"] .jury-role-list small{color:#83a0aa}
+:root[data-theme="light"] .jury-role-list article>i{color:#78959f}
+:root[data-theme="light"] .jury-role-list article.active{background:linear-gradient(90deg,rgba(5,127,157,.065),transparent)}
+:root[data-theme="light"] .jury-role-list article.active>i{border-color:rgba(5,127,157,.26)}
+:root[data-theme="light"] .jury-role-list article.done>span{border-color:rgba(32,153,95,.32)}
+:root[data-theme="light"] .jury-role-list article.done>i{border-color:rgba(32,153,95,.22)}
+:root[data-theme="light"] .jury-role-panel>footer{color:#77939d}
+:root[data-theme="light"] .jury-closure-card{background:radial-gradient(circle at 85% 12%,rgba(32,153,95,.12),transparent 30%)}
+:root[data-theme="light"] .jury-closure-card>header p{color:#617d87}
+:root[data-theme="light"] .jury-closure-card>header>strong{border:1px solid rgba(32,153,95,.38);background:rgba(32,153,95,.08);box-shadow:0 0 28px rgba(32,153,95,.12)}
+:root[data-theme="light"] .jury-closure-grid article{border:1px solid rgba(55,94,110,.12);background:rgba(0,0,0,.015)}
+:root[data-theme="light"] .jury-closure-grid span{color:#7c98a3}
+:root[data-theme="light"] .jury-closure-grid b{color:#082715}
+:root[data-theme="light"] .jury-closure-grid small{color:#829ea8}
+:root[data-theme="light"] .jury-closure-card>footer{border:1px solid rgba(32,153,95,.19);background:rgba(32,153,95,.035)}
+:root[data-theme="light"] .jury-closure-card>footer span{color:#72907c}
+:root[data-theme="light"] .jury-closure-card>footer code{color:#6b907c}
+:root[data-theme="light"] .jury-closure-grid article.passed{border-color:rgba(32,153,95,.3);background:rgba(32,153,95,.045)}
+:root[data-theme="light"] .jury-tamper-proof{background:rgba(122,0,0,.025)}
+:root[data-theme="light"] .jury-tamper-proof small{color:#7c97a1}
+:root[data-theme="light"] .jury-tamper-proof>strong{color:#927477}
+:root[data-theme="light"] .jury-tamper-proof.passed{background:rgba(32,153,95,.035)}
+:root[data-theme="light"] .jury-error{border:1px solid rgba(122,0,0,.28);background:rgba(249,244,244,.94);color:#4d0000}
+:root[data-theme="light"] .jury-footer{border-top:1px solid rgba(55,94,110,.14);background:rgba(238,243,247,.9)}
+:root[data-theme="light"] .jury-footer>span{color:#6f8c96}
+:root[data-theme="light"] .jury-footer b{color:#455b63}
 :root[data-theme="light"] .offline-icon{background:linear-gradient(135deg,#0989a6,#2349b3);box-shadow:0 18px 45px rgba(38,141,176,.24)}
 @media(max-width:900px){:root[data-theme="light"] .topbar{background:rgba(240,245,247,.9);border-bottom-color:rgba(55,94,110,.12)}:root[data-theme="light"] .mobile-bottom-nav{border:1px solid rgba(55,94,110,.2);background:rgba(240,245,248,.94);box-shadow:0 18px 50px rgba(20,51,69,.182),inset 0 1px rgba(0,0,0,.035)}:root[data-theme="light"] .mobile-bottom-nav a{color:#69848f}:root[data-theme="light"] .mobile-bottom-nav a.active{color:#001b20;background:linear-gradient(180deg,rgba(5,127,157,.14),rgba(5,127,157,.045))}:root[data-theme="light"] .mobile-nav-icon{color:#3a6774}:root[data-theme="light"] .card{box-shadow:0 12px 38px rgba(20,51,69,.077)}}
 @media(max-width:620px){:root[data-theme="light"] .globe-project-kpis>div{border:1px solid rgba(55,94,110,.08)}}
