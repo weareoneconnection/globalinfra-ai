@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     finally: db.close()
     yield
 
-app = FastAPI(title="GlobalInfra AI API", version="6.0.0", lifespan=lifespan)
+app = FastAPI(title="GlobalInfra AI API", version="6.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -83,7 +83,7 @@ app.include_router(agent_org_router)
 app.include_router(field_media_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"6.0.0","product_version":"V6.0","architecture":"governed-evidence-action"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"6.1.0","product_version":"V6.1","architecture":"governed-evidence-action"}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}

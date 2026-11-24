@@ -856,7 +856,7 @@ def platform_capabilities(
         ),
     }
     return {
-        "version": "6.0.0", "stage": "PHASE_10_1_UNIFIED_INGESTION",
+        "version": "6.1.0", "stage": "PHASE_10_1_UNIFIED_INGESTION",
         "release": "V6_GOVERNED_EVIDENCE_ACTION",
         "capabilities": {
             "7.1": "trusted_execution", "7.2": "oidc_rbac_multitenancy_audit",
@@ -872,6 +872,7 @@ def platform_capabilities(
             "V6.P0": "separation_of_duties_signed_evidence_judge_sandbox",
             "V6.P1": "tenant_scoping_connector_contract_country_pack_gate",
             "V6.P2": "production_readiness_and_verified_roi_measurements",
+            "V6.1": "jury_control_room_tamper_proof_immutable_release",
         },
         "counts": counts,
     }

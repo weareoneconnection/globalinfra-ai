@@ -15,7 +15,7 @@ const PUBLIC_AUTH_ROUTES = new Set([
 const SESSION_ID = 'CS-[A-F0-9]{20}';
 const SESSION_STATE_ROUTE = new RegExp(`^competition/sessions/${SESSION_ID}/state$`);
 const SESSION_ACTION_ROUTE = new RegExp(
-  `^competition/sessions/${SESSION_ID}/(?:analyze|execute|verify|close|reset)$`,
+  `^competition/sessions/${SESSION_ID}/(?:analyze|execute|verify|close|reset|tamper-probe)$`,
 );
 const SESSION_APPROVAL_ROUTE = new RegExp(
   `^competition/sessions/${SESSION_ID}/approvals/[1-9][0-9]*/approve$`,
@@ -49,7 +49,8 @@ export function isPublicCompetitionApiRequest(
 
 export function isPublicWebRequest(method: string, pathname: string): boolean {
   if (
-    (pathname === '/competition' || pathname === '/competition/')
+    (pathname === '/competition' || pathname === '/competition/'
+      || pathname === '/competition/jury' || pathname === '/competition/jury/')
     || pathname === '/healthz'
     || pathname === '/readyz'
     || pathname === '/manifest.webmanifest'

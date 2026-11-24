@@ -16,6 +16,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from cryptography.hazmat.primitives import serialization
+
 
 ROOT = Path(__file__).resolve().parent.parent
 API = ROOT / "services" / "api"
@@ -100,6 +102,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--junit", type=Path)
     parser.add_argument("--ci-url")
+    parser.add_argument(
+        "--public-key-output",
+        type=Path,
+        help=(
+            "Write the Ed25519 public verification key as PEM. The private "
+            "key is never written to the release bundle."
+        ),
+    )
     parser.add_argument("--key-id", default=os.getenv("EVIDENCE_SIGNING_KEY_ID"))
     parser.add_argument(
         "--require-signature",
@@ -120,6 +130,8 @@ def main() -> int:
             "--require-signature needs EVIDENCE_SIGNING_PRIVATE_KEY (Ed25519 PEM) "
             "or legacy EVIDENCE_SIGNING_KEY with at least 32 characters"
         )
+    if args.public_key_output and not private_key:
+        parser.error("--public-key-output requires EVIDENCE_SIGNING_PRIVATE_KEY")
 
     run_evaluations(args.raw_dir)
     payload = build_release_payload(
@@ -142,6 +154,17 @@ def main() -> int:
         or ("ci:ed25519" if private_key else "ci:hmac" if hmac_key else None),
     )
     digest = write_release_evidence(args.output, envelope)
+    if args.public_key_output:
+        loaded_private_key = serialization.load_pem_private_key(
+            private_key.replace("\\n", "\n").strip().encode("utf-8") + b"\n",
+            password=None,
+        )
+        public_key = loaded_private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        args.public_key_output.parent.mkdir(parents=True, exist_ok=True)
+        args.public_key_output.write_bytes(public_key)
     verification_mode = envelope["signature"]["scheme"]
     print(
         json.dumps(

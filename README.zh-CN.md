@@ -1,21 +1,23 @@
 > **Language / 语言**: [English](README.md) · 简体中文
 
-# GlobalInfra AI V6.0
+# GlobalInfra AI V6.1
 
 **全球交通基础设施智能与可信执行平台**
 
-GlobalInfra AI V6.0 是一个面向海外交通基础设施项目的开源运营数字孪生与受治理执行平台。它把工程全生命周期和 24 个专业域连接到项目控制、文档、BIM/GIS、遥测与证据化决策。参赛版提供六类数据接入、30 个受治理智能体、按评委隔离且采用不同审批/执行/核验身份的七步沙箱，以及与 commit 绑定的签名评测证据。缺失、未签名或版本不一致统一显示 `UNVERIFIED`；尚未具备真实盲测条件时显示 `NOT_RUN`。
+GlobalInfra AI V6.1 是一个面向海外交通基础设施项目的开源运营数字孪生与受治理执行平台。它把工程全生命周期和 24 个专业域连接到项目控制、文档、BIM/GIS、遥测与证据化决策。决赛版新增五分钟评委控制室、五个独立责任主体、越权与篡改负向证明，以及与签名评测证据绑定的不可变镜像发布链。缺失、未签名或版本不一致统一显示 `UNVERIFIED`；尚未具备真实盲测条件时显示 `NOT_RUN`。
 
 - 隔离的 V6 竞赛演示环境：https://globalinfra-v6-demo-competition-demo.up.railway.app/
 - 参赛证据中心：https://globalinfra-v6-demo-competition-demo.up.railway.app/competition
+- V6.1 评委控制室（V6.1 晋级发布后可用）：`/competition/jury`
 - 失败关闭证据 API：https://globalinfra-v6-demo-competition-demo.up.railway.app/backend/competition/submission-evidence?lang=zh
 - 开源许可证：[Apache License 2.0](LICENSE)
 
 > 范围说明：本仓库是一个全新的独立代码库。它不依赖、不导入、不调用、也不暴露 TheOne 或任何 TheOne 品牌的运行时。
 > 仅有公网 URL 不构成发布证明；只有证据 API 对同一部署 commit 返回 `VERIFIED_PASSED` 时，才可将该环境称为 V6 已验证部署。
 > 公网 `competition-demo` 明确是非生产演示：确定性 mock AI、演示身份模式、临时 SQLite，且未挂载签名 release envelope。它用于展示受治理闭环，在受保护签名流水线和生产依赖补齐前必须保持 `UNVERIFIED`。原 `globalinfra-ai-production` 服务仍运行 V5.1，不是本次 V6 评审入口。
+> 在 V6.1 commit 通过受保护发布流水线前，上述公网链接仍代表最后一次晋级的 V6.0 演示；本仓库不会把尚未晋级的代码表述为已部署证据。
 
-## V6.0 中可运行的能力
+## V6.1 中可运行的能力
 
 - 智能助手对话入口（默认首页）
 - 全局指挥中心仪表盘
@@ -35,6 +37,8 @@ GlobalInfra AI V6.0 是一个面向海外交通基础设施项目的开源运营
 - Web + API + PostgreSQL + Redis 的 Docker Compose 编排
 - 三套版本化参赛评测（30 + 12 + 15 条）及完整 CI 发布门禁
 - 面向评委的证据中心，展示 10 项评分映射、数据集哈希、模型路由状态与人工权限边界
+- 五分钟中英文评委控制室：显式角色交接、403/状态不变越权挑战、内存副本签名篡改挑战及单屏闭环证据卡
+- 默认分支受保护发布：Ed25519 证据验签、commit 寻址非 root 镜像、镜像摘要 provenance 及仅摘要晋级清单
 - **全链路中英文切换**：前端跟随浏览器语言自动识别（可手动覆盖），后端 API 按语言返回双语数据，并接入翻译模型用于动态生成内容的翻译
 
 默认 AI 模式是**确定性演示模式**，因此系统无需购买模型额度即可运行。平台内置了一个与 OpenAI 协议兼容的模型网关，之后可以通过环境变量启用真实模型。
@@ -187,9 +191,9 @@ V2.1 将候选决策演示升级为受管控的执行生命周期。分析阶段
 
 阶段 8 新增原生 WebGL/GLTF 孪生查看、模型版本与转换任务、一键生成六格式项目孪生、时序遥测与 SSE 实时流、4D 进度与 5D 健康/成本着色，以及带 Twin ID、事件、模型版本和时间戳引用的 Twin Copilot。能力矩阵与真实接入边界见[阶段 8：运营级数字孪生](docs/PHASE8_OPERATIONAL_TWIN.zh-CN.md)。
 
-## V6.0 参赛黄金主线与签名证据
+## V6.1 决赛评委模式与签名证据
 
-`/competition` 把双语接入、国家与生命周期路由、国家包、知识证据、多智能体分析、数字孪生上下文、明确人工审批、受控执行和独立核验串成一条七步 AI 出海黄金主线。每位评委获得全新合成会话和签名角色票据，旧一键代审批路径已退役。提交证据 API 只接受 commit 与数据集摘要均匹配部署版本的签名 CI envelope。详见 [V6 证据协议](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md)。
+`/competition` 把双语接入、国家与生命周期路由、国家包、知识证据、多智能体分析、数字孪生上下文、明确人工审批、受控执行和独立核验串成一条七步 AI 出海黄金主线。`/competition/jury` 使用同一后端状态构成无滚动决赛控制室，不自动审批，也不显示角色票据。每位评委获得全新合成会话和签名角色票据，旧一键代审批路径已退役。提交证据 API 只接受 commit 与数据集摘要均匹配部署版本的签名 CI envelope。详见 [V6 证据协议](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md)与 [V6.1 决赛运行手册](docs/V6_1_FINALS_RUNBOOK.zh-CN.md)。
 
 V6 证据中心从 envelope 动态读取套件结果、测试总数、CI 地址和发布门禁，并区分 `VERIFIED_PASSED`、`VERIFIED_FAILED` 与 `UNVERIFIED`，不再按数据集行数推导通过。固定合成回归只证明可复现性，不代表真实项目准确率；评分卡仅用于定位证据，不代表自评得分。
 
@@ -327,7 +331,7 @@ docs                      架构、安全、治理与演示文档
 
 ## 生产环境仍需加固的事项
 
-V6.0 是参赛参考实现和受控试点基础，并不代表已经取得生产认证。生产配置已对身份、数据库、存储、队列、数据驻留、职责分离和证据签名实行失败关闭；企业上线仍须取得供应商回执，完成隐私与威胁评估、备份恢复演练、SLO 观测及属地专业审查。详见 [V6 生产就绪说明](docs/V6_PRODUCTION_READINESS.zh-CN.md)。
+V6.1 是参赛参考实现和受控试点基础，并不代表已经取得生产认证。生产配置已对身份、数据库、存储、队列、数据驻留、职责分离和证据签名实行失败关闭；企业上线仍须取得供应商回执，完成隐私与威胁评估、备份恢复演练、SLO 观测及属地专业审查。详见 [V6 生产就绪说明](docs/V6_PRODUCTION_READINESS.zh-CN.md)。
 
 ## 开源贡献
 

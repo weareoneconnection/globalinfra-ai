@@ -16,6 +16,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
@@ -26,6 +27,8 @@ from .config import settings
 from .database import get_db
 from .governed_execution import (
     GovernedExecutionError,
+    _audit_signature_is_valid,
+    _execution_receipt_digest,
     action_proposal_digest,
     close_action,
     execute_action,
@@ -41,6 +44,7 @@ from .models import (
     Artifact,
     Case,
     CompetitionSession,
+    Evidence,
     ExecutionReceipt,
     Project,
     TwinObject,
@@ -332,6 +336,13 @@ def _state(db: Session, row: CompetitionSession) -> dict:
             .order_by(Approval.id)
         )
     )
+    evidence = list(
+        db.scalars(
+            select(Evidence)
+            .where(Evidence.case_id == row.case_id)
+            .order_by(Evidence.confidence.desc(), Evidence.id)
+        )
+    )
     execution = (
         db.scalar(
             select(ExecutionReceipt).where(ExecutionReceipt.action_id == action.id)
@@ -409,6 +420,16 @@ def _state(db: Session, row: CompetitionSession) -> dict:
             }
             for item in approvals
         ],
+        "evidence": [
+            {
+                "id": item.id,
+                "source_ref": item.source_ref,
+                "title": item.title,
+                "confidence": item.confidence,
+                "verified": item.verified,
+            }
+            for item in evidence
+        ],
         "action": None
         if action is None
         else {
@@ -470,6 +491,33 @@ def _state(db: Session, row: CompetitionSession) -> dict:
 def _error(exc: GovernedExecutionError) -> HTTPException:
     return HTTPException(
         exc.status_code, detail={"code": exc.code, "message": exc.message}
+    )
+
+
+def _tampered_execution_receipt_copy(receipt: ExecutionReceipt) -> SimpleNamespace:
+    """Return an untracked receipt copy with one signed field changed.
+
+    Jury Mode uses this copy to demonstrate that a signed receipt rejects a
+    one-field modification.  It deliberately does not mutate the SQLAlchemy
+    entity or accept arbitrary client input, so the canonical evidence chain
+    remains read-only throughout the probe.
+    """
+    return SimpleNamespace(
+        id=receipt.id,
+        case_id=receipt.case_id,
+        action_id=receipt.action_id,
+        approval_id=receipt.approval_id,
+        executor=f"{receipt.executor}:tampered-copy",
+        executor_role=receipt.executor_role,
+        action_type=receipt.action_type,
+        started_at=receipt.started_at,
+        completed_at=receipt.completed_at,
+        status=receipt.status,
+        evidence_refs=list(receipt.evidence_refs or []),
+        input_digest=receipt.input_digest,
+        output_digest=receipt.output_digest,
+        artifact_ref=receipt.artifact_ref,
+        policy_version=receipt.policy_version,
     )
 
 
@@ -740,3 +788,133 @@ def close_session_action(
     row.status = "CLOSED"
     db.commit()
     return _state(db, row)
+
+
+@router.post("/{session_id}/tamper-probe")
+def probe_tampered_receipt_copy(
+    session_id: str,
+    role_ticket: str = Header(alias="X-Competition-Role-Ticket"),
+    db: Session = Depends(get_db),
+):
+    """Reject an in-memory receipt modification without touching evidence.
+
+    The probe is available only to the session's dedicated closer after the
+    governed workflow is fully closed.  It changes the signed ``executor``
+    field on an untracked copy, verifies that the original signature no longer
+    validates, then reloads the canonical state and proves its digest and
+    closure chain are unchanged.
+    """
+    row, actor = _actor(db, session_id, role_ticket, {"closer"})
+    action = db.scalar(
+        select(Action)
+        .where(Action.case_id == row.case_id)
+        .order_by(Action.created_at.desc())
+    )
+    execution = (
+        db.scalar(
+            select(ExecutionReceipt).where(
+                ExecutionReceipt.action_id == action.id
+            )
+        )
+        if action
+        else None
+    )
+    if (
+        row.status != "CLOSED"
+        or action is None
+        or action.status != "CLOSED"
+        or execution is None
+        or not governed_closure_is_intact(db, action)
+    ):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "JURY_EVIDENCE_INCOMPLETE",
+                "message": "Complete and close the governed session before running the tamper probe.",
+            },
+        )
+    if action.closed_by != actor.subject:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "CLOSER_IDENTITY_MISMATCH",
+                "message": "Only the subject that closed this session can run its tamper probe.",
+            },
+        )
+
+    canonical_digest = _execution_receipt_digest(execution)
+    canonical_signature_valid = (
+        bool(execution.receipt_digest)
+        and hmac.compare_digest(execution.receipt_digest, canonical_digest)
+        and _audit_signature_is_valid(
+            canonical_digest, execution.receipt_signature, execution.key_id
+        )
+    )
+    if not canonical_signature_valid:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "CANONICAL_EVIDENCE_INVALID",
+                "message": "The canonical execution receipt is not valid; no tamper demonstration was run.",
+            },
+        )
+
+    canonical_state_digest = _digest(_state(db, row))
+    tampered_copy = _tampered_execution_receipt_copy(execution)
+    tampered_digest = _execution_receipt_digest(tampered_copy)
+    tampered_signature_valid = _audit_signature_is_valid(
+        tampered_digest, execution.receipt_signature, execution.key_id
+    )
+
+    # Expire the identity map and read the records again.  This makes the API
+    # response prove the database-backed evidence is unchanged, rather than
+    # merely comparing two references to the same in-memory object.
+    db.expire_all()
+    canonical_row = db.get(CompetitionSession, session_id)
+    canonical_action = (
+        db.scalar(
+            select(Action)
+            .where(Action.case_id == canonical_row.case_id)
+            .order_by(Action.created_at.desc())
+        )
+        if canonical_row
+        else None
+    )
+    canonical_state_unchanged = bool(
+        canonical_row
+        and canonical_action
+        and governed_closure_is_intact(db, canonical_action)
+        and hmac.compare_digest(
+            canonical_state_digest, _digest(_state(db, canonical_row))
+        )
+    )
+    if tampered_signature_valid or not canonical_state_unchanged:
+        raise HTTPException(
+            500,
+            detail={
+                "code": "TAMPER_PROBE_INVARIANT_FAILED",
+                "message": "The tamper probe did not preserve its fail-closed invariants.",
+            },
+        )
+
+    return {
+        "schema": "globalinfra.jury-tamper-probe.v1",
+        "session_id": session_id,
+        "probe": {
+            "status": "INVALID_SIGNATURE",
+            "reason": "SIGNED_FIELD_TAMPERED",
+            "field": "execution.executor",
+            "canonical_digest": canonical_digest,
+            "tampered_digest": tampered_digest,
+            "signature_valid": False,
+        },
+        "canonical": {
+            "status": "VERIFIED_INTACT",
+            "state_digest": canonical_state_digest,
+            "signature_valid": True,
+            "unchanged": True,
+            "complete": True,
+            "closed_by": actor.subject,
+            "external_delivery_performed": False,
+        },
+    }

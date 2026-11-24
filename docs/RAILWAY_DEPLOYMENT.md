@@ -13,7 +13,7 @@ services. Railpack cannot infer an application from the repository root.
 | Railway resource | Source / provider | Root directory | Health check |
 | --- | --- | --- | --- |
 | `globalinfra-ai` (Web) | `weareoneconnection/globalinfra-ai` | `/apps/web` | public `/readyz` |
-| `api` | `weareoneconnection/globalinfra-ai` | `/services/api` | `/readyz` |
+| `api` | `ghcr.io/weareoneconnection/globalinfra-api@sha256:<approved-digest>` | n/a | `/readyz` |
 | PostgreSQL | Railway managed PostgreSQL | n/a | managed |
 | durable queue / Redis | approved managed provider | n/a | provider-specific |
 | object storage | approved regional provider | n/a | provider-specific |
@@ -25,9 +25,11 @@ encrypted-session configuration is missing or invalid. It performs no live
 identity-provider or API call, so it does not by itself prove the OIDC flow,
 API connectivity, release evidence, or production readiness.
 
-Railway detects the `Dockerfile` inside each source root. Both images listen on
-Railway's injected `PORT`. Do not deploy `docker-compose.yml` as one Railway
-service.
+The Web source build detects the `Dockerfile` inside its source root. A
+production API release instead uses the commit-addressed image produced from
+`services/api/Dockerfile.release`; the normal `Dockerfile` remains the
+zero-config development and demo image. Both listen on Railway's injected
+`PORT`. Do not deploy `docker-compose.yml` as one Railway service.
 
 ## API variables
 
@@ -103,37 +105,62 @@ through `NEXT_PUBLIC_*` variables. Rotate `WEB_SESSION_SECRET` through a
 planned session invalidation because existing cookies cannot be decrypted
 after an uncoordinated rotation.
 
-## Signed artifact handoff is a required deployment step
+## Signed evidence and immutable API image
 
-The GitHub Actions `upload-artifact` step does **not** copy
-`release-evidence.json` into a Railway image or filesystem. The checked-in
-Railway IaC therefore does not claim an automatic mount.
+The protected `release-signing` GitHub Environment gates two default-branch
+jobs in `.github/workflows/ci.yml`:
 
-Before starting the API for a release, the deployment workflow must:
+1. `release-evidence` runs the evaluations and API tests, signs the envelope
+   with Ed25519, exports only the public key, and uploads the complete raw
+   evidence bundle;
+2. `release-image` cryptographically verifies that envelope against the
+   checked-out commit and current datasets, builds
+   `services/api/Dockerfile.release`, pushes the single commit tag to GHCR,
+   creates GitHub build provenance for the image digest, and emits a
+   `globalinfra.release-manifest.v1` artifact.
 
-1. download the signed artifact produced for the exact deployment commit;
-2. verify its source commit and expected artifact digest;
-3. place it in an immutable deployment image layer or a read-only mounted
-   volume at `RELEASE_EVIDENCE_PATH`;
-4. set `GIT_COMMIT_SHA` or `RAILWAY_GIT_COMMIT_SHA` to the same full commit;
-5. give the API runtime read-only access and no release signing private key.
+The release image stores the signed envelope at
+`/run/globalinfra-evidence/release-evidence.json`, embeds the source commit and
+evidence SHA-256 as OCI metadata, and runs as a non-root user that cannot
+replace the root-owned evidence file. The manifest binds the evidence digest,
+public-key fingerprint, source commit, CI run and immutable registry digest
+without creating a circular image digest.
+
+Before starting the API for a release, the promotion operator must:
+
+1. download the release manifest produced for the intended commit;
+2. verify the GitHub artifact and build-provenance attestation;
+3. configure Railway with the manifest's exact `image.reference` containing
+   `@sha256:...`—never a mutable tag;
+4. set the matching public key in `EVIDENCE_VERIFICATION_PUBLIC_KEY` and never
+   provide `EVIDENCE_SIGNING_PRIVATE_KEY` to Railway;
+5. verify that the runtime reports the same commit and evidence digest before
+   directing traffic to it.
 
 With `ENV=production` and `EVIDENCE_BUNDLE_REQUIRED=true`, a missing artifact
 path or invalid production configuration must stop startup. A present but
 invalid, mismatched, or incomplete envelope remains `NOT_READY`; never convert
-that state into a deployment success claim. A custom Railway release pipeline
-or image promotion step is still required to implement this handoff.
+that state into a deployment success claim. Railway promotion remains an
+explicit approval step because repository pushes must not silently replace a
+production digest.
+
+Before merging the first V6.1 release to the default branch, disconnect the
+legacy API service from GitHub `main` autodeploy. Otherwise Railway may start a
+source build before the protected evidence image has been approved.
 
 ## Deployment order
 
-1. Run the V6 CI on the intended commit and produce signed release evidence.
-2. Provision PostgreSQL, durable queue/Redis, object storage, backup policy,
+1. Run the V6 CI on the intended commit and approve the protected
+   `release-signing` jobs.
+2. Verify the GHCR provenance and release manifest, then record the immutable
+   API image digest.
+3. Provision PostgreSQL, durable queue/Redis, object storage, backup policy,
    and approved regional networking.
-3. Provision API and Web secrets from a secret manager.
-4. Stage the signed evidence as described above.
-5. Deploy `api`; run `alembic upgrade head` as the pre-deploy command.
-6. Deploy `globalinfra-ai` and create its public HTTPS domain.
-7. Register the final `/auth/callback` URI with the identity provider and test
+4. Provision API and Web secrets from a secret manager.
+5. Stage the exact manifest image digest as the API source.
+6. Deploy `api`; run `alembic upgrade head` as the pre-deploy command.
+7. Deploy `globalinfra-ai` and create its public HTTPS domain.
+8. Register the final `/auth/callback` URI with the identity provider and test
    login, logout, expiry, invalid state/nonce, and role/project denial.
 
 ## Post-deploy verification

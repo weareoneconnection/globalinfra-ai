@@ -197,8 +197,8 @@ def test_submission_evidence_fails_closed_without_signed_ci_artifact(client, mon
         competition_module, "RELEASE_EVIDENCE_PATH", tmp_path / "missing-release-evidence.json"
     )
     body = client.get("/competition/submission-evidence?lang=zh").json()
-    assert body["phase"] == "V6.0"
-    assert body["release"]["product_version"] == "V6.0"
+    assert body["phase"] == "V6.1"
+    assert body["release"]["product_version"] == "V6.1"
     assert body["release"]["evidence_status"] == "UNVERIFIED"
     assert body["release"]["passed_cases"] == 0
     assert body["release"]["total_cases"] == 57
@@ -375,6 +375,8 @@ def test_role_ticketed_sandbox_runs_full_separated_golden_thread(client):
     )
     assert analyzed.status_code == 200, analyzed.text
     state = analyzed.json()
+    assert state["evidence"]
+    assert all(row["source_ref"] for row in state["evidence"])
     assert {row["required_role"] for row in state["approvals"]} == {
         "project_manager",
         "hse_manager",
@@ -490,6 +492,107 @@ def test_role_ticketed_sandbox_runs_full_separated_golden_thread(client):
         f"/competition/sessions/{session_id}/state",
         headers=_header(tickets["project_manager"]["ticket"]),
     ).json()["complete"] is True
+
+
+def test_jury_tamper_probe_requires_closer_and_completed_chain(client):
+    created = _new_session(client)
+    session_id = created["session"]["id"]
+    tickets = created["role_tickets"]
+
+    wrong_role = client.post(
+        f"/competition/sessions/{session_id}/tamper-probe",
+        headers=_header(tickets["project_manager"]["ticket"]),
+    )
+    assert wrong_role.status_code == 403
+    assert wrong_role.json()["detail"]["code"] == "ROLE_SCOPE_REQUIRED"
+
+    incomplete = client.post(
+        f"/competition/sessions/{session_id}/tamper-probe",
+        headers=_header(tickets["closer"]["ticket"]),
+    )
+    assert incomplete.status_code == 409
+    assert incomplete.json()["detail"]["code"] == "JURY_EVIDENCE_INCOMPLETE"
+
+
+def test_jury_tamper_probe_rejects_copy_and_preserves_canonical_chain(client):
+    created, action_id = _verified_session(client)
+    session_id = created["session"]["id"]
+    tickets = created["role_tickets"]
+    closed = client.post(
+        f"/competition/sessions/{session_id}/close",
+        headers=_header(tickets["closer"]["ticket"]),
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["complete"] is True
+
+    with SessionLocal() as db:
+        execution = db.scalar(
+            select(ExecutionReceipt).where(
+                ExecutionReceipt.action_id == action_id
+            )
+        )
+        action = db.get(Action, action_id)
+        before = (
+            execution.executor,
+            execution.receipt_digest,
+            execution.receipt_signature,
+            action.closure_digest,
+            action.closure_signature,
+            action.closed_by,
+        )
+
+    probe = client.post(
+        f"/competition/sessions/{session_id}/tamper-probe",
+        headers=_header(tickets["closer"]["ticket"]),
+    )
+    assert probe.status_code == 200, probe.text
+    body = probe.json()
+    assert body["schema"] == "globalinfra.jury-tamper-probe.v1"
+    assert body["probe"]["status"] == "INVALID_SIGNATURE"
+    assert body["probe"]["reason"] == "SIGNED_FIELD_TAMPERED"
+    assert body["probe"]["field"] == "execution.executor"
+    assert body["probe"]["signature_valid"] is False
+    assert body["probe"]["canonical_digest"] != body["probe"]["tampered_digest"]
+    assert body["canonical"] == {
+        "status": "VERIFIED_INTACT",
+        "state_digest": body["canonical"]["state_digest"],
+        "signature_valid": True,
+        "unchanged": True,
+        "complete": True,
+        "closed_by": tickets["closer"]["subject"],
+        "external_delivery_performed": False,
+    }
+
+    with SessionLocal() as db:
+        execution = db.scalar(
+            select(ExecutionReceipt).where(
+                ExecutionReceipt.action_id == action_id
+            )
+        )
+        action = db.get(Action, action_id)
+        after = (
+            execution.executor,
+            execution.receipt_digest,
+            execution.receipt_signature,
+            action.closure_digest,
+            action.closure_signature,
+            action.closed_by,
+        )
+    assert after == before
+
+    repeated = client.post(
+        f"/competition/sessions/{session_id}/tamper-probe",
+        headers=_header(tickets["closer"]["ticket"]),
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["canonical"]["state_digest"] == body["canonical"]["state_digest"]
+    assert repeated.json()["probe"]["tampered_digest"] == body["probe"]["tampered_digest"]
+    final_state = client.get(
+        f"/competition/sessions/{session_id}/state",
+        headers=_header(tickets["closer"]["ticket"]),
+    ).json()
+    assert final_state["complete"] is True
+    assert final_state["action"]["status"] == "CLOSED"
 
 
 def test_sandbox_never_reuses_tenant_project_or_private_documents(client):

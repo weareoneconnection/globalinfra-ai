@@ -72,9 +72,6 @@ jobs:
       - name: Generate signed release evidence
         env:
           EVIDENCE_SIGNING_PRIVATE_KEY: ${{ secrets.EVIDENCE_SIGNING_PRIVATE_KEY }}
-          # Temporary compatibility for installations not yet rotated to
-          # Ed25519. The generator always prefers the private-key path.
-          EVIDENCE_SIGNING_KEY: ${{ secrets.EVIDENCE_SIGNING_KEY }}
           EVIDENCE_SIGNING_KEY_ID: github-actions:release-v1
           WEB_BUILD_STATUS: PASSED
           MIGRATION_CHECK_STATUS: PASSED
@@ -84,19 +81,111 @@ jobs:
           --require-signature
           --raw-dir /tmp/globalinfra-evidence-raw
           --junit /tmp/globalinfra-junit.xml
+          --public-key-output /tmp/release-evidence-public.pem
           --output services/api/evidence/release-evidence.json
       - name: Model comparison protocol (fail-closed without blind data)
         run: >-
           python evals/run_model_comparison.py
           --output services/api/evidence/model-comparison.json
+      - name: Assemble immutable release bundle
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release-bundle/raw
+          install -m 0444 services/api/evidence/release-evidence.json dist/release-bundle/release-evidence.json
+          install -m 0444 services/api/evidence/model-comparison.json dist/release-bundle/model-comparison.json
+          install -m 0444 /tmp/release-evidence-public.pem dist/release-bundle/release-evidence-public.pem
+          install -m 0444 /tmp/globalinfra-junit.xml dist/release-bundle/api-tests.junit.xml
+          install -m 0444 /tmp/globalinfra-evidence-raw/*.json dist/release-bundle/raw/
       - uses: actions/upload-artifact@v4
         with:
-          name: globalinfra-v6-release-evidence
-          path: |
-            services/api/evidence/release-evidence.json
-            services/api/evidence/model-comparison.json
-            /tmp/globalinfra-evidence-raw/*.json
-            /tmp/globalinfra-junit.xml
+          name: globalinfra-v6-1-release-evidence
+          path: dist/release-bundle/
+          if-no-files-found: error
+          retention-days: 90
+  release-image:
+    # Never publish an image for pull requests or arbitrary branches. The
+    # protected release-signing Environment must approve the exact default-
+    # branch commit after every normal CI gate has passed.
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    environment: release-signing
+    needs: [release-evidence]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/globalinfra-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r services/api/requirements.txt
+      - run: python -m pip check
+      - uses: actions/download-artifact@v4
+        with:
+          name: globalinfra-v6-1-release-evidence
+          path: /tmp/globalinfra-release-bundle
+      - name: Stage signed evidence as an image build input
+        id: evidence
+        run: |
+          set -euo pipefail
+          install -D -m 0444 /tmp/globalinfra-release-bundle/release-evidence.json services/api/evidence/release-evidence.json
+          sha256sum services/api/evidence/release-evidence.json | awk '{print "sha256=" $1}' >> "$GITHUB_OUTPUT"
+          date -u +'%Y-%m-%dT%H:%M:%SZ' | awk '{print "created=" $1}' >> "$GITHUB_OUTPUT"
+      - name: Verify signed evidence before registry push
+        run: >-
+          python scripts/generate_release_manifest.py
+          --evidence services/api/evidence/release-evidence.json
+          --public-key /tmp/globalinfra-release-bundle/release-evidence-public.pem
+          --commit "${GITHUB_SHA}"
+          --image "${IMAGE_NAME}"
+          --image-digest "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          --ci-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          --output /tmp/release-manifest-preflight.json
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push commit-addressed API image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: services/api
+          file: services/api/Dockerfile.release
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
+            EVIDENCE_SHA256=${{ steps.evidence.outputs.sha256 }}
+            BUILD_DATE=${{ steps.evidence.outputs.created }}
+          provenance: false
+          sbom: true
+      - name: Attest immutable image provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Bind evidence, source and image digest
+        run: >-
+          python scripts/generate_release_manifest.py
+          --evidence services/api/evidence/release-evidence.json
+          --public-key /tmp/globalinfra-release-bundle/release-evidence-public.pem
+          --commit "${GITHUB_SHA}"
+          --image "${IMAGE_NAME}"
+          --image-digest "${{ steps.build.outputs.digest }}"
+          --ci-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          --output dist/release-manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: globalinfra-v6-1-release-manifest-${{ github.sha }}
+          path: dist/release-manifest.json
           if-no-files-found: error
           retention-days: 90
   docker-compose-smoke-test:
@@ -154,6 +243,18 @@ jobs:
           curl -sf http://localhost:3000/twin/generate > /dev/null
           curl -sf 'http://localhost:3000/showcase?project_id=1' > /dev/null
           curl -sf http://localhost:3000/competition > /dev/null
+          curl -sf http://localhost:3000/competition/jury > /dev/null
+          # Jury Mode starts through the Web proxy. Use an explicit browser-
+          # visible Host/Origin pair so internal URL normalization cannot
+          # silently break every same-origin POST behind a reverse proxy.
+          curl -sf -X POST http://localhost:3000/backend/competition/sessions \
+            -H 'Host: 127.0.0.1:3000' \
+            -H 'Origin: http://127.0.0.1:3000' | grep -q 'role_tickets'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:3000/backend/competition/sessions \
+            -H 'Host: 127.0.0.1:3000' \
+            -H 'Origin: https://cross-site.invalid')
+          test "$code" = "403"
           curl -sf http://localhost:3000/field > /dev/null
           curl -sf http://localhost:3000/integrations > /dev/null
           curl -sf http://localhost:3000/platform > /dev/null

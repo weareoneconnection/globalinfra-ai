@@ -1,21 +1,23 @@
 > **Language / 语言**: English · [简体中文](README.zh-CN.md)
 
-# GlobalInfra AI V6.0
+# GlobalInfra AI V6.1
 
 **Global Transportation Infrastructure Intelligence & Trusted Execution Platform**
 
-GlobalInfra AI V6.0 is an open-source operational digital-twin and governed-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The competition release adds a six-channel ingestion plane, 30 governed agents, an isolated judge sandbox with five distinct approval/execution/verification/closure identities, and commit-bound signed evaluation evidence. Missing, unsigned or mismatched evidence is displayed as `UNVERIFIED`; unavailable real-model blind evaluation is displayed as `NOT_RUN`.
+GlobalInfra AI V6.1 is an open-source operational digital-twin and governed-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The finals release adds a five-minute Jury Control Room, an isolated judge sandbox with five distinct approval/execution/verification/closure identities, negative authority and tamper proofs, and an immutable-image release chain bound to signed evaluation evidence. Missing, unsigned or mismatched evidence is displayed as `UNVERIFIED`; unavailable real-model blind evaluation is displayed as `NOT_RUN`.
 
 - Isolated V6 competition demo: https://globalinfra-v6-demo-competition-demo.up.railway.app/
 - Competition evidence center: https://globalinfra-v6-demo-competition-demo.up.railway.app/competition
+- V6.1 Jury Control Room (available after V6.1 promotion): `/competition/jury`
 - Fail-closed evidence API: https://globalinfra-v6-demo-competition-demo.up.railway.app/backend/competition/submission-evidence?lang=en
 - License: [Apache License 2.0](LICENSE)
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 > A URL alone is not release proof. Treat the deployment as V6 only when the evidence API reports `VERIFIED_PASSED` for the same deployed commit.
 > The public `competition-demo` is deliberately non-production: deterministic mock AI, demo auth, ephemeral SQLite and no mounted signed release envelope. It demonstrates the governed workflow but must remain `UNVERIFIED` until the protected signing pipeline and production dependencies are supplied. The previous `globalinfra-ai-production` service remains on V5.1 and is not the V6 judging target.
+> The live links above still identify the last promoted V6.0 demo until the V6.1 commit passes the protected release pipeline; this repository does not present an unpromoted build as deployed evidence.
 
-## What is runnable in V6.0
+## What is runnable in V6.1
 
 - Conversational Assistant entry point (default home)
 - Global Command Center dashboard
@@ -35,6 +37,8 @@ GlobalInfra AI V6.0 is an open-source operational digital-twin and governed-exec
 - Docker Compose for web + API + PostgreSQL + Redis
 - Three versioned competition evaluation suites (30 + 12 + 15 cases) and a full CI release gate
 - Judge-facing evidence center with 10 scoring-criterion mappings, dataset hashes, model-routing status and human-authority boundaries
+- Five-minute bilingual Jury Control Room with explicit role hand-offs, a 403/no-mutation authority challenge, an in-memory signed-receipt tamper challenge and a single-screen closure card
+- Protected default-branch release jobs that verify Ed25519 evidence, build a commit-addressed non-root image, attest its digest and emit a digest-only promotion manifest
 - **Full-chain English/Chinese switching**: the web app auto-detects the browser language (with manual override), the API returns bilingual data per request, and a translation-model integration point powers dynamically generated content
 
 The default AI mode is **deterministic demo mode**, so the system works without buying model tokens. An OpenAI-compatible model gateway is included and can be enabled later with environment variables.
@@ -203,9 +207,9 @@ Phase 8 adds a native WebGL GLTF workspace with Twin-ID picking, traceable model
 
 For competition and pre-integration demonstrations, every seeded project also exposes one coherent six-format synthetic twin pack: IFC 4.3, glTF 2.0, 3D Tiles 1.1, GeoJSON, WMS 1.3.0 and IoT telemetry. All artifacts are generated from the same stable Twin IDs, downloadable from `/twin`, checksummed where static, and explicitly labelled `SYNTHETIC_DEMO`. See [项目级合成数字孪生数据包](docs/SYNTHETIC_TWIN_PACK.zh-CN.md).
 
-## V6.0 Competition Golden Thread and Signed Evidence
+## V6.1 Finals Jury Mode and Signed Evidence
 
-`/competition` composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. Each judge receives a fresh synthetic session with signed, role-bound tickets; the former one-click approval path is retired. The submission-evidence API accepts results only from a signed CI envelope whose commit and dataset digests match the deployment. See [V6 Evidence Protocol](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md).
+`/competition` composes bilingual intake, country/lifecycle routing, country packs, knowledge evidence, multi-agent analysis, digital-twin context, explicit human approval, governed execution and independent verification into one seven-step AI-outbound golden thread. `/competition/jury` turns that same backend state into a no-scroll finals control room; it never auto-approves or exposes role tickets. Each judge receives a fresh synthetic session with signed, role-bound tickets; the former one-click approval path is retired. The submission-evidence API accepts results only from a signed CI envelope whose commit and dataset digests match the deployment. See [V6 Evidence Protocol](docs/V6_EVIDENCE_PROTOCOL.zh-CN.md) and the [V6.1 Finals Runbook](docs/V6_1_FINALS_RUNBOOK.zh-CN.md).
 
 The V6 evidence center reads suite outcomes, test totals, CI URL and release gates dynamically from that envelope. It reports `VERIFIED_PASSED`, `VERIFIED_FAILED` or `UNVERIFIED` instead of inferring success from dataset size. Fixed synthetic regressions establish reproducibility only; they are not production-accuracy claims. Criterion cards locate evidence and do not claim self-awarded scores.
 
@@ -344,7 +348,7 @@ See `docs/ARCHITECTURE.md` (Chinese: `docs/ARCHITECTURE.zh-CN.md`) for the compl
 
 ## Production hardening still required
 
-V6.0 is a competition reference implementation and controlled-pilot foundation, not a claim of production certification. Production configuration now fails closed on identity, database, storage, queue, residency, separation-of-duties and evidence-signing requirements; enterprise rollout still requires provider receipts, privacy and threat reviews, backup/restore drills, SLO evidence and jurisdiction-specific professional review. See [V6 Production Readiness](docs/V6_PRODUCTION_READINESS.zh-CN.md).
+V6.1 is a competition reference implementation and controlled-pilot foundation, not a claim of production certification. Production configuration now fails closed on identity, database, storage, queue, residency, separation-of-duties and evidence-signing requirements; enterprise rollout still requires provider receipts, privacy and threat reviews, backup/restore drills, SLO evidence and jurisdiction-specific professional review. See [V6 Production Readiness](docs/V6_PRODUCTION_READINESS.zh-CN.md).
 
 ## Open-source contribution
 

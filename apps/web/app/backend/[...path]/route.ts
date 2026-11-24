@@ -40,6 +40,22 @@ function trustedBrowserOrigin(): string | null {
   }
 }
 
+function browserFacingOrigin(req: NextRequest): string {
+  const host = (req.headers.get('host') || req.headers.get('x-forwarded-host'))
+    ?.split(',', 1)[0]
+    .trim();
+  const protocol = (req.headers.get('x-forwarded-proto') || req.nextUrl.protocol)
+    .split(',', 1)[0]
+    .trim()
+    .replace(/:$/, '');
+  if (!host || !['http', 'https'].includes(protocol)) return req.nextUrl.origin;
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return req.nextUrl.origin;
+  }
+}
+
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const base = (process.env.API_INTERNAL_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -75,7 +91,12 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     );
   }
   const requestOrigin = req.headers.get('origin');
-  const expectedOrigin = trustedBrowserOrigin() ?? (demoMode ? req.nextUrl.origin : null);
+  // Demo/Jury traffic is intentionally same-origin with the Web request. Do
+  // not let a stale production OIDC redirect URI override that origin: doing
+  // so would make every public competition POST fail even though the browser
+  // is calling its own host. OIDC mode remains pinned to the registered
+  // redirect origin.
+  const expectedOrigin = demoMode ? browserFacingOrigin(req) : trustedBrowserOrigin();
   if (
     unsafeMethod
     && ((sessionAuthenticated && !requestOrigin)

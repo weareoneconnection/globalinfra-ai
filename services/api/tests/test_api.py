@@ -12,6 +12,8 @@ def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
+    assert r.json()["version"] == "6.1.0"
+    assert r.json()["product_version"] == "V6.1"
 
 
 def test_projects_are_localized_by_the_lang_query_param(client):
