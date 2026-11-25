@@ -19,7 +19,6 @@
         "label": "项目运营",
         "items": [
           { "href": "/data-ingestion", "label": "数据接入", "icon": "DI" },
-          { "href": "/drawings", "label": "图纸工作台", "icon": "2D" },
           { "href": "/field", "label": "现场作业", "icon": "FO" },
           { "href": "/cases", "label": "工单", "icon": "◎" },
           { "href": "/approvals", "label": "审批", "icon": "✓" },
@@ -497,12 +496,11 @@
     "secretPolicy": "凭据只从部署密钥读取，绝不写入连接器配置。"
   },
   "Drawings": {
-    "title": "图纸专业工作台",
-    "subtitle": "读取工程图纸并保留坐标级证据，由工程师确认不确定项后生成可追溯的 3D 与 IFC 4.3 草模。",
+    "title": "图纸证据审阅",
+    "subtitle": "这是智能助手发起的专业审阅流程：核对图纸证据与不确定项，并按需生成可追溯的 3D 与 IFC 4.3 草模。",
     "trustStatement": "每个提取字段和生成构件都能追溯到原图页码与坐标。",
     "backToAssistant": "返回智能助手",
-    "openedFromAssistant": "由智能助手发起",
-    "standaloneWorkbench": "工程师直接审阅",
+    "assistantReviewMode": "智能助手 · 专业审阅",
     "loadingDrawing": "正在恢复智能助手中的图纸任务…",
     "overlay": {
       "review": "待复核",
@@ -795,7 +793,7 @@
     "drawingUncertain": "项待复核",
     "drawingGeometryConfirmed": "几何已确认 {confirmed}/{geometry}",
     "drawingFootprintsConfirmed": "闭合轮廓已确认 {confirmed}/{footprints}",
-    "drawingWorkspaceSummary": "已同步最新图纸工作台：共 {elements} 个证据构件，{confirmed}/{geometry} 个几何候选已经工程师确认。点击下方按钮可查看原图坐标、待复核构件和建模门禁。",
+    "drawingWorkspaceSummary": "已同步最新图纸证据：共 {elements} 个证据构件，{confirmed}/{geometry} 个几何候选已经工程师确认。点击下方按钮可核对原图坐标、待复核构件和建模门禁。",
     "drawingFields": {
       "number": "图号",
       "revision": "版本",
@@ -805,10 +803,10 @@
     "drawingGrounded": "基于图纸证据",
     "drawingUnsupported": "图纸证据不足",
     "drawingBlockers": "建模前仍有 {count} 项门禁需要确认",
-    "drawingOpenWorkbench": "打开图纸工作台",
-    "drawingRefresh": "刷新工作台状态",
+    "drawingOpenWorkbench": "审阅图纸证据",
+    "drawingRefresh": "刷新证据状态",
     "drawingRefreshing": "正在刷新…",
-    "help": "我是总调度，可以把一句话拆成多个任务交给不同智能体：① 图纸智能体——读取 PDF/PNG/JPEG/TIFF，返回页码和坐标证据，并把专业校正交给图纸工作台；② 建案智能体——把现场问题或业主函件变成工单；③ 法规智能体——查询当地法规并引用原文；④ 案例跟进、项目进度和审批队列智能体。图纸建模、审批、执行和关闭始终由你确认。",
+    "help": "我是总调度，可以把一句话拆成多个任务交给不同智能体：① 图纸智能体——读取 PDF/PNG/JPEG/TIFF，返回页码和坐标证据，并按需进入图纸证据审阅流程；② 建案智能体——把现场问题或业主函件变成工单；③ 法规智能体——查询当地法规并引用原文；④ 案例跟进、项目进度和审批队列智能体。图纸建模、审批、执行和关闭始终由你确认。",
     "caseIntro": "已建立工单 {id}，判定为「{type}」，风险等级：{risk}。下面是专家团队的结论和处置计划。",
     "deadline": "响应时限",
     "team": "专家团队",
