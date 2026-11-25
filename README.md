@@ -6,16 +6,15 @@
 
 GlobalInfra AI V6.1 is an open-source operational digital-twin and governed-execution platform for overseas transportation infrastructure projects. It connects the complete project lifecycle and 24 engineering domains to project controls, documents, BIM/GIS, telemetry and evidence-grounded decisions. The finals release adds a five-minute Jury Control Room, an isolated judge sandbox with five distinct approval/execution/verification/closure identities, negative authority and tamper proofs, and an immutable-image release chain bound to signed evaluation evidence. Missing, unsigned or mismatched evidence is displayed as `UNVERIFIED`; unavailable real-model blind evaluation is displayed as `NOT_RUN`.
 
-- Isolated V6 competition demo: https://globalinfra-v6-demo-competition-demo.up.railway.app/
+- Isolated V6.1 competition demo: https://globalinfra-v6-demo-competition-demo.up.railway.app/
 - Competition evidence center: https://globalinfra-v6-demo-competition-demo.up.railway.app/competition
-- V6.1 Jury Control Room (available after V6.1 promotion): `/competition/jury`
+- V6.1 Jury Control Room: https://globalinfra-v6-demo-competition-demo.up.railway.app/competition/jury
 - Fail-closed evidence API: https://globalinfra-v6-demo-competition-demo.up.railway.app/backend/competition/submission-evidence?lang=en
 - License: [Apache License 2.0](LICENSE)
 
 > Scope note: this repository is a new standalone codebase. It does not depend on, import, call, or expose TheOne or any TheOne-branded runtime.
 > A URL alone is not release proof. Treat the deployment as V6 only when the evidence API reports `VERIFIED_PASSED` for the same deployed commit.
-> The public `competition-demo` is deliberately non-production: deterministic mock AI, demo auth, ephemeral SQLite and no mounted signed release envelope. It demonstrates the governed workflow but must remain `UNVERIFIED` until the protected signing pipeline and production dependencies are supplied. The previous `globalinfra-ai-production` service remains on V5.1 and is not the V6 judging target.
-> The live links above still identify the last promoted V6.0 demo until the V6.1 commit passes the protected release pipeline; this repository does not present an unpromoted build as deployed evidence.
+> The public `competition-demo` is deliberately non-production: deterministic mock AI, demo auth and ephemeral SQLite. Its API runs the commit-addressed V6.1 image with a mounted Ed25519-signed release envelope, so the evidence endpoint reports `VERIFIED_PASSED` for the fixed synthetic suites and deployed commit. That release proof does not turn demo dependencies into production dependencies or turn `NOT_RUN` blind-model evaluation into a result. The previous `globalinfra-ai-production` service remains on V5.1 and is not the V6 judging target.
 
 ## What is runnable in V6.1
 
