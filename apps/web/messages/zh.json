@@ -794,6 +794,7 @@
     "drawingElements": "个证据构件",
     "drawingUncertain": "项待复核",
     "drawingGeometryConfirmed": "几何已确认 {confirmed}/{geometry}",
+    "drawingFootprintsConfirmed": "闭合轮廓已确认 {confirmed}/{footprints}",
     "drawingWorkspaceSummary": "已同步最新图纸工作台：共 {elements} 个证据构件，{confirmed}/{geometry} 个几何候选已经工程师确认。点击下方按钮可查看原图坐标、待复核构件和建模门禁。",
     "drawingFields": {
       "number": "图号",

@@ -39,7 +39,7 @@ from .security import Principal, get_principal, require_project, require_roles
 
 
 router = APIRouter(prefix="/drawings", tags=["drawing-intelligence"])
-PARSER_VERSION = "globalinfra.drawing.v1.1"
+PARSER_VERSION = "globalinfra.drawing.v1.2"
 MAX_PDF_PAGES = 200
 MAX_PAGE_WORDS = 250_000
 MAX_PAGE_VECTOR_PRIMITIVES = 200_000
@@ -51,6 +51,7 @@ MAX_ANALYSIS_ELEMENTS = 10_000
 MAX_PREVIEW_DIMENSION = 3_000
 MAX_PREVIEW_PIXELS = 9_000_000
 MAX_RASTER_PIXELS = 40_000_000
+MAX_BOUNDARY_CANDIDATES_PER_PAGE = 80
 SUPPORTED_CONTENT_TYPES = {
     "pdf": "application/pdf",
     "png": "image/png",
@@ -98,7 +99,7 @@ VISION_RESPONSE_FORMAT = {
                             "source_text": {"type": "string"},
                             "geometry_type": {
                                 "type": ["string", "null"],
-                                "enum": ["RECTANGLE_FOOTPRINT", "LINE", None],
+                                "enum": ["RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT", "LINE", None],
                             },
                         },
                     },
@@ -174,16 +175,68 @@ _GRID = re.compile(r"\bGRID\s*[-:#]?\s*([A-Z0-9]+)\b", re.I)
 _ROOM = re.compile(r"\b(?:EQUIPMENT|CONTROL|PLANT|PUMP|ELECTRICAL|SWITCH|MECHANICAL)?\s*ROOM\b|设备房|控制室|泵房", re.I)
 _MATERIAL = re.compile(
     r"\b(?:STAINLESS\s+STEEL|CHANNEL\s+STEEL|STRUCTURAL\s+STEEL|STEEL\s+FRAME\s+METAL|"
-    r"REINFORCED\s+CONCRETE|CONCRETE|ALUMINIUM|ALUMINUM|HDPE|CEM(?:EN)?T\.?\s+PLASTER|MASONRY|STEEL)\b"
-    r"|不锈钢|槽钢|钢筋混凝土|混凝土|铝合金|铝材|高密度聚乙烯|水泥砂浆|砌体|结构钢",
+    r"REINFORCED\s+CONCRETE|CONCRETE|ALUMINIUM|ALUMINUM|HDPE|TIMBER|PVC|GLASS|"
+    r"WIRE\s+(?:NETTING|MESH)|CEM(?:EN)?T\.?\s+PLASTER|MASONRY|STEEL)\b"
+    r"|不锈钢|槽钢|钢筋混凝土|混凝土|铝合金|铝材|木材|木门|PVC|玻璃|钢丝网|高密度聚乙烯|水泥砂浆|砌体|结构钢",
     re.I,
 )
+_MATERIAL_CATEGORY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("STAINLESS_STEEL", re.compile(r"STAINLESS\s+STEEL|不锈钢", re.I)),
+    ("CHANNEL_STEEL", re.compile(r"CHANNEL\s+STEEL|槽钢", re.I)),
+    ("STEEL", re.compile(r"STRUCTURAL\s+STEEL|STEEL\s+FRAME\s+METAL|\bSTEEL\b|结构钢", re.I)),
+    ("CONCRETE", re.compile(r"REINFORCED\s+CONCRETE|\bCONCRETE\b|钢筋混凝土|混凝土", re.I)),
+    ("ALUMINIUM", re.compile(r"ALUMINIUM|ALUMINUM|铝合金|铝材", re.I)),
+    ("HDPE", re.compile(r"\bHDPE\b|高密度聚乙烯", re.I)),
+    ("TIMBER", re.compile(r"\bTIMBER\b|木材|木门", re.I)),
+    ("PVC", re.compile(r"\bPVC\b", re.I)),
+    ("GLASS", re.compile(r"\bGLASS\b|玻璃", re.I)),
+    ("WIRE_MESH", re.compile(r"WIRE\s+(?:NETTING|MESH)|钢丝网", re.I)),
+    ("CEMENT_PLASTER", re.compile(r"CEM(?:EN)?T\.?\s+PLASTER|水泥砂浆", re.I)),
+    ("MASONRY", re.compile(r"\bMASONRY\b|砌体", re.I)),
+)
+_QUANTITY = re.compile(r"(?<![A-Z0-9])(\d+)\s*(?:NOS?\.?|PCS?\.?|SETS?\.?)\b", re.I)
+_SIZE = re.compile(
+    r"(\d+(?:\.\d+)?\s*(?:MM|CM|M)?(?:\s*\([WLH]\))?)\s*[X×]\s*"
+    r"(\d+(?:\.\d+)?\s*(?:MM|CM|M)?(?:\s*\([WLH]\))?)",
+    re.I,
+)
+_SCHEDULE_KIND = re.compile(r"\b(DOOR|WINDOW|LOUVERS?|SHUTTERS?)\b|门|窗|百叶|快门", re.I)
+_SCHEDULE_TITLE = re.compile(r"\b(DOOR|WINDOW|LOUVER|SHUTTER)\s+SCHEDULE\b|门窗表|门表|窗表", re.I)
+_SCHEDULE_ROW_CODE = re.compile(r"^[A-Z]{1,4}\d{1,3}$", re.I)
 _WORD = re.compile(r"[A-Za-z0-9_./:-]+|[\u4e00-\u9fff]+")
 _CONFIRMED_SCALE = re.compile(r"^1\s*:\s*([1-9]\d*(?:\.\d+)?)$")
 
 
 def _id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:20].upper()}"
+
+
+def _material_categories(text: str) -> list[str]:
+    categories = [name for name, pattern in _MATERIAL_CATEGORY_RULES if pattern.search(text)]
+    if "STEEL" in categories and any(
+        category in categories for category in {"STAINLESS_STEEL", "CHANNEL_STEEL"}
+    ):
+        categories.remove("STEEL")
+    return categories
+
+
+def _explicit_quantity(text: str) -> int | None:
+    match = _QUANTITY.search(text)
+    return int(match.group(1)) if match else None
+
+
+def _schedule_kind(text: str) -> str | None:
+    match = _SCHEDULE_KIND.search(text)
+    if not match:
+        return None
+    token = match.group(0).upper()
+    if "DOOR" in token or "门" in token:
+        return "DOOR"
+    if "WINDOW" in token or "窗" in token:
+        return "WINDOW"
+    if "LOUVER" in token or "百叶" in token:
+        return "LOUVER"
+    return "SHUTTER"
 
 
 def _safe_filename(value: str | None, fallback: str) -> str:
@@ -332,6 +385,7 @@ def _parse_pdf(content: bytes) -> list[ParsedPage]:
                 )
                 lines.append(ParsedLine(index + 1, line_text, _normalize_bbox(box, width, height)))
             geometry: list[dict] = []
+            boundary_candidates: list[dict] = []
             try:
                 drawings = page.get_drawings()
                 vector_count = sum(len(path.get("items", [])) for path in drawings)
@@ -346,7 +400,67 @@ def _parse_pdf(content: bytes) -> list[ParsedPage]:
                     )
                 for path_index, path in enumerate(drawings, start=1):
                     stroke = max(float(path.get("width") or 0.0), 1.0)
-                    for item_index, item in enumerate(path.get("items", []), start=1):
+                    path_items = path.get("items", [])
+                    points: list[tuple[float, float]] | None = None
+                    if len(path_items) >= 3 and all(item[0] == "l" for item in path_items):
+                        line_points = [
+                            (float(path_items[0][1].x), float(path_items[0][1].y))
+                        ] + [
+                            (float(item[2].x), float(item[2].y)) for item in path_items
+                        ]
+                        continuous = all(
+                            math.dist(
+                                (float(current[2].x), float(current[2].y)),
+                                (float(following[1].x), float(following[1].y)),
+                            ) <= 1.5
+                            for current, following in zip(path_items, path_items[1:])
+                        )
+                        if continuous and math.dist(line_points[0], line_points[-1]) <= 1.5:
+                            points = line_points
+                    elif len(path_items) == 1 and path_items[0][0] == "qu":
+                        quad = path_items[0][1]
+                        points = [
+                            (float(quad.ul.x), float(quad.ul.y)),
+                            (float(quad.ur.x), float(quad.ur.y)),
+                            (float(quad.lr.x), float(quad.lr.y)),
+                            (float(quad.ll.x), float(quad.ll.y)),
+                            (float(quad.ul.x), float(quad.ul.y)),
+                        ]
+                    if points:
+                        source_area = abs(sum(
+                            start[0] * end[1] - end[0] * start[1]
+                            for start, end in zip(points, points[1:])
+                        )) / 2
+                        x0, y0 = min(point[0] for point in points), min(point[1] for point in points)
+                        x1, y1 = max(point[0] for point in points), max(point[1] for point in points)
+                        bbox_area = max((x1 - x0) * (y1 - y0), 1.0)
+                        area_ratio = source_area / max(width * height, 1.0)
+                        if (
+                            min(x1 - x0, y1 - y0) >= 20
+                            and 0.00001 <= area_ratio <= 0.8
+                            and source_area / bbox_area >= 0.15
+                        ):
+                            bbox = _normalize_bbox((x0, y0, x1, y1), width, height)
+                            boundary_candidates.append({
+                                "type": "SPACE",
+                                "label": "closed footprint candidate",
+                                "value": f"Closed footprint P{index + 1}-{path_index}",
+                                "unit": None,
+                                "page": index + 1,
+                                "bbox": bbox,
+                                "confidence": 0.76,
+                                "method": "PDF_VECTOR_GEOMETRY",
+                                "state": "INFERRED",
+                                "properties": {
+                                    "source_text": "Closed PDF vector path; exterior/space semantics require human confirmation",
+                                    "geometry_type": "POLYGON_FOOTPRINT",
+                                    "outline": [[round(x / width, 6), round(y / height, 6)] for x, y in points[:-1]],
+                                    "outline_points": [[round(x, 6), round(y, 6)] for x, y in points[:-1]],
+                                    "source_area_points2": round(source_area, 6),
+                                    "semantic_boundary": "CANDIDATE_NOT_CONFIRMED",
+                                },
+                            })
+                    for item_index, item in enumerate(path_items, start=1):
                         kind = item[0]
                         if kind == "re":
                             rect = item[1]
@@ -383,6 +497,13 @@ def _parse_pdf(content: bytes) -> list[ParsedPage]:
                                         [bbox[0], bbox[1]], [bbox[2], bbox[1]],
                                         [bbox[2], bbox[3]], [bbox[0], bbox[3]],
                                     ],
+                                    "outline_points": [
+                                        [round(float(rect.x0), 6), round(float(rect.y0), 6)],
+                                        [round(float(rect.x1), 6), round(float(rect.y0), 6)],
+                                        [round(float(rect.x1), 6), round(float(rect.y1), 6)],
+                                        [round(float(rect.x0), 6), round(float(rect.y1), 6)],
+                                    ],
+                                    "source_area_points2": round(rect_width * rect_height, 6),
                                     "semantic_boundary": "CANDIDATE_NOT_CONFIRMED",
                                 },
                             })
@@ -427,6 +548,15 @@ def _parse_pdf(content: bytes) -> list[ParsedPage]:
                                     "semantic_boundary": "CANDIDATE_NOT_CONFIRMED",
                                 },
                             })
+                for boundary in sorted(
+                    boundary_candidates,
+                    key=lambda item: float(item["properties"]["source_area_points2"]),
+                    reverse=True,
+                )[:MAX_BOUNDARY_CANDIDATES_PER_PAGE]:
+                    total_geometry += 1
+                    if total_geometry > MAX_ANALYSIS_ELEMENTS:
+                        raise HTTPException(422, "Drawing exceeds the 10,000-element analysis safety limit")
+                    geometry.append(boundary)
             except HTTPException:
                 raise
             except Exception:
@@ -539,7 +669,7 @@ def _parse_vision_elements(raw: str, page_count: int) -> list[dict]:
             if value not in {"mm", "cm", "m"}:
                 continue
         geometry_type = row.get("geometry_type")
-        if geometry_type not in {None, "RECTANGLE_FOOTPRINT", "LINE"}:
+        if geometry_type not in {None, "RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT", "LINE"}:
             geometry_type = None
         result.append({
             "type": element_type,
@@ -611,6 +741,7 @@ def _element_specs(
         confidence: float,
         unit: str | None = None,
         source_span: tuple[int, int] | None = None,
+        extra_properties: dict | None = None,
     ):
         key = (kind, value.upper(), line.page, tuple(line.bbox))
         if key in seen:
@@ -622,7 +753,10 @@ def _element_specs(
             "type": kind, "label": label, "value": value.strip()[:500], "unit": unit,
             "page": line.page, "bbox": line.bbox, "confidence": confidence,
             "method": "PDF_VECTOR_TEXT", "state": "EXTRACTED",
-            "properties": {"source_text": source_excerpt(line, source_span)},
+            "properties": {
+                "source_text": source_excerpt(line, source_span),
+                **(extra_properties or {}),
+            },
         })
 
     # Title-block codes are authoritative and must outrank CAD file paths such
@@ -699,10 +833,92 @@ def _element_specs(
         room = _ROOM.search(line.text)
         if room:
             add("SPACE", "room", room.group(0), line, 0.84, source_span=room.span(0))
+        material_categories = _material_categories(line.text)
+        quantity = _explicit_quantity(line.text)
         for material in _MATERIAL.finditer(line.text):
-            add("MATERIAL", "material_requirement", material.group(0), line, 0.88, source_span=material.span(0))
+            add(
+                "MATERIAL", "material_requirement", material.group(0), line, 0.88,
+                source_span=material.span(0),
+                extra_properties={
+                    "material_categories": material_categories,
+                    "quantity": quantity,
+                    "quantity_basis": "EXPLICIT_TEXT" if quantity is not None else None,
+                },
+            )
+        schedule_kind = _schedule_kind(line.text)
+        if schedule_kind:
+            sizes = [
+                f"{match.group(1).strip()} x {match.group(2).strip()}"
+                for match in _SIZE.finditer(line.text)
+            ]
+            add(
+                "SCHEDULE_ITEM", f"{schedule_kind.lower()}_schedule_item",
+                line.text, line, 0.86,
+                extra_properties={
+                    "schedule_kind": schedule_kind,
+                    "material_categories": material_categories,
+                    "quantity": quantity,
+                    "sizes": sizes,
+                },
+            )
         if re.search(r"\b(?:NOTE|GENERAL NOTES?)\b|说明", line.text, re.I):
             add("NOTE", "note", line.text, line, 0.82)
+
+    # CAD/PDF schedules often place each cell in a separate text object. Rejoin
+    # cells by their row baseline so type, size and description remain one
+    # evidence unit instead of unrelated OCR fragments.
+    for title_line in (line for line in lines if _SCHEDULE_TITLE.search(line.text)):
+        title_kind = _schedule_kind(title_line.text) or "DOOR"
+        table_x0 = max(0.0, title_line.bbox[0] - 0.01)
+        table_x1 = min(1.0, title_line.bbox[0] + 0.11)
+        table_y0 = title_line.bbox[3]
+        table_y1 = min(1.0, title_line.bbox[3] + 0.22)
+        table_lines = [
+            line for line in lines
+            if line.page == title_line.page
+            and table_x0 <= line.bbox[0] <= table_x1
+            and table_y0 <= (line.bbox[1] + line.bbox[3]) / 2 <= table_y1
+        ]
+        for anchor in (line for line in table_lines if _SCHEDULE_ROW_CODE.fullmatch(line.text.strip())):
+            anchor_y = (anchor.bbox[1] + anchor.bbox[3]) / 2
+            cells = sorted(
+                (
+                    line for line in table_lines
+                    if abs((line.bbox[1] + line.bbox[3]) / 2 - anchor_y) <= 0.006
+                ),
+                key=lambda line: line.bbox[0],
+            )
+            combined = " | ".join(
+                line.text.strip() for line in cells if line.text.strip()
+            )
+            if not combined or not _SIZE.search(combined):
+                continue
+            row = ParsedLine(
+                page=anchor.page,
+                text=f"{title_kind} SCHEDULE: {combined}",
+                bbox=[
+                    min(line.bbox[0] for line in cells),
+                    min(line.bbox[1] for line in cells),
+                    max(line.bbox[2] for line in cells),
+                    max(line.bbox[3] for line in cells),
+                ],
+            )
+            sizes = [
+                f"{match.group(1).strip()} x {match.group(2).strip()}"
+                for match in _SIZE.finditer(combined)
+            ]
+            add(
+                "SCHEDULE_ITEM", f"{title_kind.lower()}_schedule_row", combined,
+                row, 0.93,
+                extra_properties={
+                    "schedule_kind": title_kind,
+                    "row_code": anchor.text.strip(),
+                    "material_categories": _material_categories(combined),
+                    "quantity": _explicit_quantity(combined),
+                    "sizes": sizes,
+                    "reconstructed_from_cells": len(cells),
+                },
+            )
     return metadata, elements
 
 
@@ -722,8 +938,53 @@ def _is_model_geometry(row: DrawingElement) -> bool:
     return bool(
         row.element_type in {"WALL", "DOOR", "SPACE", "EQUIPMENT"}
         and row.extraction_method in {"PDF_VECTOR_GEOMETRY", "MULTIMODAL_VISION"}
-        and geometry_type in {"LINE", "RECTANGLE_FOOTPRINT"}
+        and geometry_type in {"LINE", "RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT"}
     )
+
+
+def _serialized_confirmation(item: dict) -> bool:
+    properties = item.get("properties") or {}
+    return bool(
+        item.get("state") == "USER_CONFIRMED"
+        and properties.get("evidence_kind") == "USER_CONFIRMATION"
+        and properties.get("actor")
+        and properties.get("confirmed_at")
+    )
+
+
+def _footprint_area_m2(document: DrawingDocument, detail: dict, item: dict) -> float | None:
+    properties = item.get("properties") or {}
+    geometry_type = str(properties.get("geometry_type") or "").upper()
+    if geometry_type not in {"RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT"}:
+        return None
+    try:
+        source_area = float(properties.get("source_area_points2"))
+    except (TypeError, ValueError):
+        source_area = 0.0
+    if source_area <= 0 and geometry_type == "RECTANGLE_FOOTPRINT":
+        sheet = next(
+            (row for row in detail["sheets"] if row["page"] == item["page"]),
+            None,
+        )
+        bbox = item.get("bbox") or []
+        if sheet and len(bbox) == 4:
+            source_area = (
+                max(0.0, float(bbox[2]) - float(bbox[0])) * float(sheet["width"])
+                * max(0.0, float(bbox[3]) - float(bbox[1])) * float(sheet["height"])
+            )
+    if source_area <= 0:
+        return None
+    if document.file_type == "pdf":
+        scale_match = _CONFIRMED_SCALE.match(document.scale or "")
+        if not scale_match:
+            return None
+        metres_per_point = (0.0254 / 72.0) * float(scale_match.group(1))
+        return source_area * metres_per_point * metres_per_point
+    try:
+        metres_per_source_unit = float(document.metadata_json.get("meters_per_source_unit"))
+    except (TypeError, ValueError):
+        return None
+    return source_area * metres_per_source_unit * metres_per_source_unit
 
 
 def _model_gate(document: DrawingDocument, elements: list[DrawingElement]) -> tuple[bool, list[str]]:
@@ -1083,7 +1344,11 @@ def ask_drawing(
     question_lower = payload.question.lower()
     chinese = bool(re.search(r"[\u4e00-\u9fff]", payload.question))
 
-    if re.search(r"建筑面积|总面积|building\s+area|gross\s+floor\s+area", question_lower, re.I):
+    if re.search(
+        r"建筑面积|总面积|占地面积|轮廓面积|面积(?:是|有|为|多少|计算)"
+        r"|building\s+area|gross\s+floor\s+area|footprint\s+area",
+        question_lower, re.I,
+    ):
         area = next(
             (
                 item for item in detail["elements"]
@@ -1111,34 +1376,160 @@ def ask_drawing(
         geometry = [
             item for item in detail["elements"]
             if item["type"] in {"WALL", "DOOR", "SPACE", "EQUIPMENT"}
-            and str(item["properties"].get("geometry_type", "")).upper() in {"LINE", "RECTANGLE_FOOTPRINT"}
+            and str(item["properties"].get("geometry_type", "")).upper()
+            in {"LINE", "RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT"}
         ]
-        confirmed = [item for item in geometry if item["state"] == "USER_CONFIRMED"]
+        confirmed = [item for item in geometry if _serialized_confirmation(item)]
+        footprints = [
+            item for item in geometry
+            if str(item["properties"].get("geometry_type", "")).upper()
+            in {"RECTANGLE_FOOTPRINT", "POLYGON_FOOTPRINT"}
+        ]
+        confirmed_footprints = [item for item in footprints if _serialized_confirmation(item)]
+        calibration_label = "scale" if document.file_type == "pdf" else "source_calibration"
+        calibration = next(
+            (
+                item for item in detail["elements"]
+                if item["label"] == calibration_label and _serialized_confirmation(item)
+            ),
+            None,
+        )
+        computed = [
+            (item, _footprint_area_m2(document, detail, item))
+            for item in confirmed_footprints
+        ] if calibration else []
+        computed = [(item, value) for item, value in computed if value is not None]
+        if computed:
+            total_area = sum(value for _, value in computed)
+            answer = (
+                f"已根据 {len(computed)} 个经工程师确认的闭合轮廓和已确认比例计算，"
+                f"闭合轮廓面积合计为 {total_area:.2f} m²。"
+                "该数值是已确认轮廓的几何面积；如果轮廓相互重叠或不代表建筑外边界，不应直接当作总建筑面积。"
+                if chinese else
+                f"Using {len(computed)} engineer-confirmed closed footprint(s) and the confirmed scale, "
+                f"the confirmed footprint area totals {total_area:.2f} m². This is a geometric footprint total; "
+                "overlapping or non-exterior footprints must not be treated as gross building area."
+            )
+            evidence_items = [item for item, _ in computed]
+            if calibration:
+                evidence_items.append(calibration)
+            return {
+                "answer": answer, "grounded": True,
+                "facts": [{
+                    "id": item["id"], "type": item["type"], "label": item["label"],
+                    "value": f"{value:.2f} m²", "confidence": item["confidence"],
+                } for item, value in computed],
+                "citations": [{
+                    "element_id": item["id"], **item["evidence"],
+                    "confidence": item["confidence"], "state": item["state"],
+                } for item in evidence_items],
+                "calculation": {
+                    "method": "CONFIRMED_VECTOR_FOOTPRINT_X_CONFIRMED_SCALE",
+                    "footprint_count": len(computed), "area_m2": round(total_area, 2),
+                },
+                "boundary": "Only audited closed footprints and an audited scale/calibration enter the calculation.",
+            }
+        if confirmed_footprints and not calibration:
+            answer = (
+                f"已确认 {len(confirmed_footprints)} 个闭合轮廓，但比例尺尚未经工程师确认，因此暂不计算面积。"
+                if chinese else
+                f"{len(confirmed_footprints)} closed footprint(s) are confirmed, but the scale is not audited, so area is not calculated."
+            )
+            return {
+                "answer": answer, "grounded": False, "facts": [], "citations": [],
+                "boundary": "Area calculation requires audited geometry and scale/calibration.",
+            }
         answer = (
-            f"这张图没有检出明确标注的建筑面积，且当前仅有 {len(confirmed)}/{len(geometry)} 个几何候选已确认，"
-            "未形成经工程师确认的闭合建筑外轮廓，因此不能可靠计算建筑面积。"
-            "请先在图纸工作台确认比例、单位和闭合外轮廓，再执行面积计算。"
+            f"这张图没有检出明确标注的建筑面积。当前识别到 {len(footprints)} 个闭合轮廓候选，"
+            f"已确认 {len(confirmed_footprints)} 个；全部几何候选已确认 {len(confirmed)}/{len(geometry)}。"
+            "请先在图纸工作台选中并确认建筑外轮廓和比例，系统将自动计算面积。"
             if chinese else
-            f"No explicit building-area label was found. Only {len(confirmed)}/{len(geometry)} geometry candidates are confirmed, "
-            "and there is no engineer-confirmed closed building outline, so a reliable area cannot be calculated. "
-            "Confirm the scale, unit and closed exterior boundary in the Drawing Workbench first."
+            f"No explicit building-area label was found. {len(footprints)} closed footprint candidates were detected; "
+            f"{len(confirmed_footprints)} are confirmed, and {len(confirmed)}/{len(geometry)} total geometry candidates are confirmed. "
+            "Confirm the exterior footprint and scale in the Drawing Workbench to calculate area automatically."
         )
         return {
             "answer": answer, "grounded": False, "facts": [], "citations": [],
             "boundary": "No area is inferred from unconfirmed or open geometry.",
         }
 
+    if re.search(r"门窗|门表|窗表|门.*(?:规格|数量|材料)|窗.*(?:规格|数量|材料)|(?:door|window)\s+schedule", question_lower, re.I):
+        schedule_items: list[dict] = []
+        seen_schedule: set[str] = set()
+        for item in detail["elements"]:
+            if item["type"] != "SCHEDULE_ITEM":
+                continue
+            source = re.sub(r"\s+", " ", str(item["properties"].get("source_text") or item["value"])).strip()
+            normalized = source.casefold()
+            if not normalized or normalized in seen_schedule:
+                continue
+            seen_schedule.add(normalized)
+            schedule_items.append(item)
+        schedule_items.sort(
+            key=lambda item: (
+                not str(item["label"]).endswith("_schedule_row"),
+                item["page"], item["bbox"][1], item["bbox"][0],
+            )
+        )
+        schedule_items = schedule_items[:16]
+        if schedule_items:
+            kind_labels = {
+                "DOOR": "门", "WINDOW": "窗", "LOUVER": "百叶", "SHUTTER": "快门/遮挡",
+            } if chinese else {
+                "DOOR": "door", "WINDOW": "window", "LOUVER": "louver", "SHUTTER": "shutter",
+            }
+            counts: dict[str, int] = {}
+            explicit_quantities: dict[str, int] = {}
+            for item in schedule_items:
+                properties = item["properties"]
+                kind = str(properties.get("schedule_kind") or "OTHER")
+                counts[kind] = counts.get(kind, 0) + 1
+                quantity = properties.get("quantity")
+                if isinstance(quantity, int):
+                    explicit_quantities[kind] = explicit_quantities.get(kind, 0) + quantity
+            summary = ", ".join(
+                f"{kind_labels.get(kind, kind)} {count} {'条' if chinese else 'rows'}"
+                + (f"/明确数量 {explicit_quantities[kind]}" if chinese and kind in explicit_quantities else "")
+                for kind, count in sorted(counts.items())
+            )
+            details = [
+                re.sub(r"\s+", " ", str(item["properties"].get("source_text") or item["value"])).strip()
+                for item in schedule_items[:12]
+            ]
+            prefix = f"门窗/构件表识别结果（{summary}）：" if chinese else f"Door/window schedule results ({summary}): "
+            answer = prefix + ("；" if chinese else "; ").join(
+                f"{index}. {source}" for index, source in enumerate(details, start=1)
+            )
+            return {
+                "answer": answer, "grounded": True,
+                "facts": [{"id": item["id"], "type": item["type"], "label": item["label"],
+                           "value": item["value"], "confidence": item["confidence"]} for item in schedule_items[:12]],
+                "citations": [{"element_id": item["id"], **item["evidence"],
+                               "confidence": item["confidence"], "state": item["state"]} for item in schedule_items[:12]],
+                "schedule_summary": {"counts": counts, "explicit_quantities": explicit_quantities},
+                "boundary": "Counts distinguish schedule rows from explicit quantities; missing quantities are not inferred.",
+            }
+
     if re.search(r"材料|材质|materials?", question_lower, re.I):
         unique: list[dict] = []
         seen_requirements: set[str] = set()
+        grouped_sources: dict[str, set[str]] = {}
+        explicit_quantities: dict[str, int] = {}
         for item in detail["elements"]:
             if item["type"] != "MATERIAL":
                 continue
             requirement = str(item["properties"].get("source_text") or item["value"]).strip()
             normalized = re.sub(r"\s+", " ", requirement).casefold()
+            categories = item["properties"].get("material_categories") or _material_categories(requirement)
+            for category in categories:
+                grouped_sources.setdefault(str(category), set()).add(normalized)
             if not normalized or normalized in seen_requirements:
                 continue
             seen_requirements.add(normalized)
+            quantity = item["properties"].get("quantity")
+            if isinstance(quantity, int):
+                for category in categories:
+                    explicit_quantities[str(category)] = explicit_quantities.get(str(category), 0) + quantity
             unique.append(item)
         unique = unique[:12]
         if unique:
@@ -1146,7 +1537,27 @@ def ask_drawing(
                 re.sub(r"\s+", " ", str(item["properties"].get("source_text") or item["value"])).strip()
                 for item in unique
             ]
-            prefix = "图纸中识别到以下材料要求：" if chinese else "Material requirements identified in the drawing: "
+            category_labels = {
+                "STAINLESS_STEEL": "不锈钢", "CHANNEL_STEEL": "槽钢", "STEEL": "钢制品",
+                "CONCRETE": "混凝土", "ALUMINIUM": "铝材", "HDPE": "HDPE",
+                "CEMENT_PLASTER": "水泥抹灰", "MASONRY": "砌体",
+                "TIMBER": "木材", "PVC": "PVC", "GLASS": "玻璃", "WIRE_MESH": "金属网",
+            } if chinese else {
+                "STAINLESS_STEEL": "stainless steel", "CHANNEL_STEEL": "channel steel", "STEEL": "steel",
+                "CONCRETE": "concrete", "ALUMINIUM": "aluminium", "HDPE": "HDPE",
+                "CEMENT_PLASTER": "cement plaster", "MASONRY": "masonry",
+                "TIMBER": "timber", "PVC": "PVC", "GLASS": "glass", "WIRE_MESH": "wire mesh",
+            }
+            category_summary = ", ".join(
+                f"{category_labels.get(category, category)} {len(sources)} {'条' if chinese else 'requirements'}"
+                + (f"/{'明确数量' if chinese else 'explicit quantity'} {explicit_quantities[category]}" if category in explicit_quantities else "")
+                for category, sources in sorted(grouped_sources.items())
+            )
+            prefix = (
+                f"材料分类汇总（{category_summary}）。原图要求："
+                if chinese else
+                f"Material category summary ({category_summary}). Source requirements: "
+            )
             separator = "；" if chinese else "; "
             answer = prefix + separator.join(
                 f"{index}. {requirement}" for index, requirement in enumerate(requirements, start=1)
@@ -1157,6 +1568,10 @@ def ask_drawing(
                            "value": item["value"], "confidence": item["confidence"]} for item in unique],
                 "citations": [{"element_id": item["id"], **item["evidence"],
                                "confidence": item["confidence"], "state": item["state"]} for item in unique],
+                "material_summary": {
+                    "requirement_counts": {category: len(sources) for category, sources in grouped_sources.items()},
+                    "explicit_quantities": explicit_quantities,
+                },
                 "boundary": "Requirements are deduplicated from source text; no missing specification is inferred.",
             }
 

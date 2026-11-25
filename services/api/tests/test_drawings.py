@@ -9,7 +9,13 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
-from app.drawings import MAX_PREVIEW_DIMENSION, MAX_PREVIEW_PIXELS, ParsedLine, _element_specs
+from app.drawings import (
+    MAX_PREVIEW_DIMENSION,
+    MAX_PREVIEW_PIXELS,
+    ParsedLine,
+    _element_specs,
+    _parse_pdf,
+)
 from app.main import app
 from app.security import Principal, get_principal
 
@@ -27,6 +33,7 @@ def _drawing_pdf() -> bytes:
         "EQUIPMENT ROOM",
         "DIMENSION 5000 mm",
         "MATERIAL: REINFORCED CONCRETE",
+        "DOOR SCHEDULE FD1 2NOS 900 X 2100 STEEL FRAME METAL DOOR",
     ]
     for index, line in enumerate(lines):
         page.insert_text((60, 55 + index * 28), line, fontsize=12)
@@ -48,6 +55,21 @@ def _large_page_pdf() -> bytes:
     document = fitz.open()
     page = document.new_page(width=10_000, height=10_000)
     page.insert_text((100, 100), "SCALE: 1:100 UNIT: mm", fontsize=12)
+    payload = document.tobytes(garbage=4, deflate=True)
+    document.close()
+    return payload
+
+
+def _closed_polygon_pdf() -> bytes:
+    document = fitz.open()
+    page = document.new_page(width=400, height=300)
+    shape = page.new_shape()
+    shape.draw_polyline([
+        fitz.Point(50, 50), fitz.Point(250, 50), fitz.Point(250, 150),
+        fitz.Point(50, 150), fitz.Point(50, 50),
+    ])
+    shape.finish(color=(0, 0, 0), width=1)
+    shape.commit()
     payload = document.tobytes(garbage=4, deflate=True)
     document.close()
     return payload
@@ -120,14 +142,21 @@ def test_pdf_analysis_returns_exact_evidence_and_grounded_answer(client):
     ).json()
     assert materials["grounded"] is True
     assert "MATERIAL: REINFORCED CONCRETE" in materials["answer"]
-    assert len(materials["citations"]) == 1
+    assert len(materials["citations"]) >= 1
 
     area = client.post(
         f"/drawings/{drawing['id']}/ask", json={"question": "建筑面积多少？"}
     ).json()
     assert area["grounded"] is False
     assert "没有检出明确标注" in area["answer"]
-    assert "闭合建筑外轮廓" in area["answer"]
+    assert "闭合轮廓候选" in area["answer"]
+
+    schedule = client.post(
+        f"/drawings/{drawing['id']}/ask", json={"question": "门窗表里有哪些规格和数量？"}
+    ).json()
+    assert schedule["grounded"] is True
+    assert "900 X 2100" in schedule["answer"]
+    assert schedule["schedule_summary"]["explicit_quantities"]["DOOR"] == 2
 
 
 def test_title_block_code_outranks_cad_path_noise_and_keeps_revision():
@@ -163,6 +192,36 @@ def test_materials_and_explicit_area_are_extracted_without_collapsing_requiremen
     area = next(row for row in elements if row["label"] == "building_area")
     assert area["value"] == "128.5"
     assert area["unit"] == "m²"
+
+    quantified = ParsedLine(
+        1, "2NOS OF 100mm(W) x 1300mm(L) CHANNEL STEEL", [0.1, 0.4, 0.8, 0.42]
+    )
+    _, quantified_elements = _element_specs([quantified])
+    material = next(row for row in quantified_elements if row["type"] == "MATERIAL")
+    assert material["properties"]["quantity"] == 2
+    assert "CHANNEL_STEEL" in material["properties"]["material_categories"]
+
+
+def test_closed_vector_path_and_split_schedule_cells_become_reviewable_evidence():
+    page = _parse_pdf(_closed_polygon_pdf())[0]
+    footprint = next(
+        item for item in page.geometry
+        if item["properties"].get("geometry_type") == "POLYGON_FOOTPRINT"
+    )
+    assert footprint["state"] == "INFERRED"
+    assert footprint["properties"]["source_area_points2"] == pytest.approx(20_000)
+
+    lines = [
+        ParsedLine(1, "DOOR SCHEDULE", [0.70, 0.10, 0.76, 0.12]),
+        ParsedLine(1, "FD1", [0.70, 0.15, 0.72, 0.16]),
+        ParsedLine(1, "2400 X 3000", [0.73, 0.15, 0.78, 0.16]),
+        ParsedLine(1, "2HR FIRE RATED STEEL DOOR", [0.79, 0.15, 0.81, 0.16]),
+    ]
+    _, elements = _element_specs(lines)
+    row = next(item for item in elements if item["label"] == "door_schedule_row")
+    assert row["properties"]["row_code"] == "FD1"
+    assert row["properties"]["sizes"] == ["2400 x 3000"]
+    assert row["properties"]["reconstructed_from_cells"] == 3
 
 
 def test_source_preview_and_human_model_gate_are_private_and_fail_closed(client):
@@ -203,6 +262,14 @@ def test_source_preview_and_human_model_gate_are_private_and_fail_closed(client)
     # Other extracted vector candidates remain explicitly unconfirmed and are
     # excluded from generation rather than silently promoted.
     assert final.json()["model_gate"]["requires_human_confirmation"] >= 1
+
+    calculated = client.post(
+        f"/drawings/{drawing_id}/ask", json={"question": "建筑面积多少？"}
+    ).json()
+    assert calculated["grounded"] is True
+    assert calculated["calculation"]["method"] == "CONFIRMED_VECTOR_FOOTPRINT_X_CONFIRMED_SCALE"
+    assert calculated["calculation"]["footprint_count"] == 1
+    assert calculated["calculation"]["area_m2"] == pytest.approx(150.59, abs=0.02)
 
 
 def test_pdf_preview_is_bounded_for_very_large_allowed_page(client):

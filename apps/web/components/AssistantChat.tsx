@@ -31,6 +31,7 @@ type DrawingReply = {
   kind: 'drawing'; drawingId: string; filename: string; status: string; sha256: string;
   projectId: number | null; pages: number; elementCount: number; uncertainCount: number;
   geometryCount: number; confirmedGeometryCount: number;
+  footprintCount: number; confirmedFootprintCount: number;
   fields: { drawingNumber: string; revision: string; scale: string; unit: string; title: string };
   categories: Record<string, number>; modelReady: boolean; blockers: string[];
   question?: string; answer?: string; grounded?: boolean; citations?: DrawingCitation[];
@@ -178,8 +179,10 @@ function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): Drawi
     const category = valueText(item.type ?? item.category).toUpperCase();
     const geometryType = valueText(object(item.properties).geometry_type).toUpperCase();
     return ['WALL', 'DOOR', 'SPACE', 'EQUIPMENT'].includes(category)
-      && ['LINE', 'RECTANGLE_FOOTPRINT'].includes(geometryType);
+      && ['LINE', 'RECTANGLE_FOOTPRINT', 'POLYGON_FOOTPRINT'].includes(geometryType);
   });
+  const footprints = geometry.filter(item => ['RECTANGLE_FOOTPRINT', 'POLYGON_FOOTPRINT']
+    .includes(valueText(object(item.properties).geometry_type).toUpperCase()));
   return {
     kind: 'drawing',
     drawingId: valueText(document.id ?? document.drawing_id) || previous?.drawingId || '',
@@ -196,6 +199,10 @@ function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): Drawi
     confirmedGeometryCount: elements.length
       ? geometry.filter(item => valueText(item.state ?? item.status).toUpperCase() === 'USER_CONFIRMED').length
       : previous?.confirmedGeometryCount ?? 0,
+    footprintCount: elements.length ? footprints.length : previous?.footprintCount ?? 0,
+    confirmedFootprintCount: elements.length
+      ? footprints.filter(item => valueText(item.state ?? item.status).toUpperCase() === 'USER_CONFIRMED').length
+      : previous?.confirmedFootprintCount ?? 0,
     fields: {
       drawingNumber: valueText(document.drawing_number ?? object(document.metadata).drawing_number) || previous?.fields.drawingNumber || '',
       revision: valueText(document.revision ?? object(document.metadata).revision) || previous?.fields.revision || '',
@@ -667,6 +674,7 @@ function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
       <span>{current.elementCount} {t('drawingElements')}</span>
       <span>{current.uncertainCount} {t('drawingUncertain')}</span>
       {current.geometryCount > 0 && <span>{t('drawingGeometryConfirmed', { confirmed: current.confirmedGeometryCount, geometry: current.geometryCount })}</span>}
+      {current.footprintCount > 0 && <span>{t('drawingFootprintsConfirmed', { confirmed: current.confirmedFootprintCount, footprints: current.footprintCount })}</span>}
       <code>{current.drawingId}</code>
     </div>
     {facts.length ? <div className="assistant-facts drawing-facts">{facts.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div> : null}

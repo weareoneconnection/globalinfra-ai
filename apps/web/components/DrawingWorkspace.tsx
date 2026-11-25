@@ -97,6 +97,17 @@ function text(value: unknown, fallback = ''): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
 }
 
+function isFootprintElement(item: DrawingElement): boolean {
+  return ['RECTANGLE_FOOTPRINT', 'POLYGON_FOOTPRINT']
+    .includes(text(item.properties?.geometry_type).toUpperCase());
+}
+
+function reviewPriority(item: DrawingElement): number {
+  if (isFootprintElement(item)) return 3;
+  if (text(item.label).endsWith('_schedule_row')) return 2;
+  return 1;
+}
+
 function normalizeDrawing(payload: unknown): DrawingDetail {
   const body = record(payload);
   const raw = record(body.drawing ?? body.result ?? body);
@@ -347,12 +358,23 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
   }, [initialDrawingId, initialElementId, initialPage, locale]);
 
   const rows = useMemo(() => detail ? fieldRows(detail) : [], [detail]);
-  const geometryCandidates = useMemo(() => detail?.elements.filter(item => {
-    const type = text(item.type ?? item.category).toUpperCase();
-    const geometryType = text(item.properties?.geometry_type).toUpperCase();
-    return ['WALL', 'DOOR', 'SPACE', 'EQUIPMENT'].includes(type)
-      && ['LINE', 'RECTANGLE_FOOTPRINT'].includes(geometryType);
-  }) ?? [], [detail]);
+  const geometryCandidates = useMemo(() => {
+    const candidates = detail?.elements.filter(item => {
+      const type = text(item.type ?? item.category).toUpperCase();
+      const geometryType = text(item.properties?.geometry_type).toUpperCase();
+      return ['WALL', 'DOOR', 'SPACE', 'EQUIPMENT'].includes(type)
+        && ['LINE', 'RECTANGLE_FOOTPRINT', 'POLYGON_FOOTPRINT'].includes(geometryType);
+    }) ?? [];
+    return [...candidates].sort((left, right) =>
+      Number(isFootprintElement(right)) - Number(isFootprintElement(left))
+    );
+  }, [detail]);
+  const reviewElements = useMemo(() => {
+    if (!detail) return [];
+    return [...detail.elements]
+      .sort((left, right) => reviewPriority(right) - reviewPriority(left))
+      .slice(0, 18);
+  }, [detail]);
   const gateReady = Boolean(detail?.modelGate.ready ?? detail?.modelGate.model_ready);
   const selectedElement = detail?.elements.find((item, index) => text(item.id ?? item.element_id, `element-${index}`) === selected);
   const sourceUnit = text(detail?.document.unit).trim().toLowerCase();
@@ -526,7 +548,7 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
         {detail ? <>
           <div className="drawing-metadata">{rows.length ? rows.map(([key, value]) => <div key={key}><span>{key.replaceAll('_', ' ')}</span><b>{String(value)}</b></div>) : <p>{t('noMetadata')}</p>}</div>
           {selectedElement ? <div className="drawing-selected"><span>{text(selectedElement.type ?? selectedElement.category, 'ELEMENT')}</span><b>{text(selectedElement.label ?? selectedElement.name ?? selectedElement.value, t('unnamedElement'))}</b><small>{t('confidence')} {Math.round(confidenceOf(selectedElement))}% · {t('sheet')} {pageOf(selectedElement)}</small><p>{text(selectedElement.evidence?.source_text ?? selectedElement.evidence?.text, t('noSourceText'))}</p></div> : null}
-          <div className="drawing-element-list">{detail.elements.slice(0, 18).map((element, index) => { const id = text(element.id ?? element.element_id, `element-${index}`); return <button type="button" className={selected === id ? 'active' : ''} onClick={() => { setSelected(id); setActivePage(pageOf(element)); }} key={id}><span>{text(element.type ?? element.category, 'ITEM')}</span><div><b>{text(element.label ?? element.name ?? element.value, t('unnamedElement'))}</b><small>{t('sheet')} {pageOf(element)}</small></div><strong className={confidenceOf(element) < 70 ? 'low' : ''}>{Math.round(confidenceOf(element))}%</strong></button>; })}</div>
+          <div className="drawing-element-list">{reviewElements.map((element, index) => { const id = text(element.id ?? element.element_id, `element-${index}`); return <button type="button" className={selected === id ? 'active' : ''} onClick={() => { setSelected(id); setActivePage(pageOf(element)); }} key={id}><span>{text(element.type ?? element.category, 'ITEM')}</span><div><b>{text(element.label ?? element.name ?? element.value, t('unnamedElement'))}</b><small>{t('sheet')} {pageOf(element)}</small></div><strong className={confidenceOf(element) < 70 ? 'low' : ''}>{Math.round(confidenceOf(element))}%</strong></button>; })}</div>
         </> : <div className="drawing-empty compact"><b>{t('analysisEmpty')}</b></div>}
       </aside>
     </div>

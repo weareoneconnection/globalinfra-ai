@@ -794,6 +794,7 @@
     "drawingElements": "evidence elements",
     "drawingUncertain": "to review",
     "drawingGeometryConfirmed": "Geometry confirmed {confirmed}/{geometry}",
+    "drawingFootprintsConfirmed": "Closed footprints confirmed {confirmed}/{footprints}",
     "drawingWorkspaceSummary": "The latest Drawing Workbench data is synchronized: {elements} evidence elements and {confirmed}/{geometry} geometry candidates are engineer-confirmed. Use the button below to inspect source coordinates, review candidates and modelling gates.",
     "drawingFields": {
       "number": "Drawing number",
