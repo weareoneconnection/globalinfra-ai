@@ -115,6 +115,55 @@ def test_pdf_analysis_returns_exact_evidence_and_grounded_answer(client):
     assert unsupported["grounded"] is False
     assert unsupported["citations"] == []
 
+    materials = client.post(
+        f"/drawings/{drawing['id']}/ask", json={"question": "这张图有哪些材料要求？"}
+    ).json()
+    assert materials["grounded"] is True
+    assert "MATERIAL: REINFORCED CONCRETE" in materials["answer"]
+    assert len(materials["citations"]) == 1
+
+    area = client.post(
+        f"/drawings/{drawing['id']}/ask", json={"question": "建筑面积多少？"}
+    ).json()
+    assert area["grounded"] is False
+    assert "没有检出明确标注" in area["answer"]
+    assert "闭合建筑外轮廓" in area["answer"]
+
+
+def test_title_block_code_outranks_cad_path_noise_and_keeps_revision():
+    path = ParsedLine(
+        1,
+        r"O:\\ECRL\\PD_ECRL_C_DS_AR_RFD_ARD001_00506.dwg REV FILES\\PD SHEET",
+        [0.1, 0.1, 0.9, 0.12],
+    )
+    title_block = ParsedLine(
+        1,
+        "PD/ECRL/C/DS/AR/RFD/ARD001/00506",
+        [0.6, 0.8, 0.9, 0.84],
+    )
+    revision = ParsedLine(1, "02", [0.92, 0.8, 0.96, 0.84])
+    revised_note = ParsedLine(1, "23/12/2022 REVISED AS PER CLOUDED NIC", [0.1, 0.4, 0.5, 0.42])
+    metadata, elements = _element_specs([path, revised_note, title_block, revision])
+    assert metadata["drawing_number"][0] == "PD/ECRL/C/DS/AR/RFD/ARD001/00506"
+    assert metadata["revision"][0] == "02"
+    assert not any(row["value"] in {"REV", "FILES"} for row in elements)
+
+
+def test_materials_and_explicit_area_are_extracted_without_collapsing_requirements():
+    lines = [
+        ParsedLine(1, "150mm Ø HDPE PIPE COVERED WITH CONCRETE AND EXTENDED", [0.1, 0.1, 0.8, 0.12]),
+        ParsedLine(1, "75mm Ø STAINLESS STEEL RAILING AT 900mm HEIGHT", [0.1, 0.2, 0.8, 0.22]),
+        ParsedLine(1, "BUILDING AREA: 128.5 m2", [0.1, 0.3, 0.5, 0.32]),
+    ]
+    _, elements = _element_specs(lines)
+    material_values = [row["value"].upper() for row in elements if row["type"] == "MATERIAL"]
+    assert "HDPE" in material_values
+    assert "CONCRETE" in material_values
+    assert "STAINLESS STEEL" in material_values
+    area = next(row for row in elements if row["label"] == "building_area")
+    assert area["value"] == "128.5"
+    assert area["unit"] == "m²"
+
 
 def test_source_preview_and_human_model_gate_are_private_and_fail_closed(client):
     body = _upload_pdf(client).json()

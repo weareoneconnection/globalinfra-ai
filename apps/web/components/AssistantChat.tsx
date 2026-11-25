@@ -30,6 +30,7 @@ type DrawingCitation = {
 type DrawingReply = {
   kind: 'drawing'; drawingId: string; filename: string; status: string; sha256: string;
   projectId: number | null; pages: number; elementCount: number; uncertainCount: number;
+  geometryCount: number; confirmedGeometryCount: number;
   fields: { drawingNumber: string; revision: string; scale: string; unit: string; title: string };
   categories: Record<string, number>; modelReady: boolean; blockers: string[];
   question?: string; answer?: string; grounded?: boolean; citations?: DrawingCitation[];
@@ -86,6 +87,7 @@ const PROGRESS_RE = /进度|进展|状态|概况|progress|status|schedule|overvi
 const KNOWLEDGE_RE = /法规|法律|规定|规范|标准|条款|条例|要求|依据|哪一条|regulation|law|clause|requirement|standard|permit/i;
 const DRAWING_RE = /图纸|图号|版次|墙体|门窗|构件|bim|ifc|drawing|blueprint|floor\s*plan/i;
 const DRAWING_EXT_RE = /\.(pdf|png|jpe?g|tiff?)$/i;
+const DRAWING_WORKBENCH_RE = /工作台|打开图纸|看看图纸|workbench/i;
 
 const INTENT_BY_TOOL: Record<Tool, Intent> = {
   report_incident: 'incident', search_knowledge: 'knowledge', case_status: 'caseStatus',
@@ -172,6 +174,12 @@ function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): Drawi
     const raw = typeof item.confidence === 'number' ? item.confidence : 0;
     return raw <= 1 ? raw * 100 : raw;
   };
+  const geometry = elements.filter(item => {
+    const category = valueText(item.type ?? item.category).toUpperCase();
+    const geometryType = valueText(object(item.properties).geometry_type).toUpperCase();
+    return ['WALL', 'DOOR', 'SPACE', 'EQUIPMENT'].includes(category)
+      && ['LINE', 'RECTANGLE_FOOTPRINT'].includes(geometryType);
+  });
   return {
     kind: 'drawing',
     drawingId: valueText(document.id ?? document.drawing_id) || previous?.drawingId || '',
@@ -184,6 +192,10 @@ function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): Drawi
     uncertainCount: elements.length
       ? elements.filter(item => confidence(item) < 80 || valueText(item.state ?? item.status).toUpperCase() === 'INFERRED').length
       : previous?.uncertainCount ?? 0,
+    geometryCount: elements.length ? geometry.length : previous?.geometryCount ?? 0,
+    confirmedGeometryCount: elements.length
+      ? geometry.filter(item => valueText(item.state ?? item.status).toUpperCase() === 'USER_CONFIRMED').length
+      : previous?.confirmedGeometryCount ?? 0,
     fields: {
       drawingNumber: valueText(document.drawing_number ?? object(document.metadata).drawing_number) || previous?.fields.drawingNumber || '',
       revision: valueText(document.revision ?? object(document.metadata).revision) || previous?.fields.revision || '',
@@ -297,13 +309,31 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   }
 
   async function askDrawing(drawing: DrawingReply, question: string): Promise<DrawingReply> {
+    const detail = await readJson(await fetch(
+      `/backend/drawings/${encodeURIComponent(drawing.drawingId)}?lang=${locale}`,
+      { headers, cache: 'no-store' },
+    ));
+    const current = normalizeDrawingReply(detail, drawing);
+    if (DRAWING_WORKBENCH_RE.test(question)) {
+      return {
+        ...current,
+        question,
+        answer: t('drawingWorkspaceSummary', {
+          elements: current.elementCount,
+          confirmed: current.confirmedGeometryCount,
+          geometry: current.geometryCount,
+        }),
+        grounded: true,
+        citations: [],
+      };
+    }
     const body = await readJson(await fetch(`/backend/drawings/${encodeURIComponent(drawing.drawingId)}/ask?lang=${locale}`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify({ question }),
     }));
     return {
-      ...drawing,
+      ...current,
       question,
       answer: valueText(body.answer),
       grounded: Boolean(body.grounded),
@@ -616,6 +646,7 @@ function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
   }
 
   const categories = Object.entries(current.categories).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const partialModel = current.modelReady && current.geometryCount > current.confirmedGeometryCount;
   const firstCitation = current.citations?.[0];
   const workbench = `/drawings?drawing_id=${encodeURIComponent(current.drawingId)}&page=${firstCitation?.page ?? 1}&element_id=${encodeURIComponent(firstCitation?.element_id ?? '')}&from=assistant`;
   const facts = [
@@ -629,12 +660,13 @@ function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
     <div className="assistant-card-head">
       <span className="badge info">DRAWING INTELLIGENCE</span>
       <b>{current.filename || current.drawingId}</b>
-      <span className={`badge ${current.modelReady ? 'ok' : 'medium'}`}>{current.modelReady ? t('drawingModelReady') : t('drawingNeedsReview')}</span>
+      <span className={`badge ${current.modelReady ? 'ok' : 'medium'}`}>{current.modelReady ? t(partialModel ? 'drawingPartialModelReady' : 'drawingModelReady') : t('drawingNeedsReview')}</span>
     </div>
     <div className="assistant-drawing-lineage">
       <span>{current.pages} {t('drawingPages')}</span>
       <span>{current.elementCount} {t('drawingElements')}</span>
       <span>{current.uncertainCount} {t('drawingUncertain')}</span>
+      {current.geometryCount > 0 && <span>{t('drawingGeometryConfirmed', { confirmed: current.confirmedGeometryCount, geometry: current.geometryCount })}</span>}
       <code>{current.drawingId}</code>
     </div>
     {facts.length ? <div className="assistant-facts drawing-facts">{facts.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div> : null}

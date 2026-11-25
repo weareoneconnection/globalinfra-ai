@@ -39,7 +39,7 @@ from .security import Principal, get_principal, require_project, require_roles
 
 
 router = APIRouter(prefix="/drawings", tags=["drawing-intelligence"])
-PARSER_VERSION = "globalinfra.drawing.v1"
+PARSER_VERSION = "globalinfra.drawing.v1.1"
 MAX_PDF_PAGES = 200
 MAX_PAGE_WORDS = 250_000
 MAX_PAGE_VECTOR_PRIMITIVES = 200_000
@@ -156,15 +156,28 @@ _FIELD_PATTERNS: dict[str, re.Pattern[str]] = {
         r"(?:DRAWING\s*(?:NO\.?|NUMBER)|DWG\s*(?:NO\.?)?|图号)\s*[:#-]?\s*([A-Z0-9][A-Z0-9._/-]{2,})",
         re.I,
     ),
-    "revision": re.compile(r"(?:REV(?:ISION)?|版本|版次)\s*[:#-]?\s*([A-Z0-9._/-]+)", re.I),
+    "revision": re.compile(r"(?:\bREV(?:ISION)?\b|版本|版次)\s*[:#-]?\s*([A-Z0-9._/-]+)", re.I),
     "scale": re.compile(r"(?:SCALE|比例)\s*[:#-]?\s*(1\s*:\s*\d+)", re.I),
     "unit": re.compile(r"(?:UNITS?|单位)\s*[:#-]?\s*(MM|CM|M|毫米|米)\b", re.I),
     "title": re.compile(r"(?:DRAWING\s*TITLE|TITLE|图名)\s*[:#-]\s*(.{3,160})", re.I),
 }
+_TITLE_BLOCK_DRAWING_CODE = re.compile(
+    r"\b(PD(?:[/_][A-Z0-9-]{1,24}){5,10})\b", re.I
+)
 _DIMENSION = re.compile(r"(?<![A-Z0-9])((?:Ø|R)?\s*\d+(?:\.\d+)?\s*(?:MM|CM|M))(?![A-Z])", re.I)
+_AREA = re.compile(
+    r"(?:GROSS\s+FLOOR\s+AREA|BUILDING\s+AREA|总建筑面积|建筑面积|总面积)"
+    r"\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(M2|M²|SQ\.?\s*M)\b",
+    re.I,
+)
 _GRID = re.compile(r"\bGRID\s*[-:#]?\s*([A-Z0-9]+)\b", re.I)
 _ROOM = re.compile(r"\b(?:EQUIPMENT|CONTROL|PLANT|PUMP|ELECTRICAL|SWITCH|MECHANICAL)?\s*ROOM\b|设备房|控制室|泵房", re.I)
-_MATERIAL = re.compile(r"\b(?:REINFORCED\s+CONCRETE|CONCRETE|STRUCTURAL\s+STEEL|STEEL|MASONRY)\b|钢筋混凝土|混凝土|结构钢", re.I)
+_MATERIAL = re.compile(
+    r"\b(?:STAINLESS\s+STEEL|CHANNEL\s+STEEL|STRUCTURAL\s+STEEL|STEEL\s+FRAME\s+METAL|"
+    r"REINFORCED\s+CONCRETE|CONCRETE|ALUMINIUM|ALUMINUM|HDPE|CEM(?:EN)?T\.?\s+PLASTER|MASONRY|STEEL)\b"
+    r"|不锈钢|槽钢|钢筋混凝土|混凝土|铝合金|铝材|高密度聚乙烯|水泥砂浆|砌体|结构钢",
+    re.I,
+)
 _WORD = re.compile(r"[A-Za-z0-9_./:-]+|[\u4e00-\u9fff]+")
 _CONFIRMED_SCALE = re.compile(r"^1\s*:\s*([1-9]\d*(?:\.\d+)?)$")
 
@@ -612,10 +625,58 @@ def _element_specs(
             "properties": {"source_text": source_excerpt(line, source_span)},
         })
 
+    # Title-block codes are authoritative and must outrank CAD file paths such
+    # as ``...00506.dwg REV FILES``.  Score all candidates before applying the
+    # generic key/value patterns so extraction order cannot promote path noise.
+    title_block_candidates: list[tuple[int, str, str | None, ParsedLine, tuple[int, int]]] = []
     for line in lines:
+        for match in _TITLE_BLOCK_DRAWING_CODE.finditer(line.text):
+            path_noise = "\\" in line.text or ".dwg" in line.text.lower()
+            context = line.text.upper()
+            score = (4 if "ISSUED FOR" in context or "DRAWING NO" in context else 0)
+            score += 2 if "/" in match.group(1) else 0
+            score -= 8 if path_noise else 0
+            tail = line.text[match.end():]
+            revision_match = re.match(r"\s+([A-Z0-9]{1,4})\b", tail, re.I)
+            revision = revision_match.group(1) if revision_match and not path_noise else None
+            if revision is None and not path_noise:
+                # Title blocks frequently extract the revision as its own tiny
+                # text box immediately to the right of the drawing number.
+                nearby = [
+                    candidate for candidate in lines
+                    if candidate.page == line.page
+                    and re.fullmatch(r"[A-Z0-9]{1,4}", candidate.text.strip(), re.I)
+                    and candidate.text.strip().upper() not in {"REV", "NO", "DWG"}
+                    and candidate.bbox[0] >= line.bbox[2]
+                    and abs(
+                        (candidate.bbox[1] + candidate.bbox[3]) / 2
+                        - (line.bbox[1] + line.bbox[3]) / 2
+                    ) <= 0.02
+                ]
+                if nearby:
+                    revision = min(
+                        nearby,
+                        key=lambda candidate: (
+                            candidate.bbox[0] - line.bbox[2],
+                            abs(candidate.bbox[1] - line.bbox[1]),
+                        ),
+                    ).text.strip()
+            title_block_candidates.append((score, match.group(1).replace("_", "/"), revision, line, match.span(1)))
+    if title_block_candidates:
+        _, drawing_number, revision, source_line, source_span = max(
+            title_block_candidates, key=lambda item: item[0]
+        )
+        metadata["drawing_number"] = (drawing_number, source_line)
+        add("METADATA", "drawing_number", drawing_number, source_line, 0.99, source_span=source_span)
+        if revision:
+            metadata["revision"] = (revision, source_line)
+            add("METADATA", "revision", revision, source_line, 0.99, source_span=source_span)
+
+    for line in lines:
+        path_noise = "\\" in line.text or ".dwg" in line.text.lower()
         for field, pattern in _FIELD_PATTERNS.items():
             match = pattern.search(line.text)
-            if match and field not in metadata:
+            if match and field not in metadata and not (path_noise and field in {"drawing_number", "revision"}):
                 value = re.sub(r"\s+", "", match.group(1)) if field == "scale" else match.group(1).strip()
                 if field == "unit":
                     value = {"毫米": "mm", "米": "m"}.get(value, value.lower())
@@ -629,15 +690,17 @@ def _element_specs(
                 unit_match.group(1).lower() if unit_match else None,
                 source_span=match.span(1),
             )
+        area = _AREA.search(line.text)
+        if area:
+            add("PARAMETER", "building_area", area.group(1), line, 0.95, "m²", area.span(1))
         grid = _GRID.search(line.text)
         if grid:
             add("GRID", "grid", grid.group(1), line, 0.9, source_span=grid.span(1))
         room = _ROOM.search(line.text)
         if room:
             add("SPACE", "room", room.group(0), line, 0.84, source_span=room.span(0))
-        material = _MATERIAL.search(line.text)
-        if material:
-            add("MATERIAL", "material", material.group(0), line, 0.88, source_span=material.span(0))
+        for material in _MATERIAL.finditer(line.text):
+            add("MATERIAL", "material_requirement", material.group(0), line, 0.88, source_span=material.span(0))
         if re.search(r"\b(?:NOTE|GENERAL NOTES?)\b|说明", line.text, re.I):
             add("NOTE", "note", line.text, line, 0.82)
     return metadata, elements
@@ -1017,12 +1080,91 @@ def ask_drawing(
 ):
     document = _get_document(db, drawing_id, principal)
     detail = _detail(db, document)
+    question_lower = payload.question.lower()
+    chinese = bool(re.search(r"[\u4e00-\u9fff]", payload.question))
+
+    if re.search(r"建筑面积|总面积|building\s+area|gross\s+floor\s+area", question_lower, re.I):
+        area = next(
+            (
+                item for item in detail["elements"]
+                if item["type"] == "PARAMETER" and item["label"] == "building_area"
+            ),
+            None,
+        )
+        if area:
+            citation = {
+                "element_id": area["id"], **area["evidence"],
+                "confidence": area["confidence"], "state": area["state"],
+            }
+            answer = (
+                f'图纸明确标注的建筑面积为 {area["value"]} {area["unit"] or "m²"}。'
+                if chinese else
+                f'The drawing explicitly states a building area of {area["value"]} {area["unit"] or "m²"}.'
+            )
+            return {
+                "answer": answer, "grounded": True,
+                "facts": [{"id": area["id"], "type": area["type"], "label": area["label"],
+                           "value": area["value"], "confidence": area["confidence"]}],
+                "citations": [citation],
+                "boundary": "The value is returned only because it is explicitly labelled in the source drawing.",
+            }
+        geometry = [
+            item for item in detail["elements"]
+            if item["type"] in {"WALL", "DOOR", "SPACE", "EQUIPMENT"}
+            and str(item["properties"].get("geometry_type", "")).upper() in {"LINE", "RECTANGLE_FOOTPRINT"}
+        ]
+        confirmed = [item for item in geometry if item["state"] == "USER_CONFIRMED"]
+        answer = (
+            f"这张图没有检出明确标注的建筑面积，且当前仅有 {len(confirmed)}/{len(geometry)} 个几何候选已确认，"
+            "未形成经工程师确认的闭合建筑外轮廓，因此不能可靠计算建筑面积。"
+            "请先在图纸工作台确认比例、单位和闭合外轮廓，再执行面积计算。"
+            if chinese else
+            f"No explicit building-area label was found. Only {len(confirmed)}/{len(geometry)} geometry candidates are confirmed, "
+            "and there is no engineer-confirmed closed building outline, so a reliable area cannot be calculated. "
+            "Confirm the scale, unit and closed exterior boundary in the Drawing Workbench first."
+        )
+        return {
+            "answer": answer, "grounded": False, "facts": [], "citations": [],
+            "boundary": "No area is inferred from unconfirmed or open geometry.",
+        }
+
+    if re.search(r"材料|材质|materials?", question_lower, re.I):
+        unique: list[dict] = []
+        seen_requirements: set[str] = set()
+        for item in detail["elements"]:
+            if item["type"] != "MATERIAL":
+                continue
+            requirement = str(item["properties"].get("source_text") or item["value"]).strip()
+            normalized = re.sub(r"\s+", " ", requirement).casefold()
+            if not normalized or normalized in seen_requirements:
+                continue
+            seen_requirements.add(normalized)
+            unique.append(item)
+        unique = unique[:12]
+        if unique:
+            requirements = [
+                re.sub(r"\s+", " ", str(item["properties"].get("source_text") or item["value"])).strip()
+                for item in unique
+            ]
+            prefix = "图纸中识别到以下材料要求：" if chinese else "Material requirements identified in the drawing: "
+            separator = "；" if chinese else "; "
+            answer = prefix + separator.join(
+                f"{index}. {requirement}" for index, requirement in enumerate(requirements, start=1)
+            )
+            return {
+                "answer": answer, "grounded": True,
+                "facts": [{"id": item["id"], "type": item["type"], "label": item["label"],
+                           "value": item["value"], "confidence": item["confidence"]} for item in unique],
+                "citations": [{"element_id": item["id"], **item["evidence"],
+                               "confidence": item["confidence"], "state": item["state"]} for item in unique],
+                "boundary": "Requirements are deduplicated from source text; no missing specification is inferred.",
+            }
+
     synonyms = {
         "比例": "scale", "单位": "unit", "图号": "drawing_number", "版本": "revision",
         "尺寸": "dimension", "房间": "room", "材料": "material", "轴网": "grid",
         "设备": "equipment", "净空": "clearance", "墙": "wall", "门": "door",
     }
-    question_lower = payload.question.lower()
     tokens = {
         token.lower() for token in _WORD.findall(payload.question)
         if len(token) > 1 and not re.fullmatch(r"[\u4e00-\u9fff]+", token)
@@ -1043,7 +1185,13 @@ def ask_drawing(
     citations = [{"element_id": item["id"], **item["evidence"],
                   "confidence": item["confidence"], "state": item["state"]} for item in facts]
     if not facts:
-        return {"answer": "No extracted drawing evidence supports this question.",
+        answer = (
+            "当前提取的图纸证据不足以回答这个问题。我不会推断图纸中未标注或尚未确认的信息。"
+            if chinese else
+            "The extracted drawing evidence is insufficient to answer this question. "
+            "I will not infer facts that are not labelled or confirmed in the drawing."
+        )
+        return {"answer": answer,
                 "grounded": False, "facts": [], "citations": [],
                 "boundary": "The assistant does not infer missing drawing facts."}
     answer = "; ".join(f'{item["label"]}: {item["value"]}' for item in facts)
