@@ -12,7 +12,7 @@ export function Sidebar() {
   const t = useTranslations('Sidebar');
   const groups = t.raw('groups') as NavGroup[];
   const allItems = groups.flatMap(group => group.items);
-  const mobileHrefs = ['/', '/data-ingestion', '/field', '/twin', '/approvals'];
+  const mobileHrefs = ['/', '/drawings', '/field', '/twin', '/approvals'];
   const mobileItems = mobileHrefs
     .map(href => allItems.find(item => item.href === href))
     .filter((item): item is NavItem => Boolean(item));

@@ -16,6 +16,8 @@ function timeoutFor(path: string[]): number {
   if (
     route === 'intake/text' ||
     route === 'intake/document' ||
+    route === 'drawings/analyze' ||
+    /^drawings\/[^/]+\/(ask|confirm|model)$/.test(route) ||
     route === 'i18n/translate' ||
     route === 'assistant/chat' ||
     route === 'assistant/dispatch' ||
@@ -124,7 +126,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       signal: AbortSignal.timeout(timeoutMs)
     });
     const responseHeaders = new Headers();
-    for (const name of ['content-type', 'content-language', 'content-disposition', 'x-data-provenance', 'retry-after']) {
+    for (const name of ['content-type', 'content-language', 'content-disposition', 'cache-control', 'x-content-type-options', 'x-data-provenance', 'retry-after']) {
       const value = res.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }

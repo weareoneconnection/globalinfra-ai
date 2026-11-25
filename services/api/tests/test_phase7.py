@@ -377,6 +377,42 @@ def test_ai_quality_gate_and_operational_endpoints(client):
     assert metrics.headers.get("x-request-id")
 
 
+def test_fast_launch_readyz_is_200_but_discloses_degraded_controls(client, monkeypatch):
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "railway_environment", "")
+    monkeypatch.setattr(settings, "competition_fast_launch", True)
+    monkeypatch.setattr(
+        "app.main.production_readiness",
+        lambda: {
+            "status": "NOT_READY",
+            "controls": {
+                "production_database": True,
+                "enterprise_identity": False,
+                "object_storage": False,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "app.main.audit_health_snapshot",
+        lambda: {
+            "status": "ok", "consecutive_failures": 0,
+            "failures_total": 0, "outbox_enqueued_total": 0,
+            "outbox_failures_total": 0,
+        },
+    )
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["readiness_class"] == "DEGRADED_COMPETITION"
+    assert body["release"] == "NOT_READY"
+    assert body["temporary_exceptions"] == [
+        "enterprise_identity", "object_storage"
+    ]
+
+
 def test_mutation_writes_audit_event(client):
     response = client.post("/identity/register")
     assert response.status_code == 200

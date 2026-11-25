@@ -539,6 +539,29 @@
 :root[data-theme="light"] .feed-channel{border:1px solid rgba(5,127,157,.13)}
 :root[data-theme="light"] .ingestion-feed-table small{color:#7b9aa3}
 :root[data-theme="light"] .ingestion-feed-table time{color:#7f9ea7}
+
+/* Drawing-to-Twin Copilot */
+:root[data-theme="light"] .drawing-trust-strip{border-color:rgba(32,153,95,.2);background:linear-gradient(90deg,rgba(32,153,95,.075),rgba(241,246,248,.86))}
+:root[data-theme="light"] .drawing-steps{background:rgba(5,127,157,.1)}
+:root[data-theme="light"] .drawing-steps>div{background:rgba(246,248,250,.94);color:#718f98}
+:root[data-theme="light"] .drawing-steps>div.active{background:linear-gradient(90deg,rgba(5,127,157,.08),rgba(246,248,250,.94));color:#17363c}
+:root[data-theme="light"] .drawing-source-panel input,:root[data-theme="light"] .drawing-source-panel select,:root[data-theme="light"] .drawing-confirm-panel input,:root[data-theme="light"] .drawing-confirm-panel select,:root[data-theme="light"] .drawing-ask-panel input{border-color:rgba(0,0,0,.1);background:#f1f6f8;color:#0e2226}
+:root[data-theme="light"] .drawing-source-panel input[type=file]{color:#617e87}
+:root[data-theme="light"] .drawing-source-panel input[type=file]::file-selector-button{border-color:rgba(5,127,157,.22);background:rgba(5,127,157,.08);color:#083e47}
+:root[data-theme="light"] .drawing-boundary,:root[data-theme="light"] .drawing-not-for-construction{border-color:rgba(146,89,0,.16);background:rgba(146,89,0,.035);color:#765c21}
+:root[data-theme="light"] .drawing-document-receipt,:root[data-theme="light"] .drawing-selected,:root[data-theme="light"] .drawing-answer{border-color:rgba(5,127,157,.14);background:rgba(5,127,157,.035)}
+:root[data-theme="light"] .drawing-page-tabs button{border-color:rgba(0,0,0,.1);color:#6f8e97}
+:root[data-theme="light"] .drawing-page-tabs button.active{border-color:rgba(5,127,157,.4);background:rgba(5,127,157,.1);color:#154c55}
+:root[data-theme="light"] .drawing-metadata>div,:root[data-theme="light"] .drawing-artifacts a{border-color:rgba(0,0,0,.065)}
+:root[data-theme="light"] .drawing-element-list{border-color:rgba(0,0,0,.065)}
+:root[data-theme="light"] .drawing-element-list>button{border-color:rgba(0,0,0,.055)}
+:root[data-theme="light"] .drawing-element-list>button:hover,:root[data-theme="light"] .drawing-element-list>button.active{background:linear-gradient(90deg,rgba(5,127,157,.08),transparent)}
+:root[data-theme="light"] .drawing-answer>div button{border-color:rgba(5,127,157,.24);background:rgba(5,127,157,.07);color:#155b66}
+:root[data-theme="light"] .drawing-gate{border-color:rgba(146,89,0,.18);background:rgba(146,89,0,.035)}
+:root[data-theme="light"] .drawing-gate.ready{border-color:rgba(32,153,95,.2);background:rgba(32,153,95,.04)}
+:root[data-theme="light"] .drawing-model-cta>div span{border-color:rgba(5,127,157,.18);color:#17606a}
+:root[data-theme="light"] .drawing-validation>span,:root[data-theme="light"] .drawing-validation>b{background:rgba(0,0,0,.035)}
+:root[data-theme="light"] .drawing-error{background:#fff0f0;color:#6e1111}
 @media(max-width:900px){:root[data-theme="light"] .ingestion-channel-rail button{border-right:1px solid rgba(0,0,0,.055)}}
 :root[data-theme="light"] .case-create-fields label>span,:root[data-theme="light"] .case-create-governance label>span{color:#6b8992}
 :root[data-theme="light"] .case-create-fields input,:root[data-theme="light"] .case-create-fields select,:root[data-theme="light"] .case-create-fields textarea,:root[data-theme="light"] .case-create-governance select{border:1px solid rgba(0,0,0,.1);background:#f1f6f8;color:#0e1f23}

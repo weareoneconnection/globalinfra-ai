@@ -921,6 +921,11 @@ def production_readiness():
     }
     return {
         "status": "READY" if all(controls.values()) else "NOT_READY",
+        "deployment_profile": settings.deployment_profile,
+        "temporary_fast_launch": settings.competition_fast_launch,
+        "temporary_exceptions": [
+            name for name, passed in controls.items() if not passed
+        ] if settings.competition_fast_launch else [],
         "controls": controls,
         "release_evidence": {
             "verification": {

@@ -38,6 +38,7 @@ GlobalInfra AI V6.1 is an open-source operational digital-twin and governed-exec
 - Judge-facing evidence center with 10 scoring-criterion mappings, dataset hashes, model-routing status and human-authority boundaries
 - Five-minute bilingual Jury Control Room with explicit role hand-offs, a 403/no-mutation authority challenge, an in-memory signed-receipt tamper challenge and a single-screen closure card
 - Protected default-branch release jobs that verify Ed25519 evidence, build a commit-addressed non-root image, attest its digest and emit a digest-only promotion manifest
+- **Drawing-to-Twin P0–P2**: coordinate-level drawing evidence, fail-closed engineer confirmation, and provenance-bound glTF/IFC4X3 Draft artifacts; see the [finals guide and capability boundary](docs/DRAWING_TO_TWIN_P0_P2.zh-CN.md)
 - **Full-chain English/Chinese switching**: the web app auto-detects the browser language (with manual override), the API returns bilingual data per request, and a translation-model integration point powers dynamically generated content
 
 The default AI mode is **deterministic demo mode**, so the system works without buying model tokens. An OpenAI-compatible model gateway is included and can be enabled later with environment variables.
@@ -212,6 +213,10 @@ For competition and pre-integration demonstrations, every seeded project also ex
 
 The V6 evidence center reads suite outcomes, test totals, CI URL and release gates dynamically from that envelope. It reports `VERIFIED_PASSED`, `VERIFIED_FAILED` or `UNVERIFIED` instead of inferring success from dataset size. Fixed synthetic regressions establish reproducibility only; they are not production-accuracy claims. Criterion cards locate evidence and do not claim self-awarded scores.
 
+## Drawing-to-Twin P0–P2
+
+`/drawings` connects immutable source files, page/bounding-box evidence, grounded Q&A, engineer confirmation gates, and provenance-bound glTF/IFC4X3 Draft artifacts. Missing evidence or confirmation fails closed. Every generated model remains `AI_GENERATED_DRAFT / NOT_FOR_CONSTRUCTION` and cannot auto-publish into the operational twin. See the bilingual [finals guide, acceptance matrix, and five-minute demo](docs/DRAWING_TO_TWIN_P0_P2.zh-CN.md).
+
 ## V2.0 Phase 6 Digital Twin
 
 `/twin` is a complete, data-backed reference implementation of the full-lifecycle twin operating model — not a disconnected 3D mock-up. A stable `Twin ID` connects spatial identity, asset hierarchy, state history, engineering events, WBS, schedule, cost, commissioning, telemetry, maintenance and governed AI simulation.
@@ -348,6 +353,8 @@ See `docs/ARCHITECTURE.md` (Chinese: `docs/ARCHITECTURE.zh-CN.md`) for the compl
 ## Production hardening still required
 
 V6.1 is a competition reference implementation and controlled-pilot foundation, not a claim of production certification. Production configuration now fails closed on identity, database, storage, queue, residency, separation-of-duties and evidence-signing requirements; enterprise rollout still requires provider receipts, privacy and threat reviews, backup/restore drills, SLO evidence and jurisdiction-specific professional review. See [V6 Production Readiness](docs/V6_PRODUCTION_READINESS.zh-CN.md).
+
+For a time-boxed finals deployment, the explicit `COMPETITION_FAST_LAUNCH` profile can relax unavailable infrastructure without claiming production readiness. It preserves managed Postgres, audit writes, role separation, sandbox boundaries and unverified-evidence disclosure. See the [temporary fast-launch runbook](docs/COMPETITION_FAST_LAUNCH.zh-CN.md).
 
 ## Open-source contribution
 

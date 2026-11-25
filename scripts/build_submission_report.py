@@ -358,7 +358,7 @@ def add_figure(doc: Document, image_path: Path, caption: str) -> None:
         figure_width = 5.25
     elif image_path.name == "golden-thread.png":
         figure_width = 5.0
-    elif image_path.name.startswith(("assistant-", "field-")):
+    elif image_path.name.startswith(("assistant-", "field-", "ui-")):
         # Tall UI screenshots: narrower so two fit on one page.
         figure_width = 4.3
     else:
@@ -424,25 +424,49 @@ def remove_embedded_subset_fonts(docx_path: Path) -> None:
     temp_path.replace(docx_path)
 
 
-def build_report() -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    ASSET_DIR.mkdir(parents=True, exist_ok=True)
-    create_architecture(ASSET_DIR / "architecture.png")
-    create_golden_thread(ASSET_DIR / "golden-thread.png")
-    if not SCREENSHOT.exists():
-        raise FileNotFoundError(f"Production verification screenshot is missing: {SCREENSHOT}")
+DEFAULT_META = {
+    "title": "GlobalInfra AI AI出海应用设计报告",
+    "subject": "第二届交融杯人工智能场景创新应用大赛 AI出海赛道",
+    "author": "GlobalInfra AI 参赛团队",
+    "keywords": "AI出海,交通基础设施,数字孪生,多智能体,可信执行",
+}
 
-    doc = Document(TEMPLATE)
+
+def build_report(
+    source: Path = SOURCE,
+    output: Path = OUTPUT_DOCX,
+    root: Path = ROOT,
+    meta: dict | None = None,
+    globalinfra_assets: bool = True,
+    template: Path = TEMPLATE,
+) -> Path:
+    """Build a Markdown report on the official template.
+
+    Defaults preserve the GlobalInfra AI submission. Sibling entries can pass
+    their own source, output, asset root, template and document properties.
+    """
+    properties = {**DEFAULT_META, **(meta or {})}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if globalinfra_assets:
+        ASSET_DIR.mkdir(parents=True, exist_ok=True)
+        create_architecture(ASSET_DIR / "architecture.png")
+        create_golden_thread(ASSET_DIR / "golden-thread.png")
+        if not SCREENSHOT.exists():
+            raise FileNotFoundError(
+                f"Production verification screenshot is missing: {SCREENSHOT}"
+            )
+
+    doc = Document(template)
     clear_document_body(doc)
     for style in doc.styles:
         if style.type == WD_STYLE_TYPE.PARAGRAPH and style.name.casefold() in {"normal", "header", "footer"}:
             set_style_font(style)
     if "Title" not in [style.name for style in doc.styles]:
         doc.styles.add_style("Title", WD_STYLE_TYPE.PARAGRAPH)
-    doc.core_properties.title = "GlobalInfra AI AI出海应用设计报告"
-    doc.core_properties.subject = "第二届交融杯人工智能场景创新应用大赛 AI出海赛道"
-    doc.core_properties.author = "GlobalInfra AI 参赛团队"
-    doc.core_properties.keywords = "AI出海,交通基础设施,数字孪生,多智能体,可信执行"
+    doc.core_properties.title = properties["title"]
+    doc.core_properties.subject = properties["subject"]
+    doc.core_properties.author = properties["author"]
+    doc.core_properties.keywords = properties["keywords"]
 
     settings = doc.settings._element
     update = settings.find(qn("w:updateFields"))
@@ -451,7 +475,7 @@ def build_report() -> Path:
         settings.append(update)
     update.set(qn("w:val"), "true")
 
-    lines = SOURCE.read_text(encoding="utf-8").splitlines()
+    lines = source.read_text(encoding="utf-8").splitlines()
     first_title = True
     cover_index = 0
     seen_heading = False
@@ -469,7 +493,7 @@ def build_report() -> Path:
         image_match = re.fullmatch(r"!\[(.+)]\((.+)\)", line)
         if image_match:
             caption, rel_path = image_match.groups()
-            add_figure(doc, ROOT / rel_path, caption)
+            add_figure(doc, root / rel_path, caption)
             index += 1
             continue
         if line.startswith("|"):
@@ -516,9 +540,9 @@ def build_report() -> Path:
         section.header_distance = Inches(0.5909722)
         section.footer_distance = Inches(0.6888889)
 
-    doc.save(OUTPUT_DOCX)
-    remove_embedded_subset_fonts(OUTPUT_DOCX)
-    return OUTPUT_DOCX
+    doc.save(output)
+    remove_embedded_subset_fonts(output)
+    return output
 
 
 if __name__ == "__main__":

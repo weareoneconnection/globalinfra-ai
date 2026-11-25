@@ -80,6 +80,21 @@ def _set_required_production_controls(monkeypatch):
     monkeypatch.setenv("GIT_COMMIT_SHA", "a" * 40)
 
 
+def _set_fast_launch_controls(monkeypatch):
+    _clear_production_markers(monkeypatch)
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
+    monkeypatch.setenv("COMPETITION_FAST_LAUNCH", "true")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://db/app")
+    monkeypatch.setenv("AUTH_MODE", "disabled")
+    monkeypatch.setenv("REQUIRE_API_KEY", "false")
+    monkeypatch.setenv("COMPETITION_V6_ENABLED", "true")
+    monkeypatch.setenv("SANDBOX_MODE", "true")
+    monkeypatch.setenv("SOD_ENFORCED", "true")
+    monkeypatch.setenv("AUDIT_MUTATIONS", "true")
+    monkeypatch.setenv("EVIDENCE_BUNDLE_REQUIRED", "false")
+    monkeypatch.delenv("EVIDENCE_SIGNING_PRIVATE_KEY", raising=False)
+
+
 def test_production_rejects_missing_security_configuration(monkeypatch):
     _clear_production_markers(monkeypatch)
     monkeypatch.setenv("ENV", "production")
@@ -122,6 +137,38 @@ def test_production_accepts_explicit_security_configuration(monkeypatch):
     assert configured.auth_mode == "oidc"
     assert configured.require_api_key is True
     assert configured.sod_enforced is True
+
+
+def test_production_accepts_explicit_competition_fast_launch_profile(monkeypatch):
+    _set_fast_launch_controls(monkeypatch)
+
+    configured = Settings()
+
+    assert configured.competition_fast_launch is True
+    assert configured.deployment_profile == "competition_fast_launch"
+    assert configured.auth_mode == "disabled"
+    assert configured.sod_enforced is True
+    assert configured.evidence_bundle_required is False
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("DATABASE_URL", "sqlite:///./demo.db", "managed production database"),
+        ("EVIDENCE_BUNDLE_REQUIRED", "true", "visibly UNVERIFIED"),
+        ("SANDBOX_MODE", "false", "SANDBOX_MODE"),
+        ("SOD_ENFORCED", "false", "SOD_ENFORCED"),
+        ("AUDIT_MUTATIONS", "false", "AUDIT_MUTATIONS"),
+    ],
+)
+def test_fast_launch_keeps_non_negotiable_safety_boundaries(
+    monkeypatch, name, value, message
+):
+    _set_fast_launch_controls(monkeypatch)
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError, match=message):
+        Settings()
 
 
 def test_production_rejects_demo_storage_and_unsigned_sandbox(monkeypatch):

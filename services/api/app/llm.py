@@ -1,5 +1,7 @@
+import base64
 from dataclasses import dataclass
 from contextvars import ContextVar
+from typing import Any
 
 import httpx
 from .config import settings
@@ -152,11 +154,12 @@ def _rejects_response_format(response: httpx.Response) -> bool:
         return False
     return error.get("param") == "response_format"
 
-async def _generate_with_provider(
-    provider: ModelProvider, system: str, user: str, response_format: dict | None = None
+async def _generate_messages_with_provider(
+    provider: ModelProvider,
+    messages: list[dict[str, Any]],
+    response_format: dict | None = None,
 ) -> str:
     url = provider.base_url.rstrip('/') + '/chat/completions'
-    messages = [{"role":"system","content":system},{"role":"user","content":user}]
     payload = {"model": provider.model, "messages": messages, "temperature":0.1}
     if response_format is not None:
         payload["response_format"] = response_format
@@ -188,6 +191,16 @@ async def _generate_with_provider(
         raise LLMError(
             f"Upstream {provider.name} model {provider.model!r} returned an unexpected response shape: {exc}"
         ) from exc
+
+
+async def _generate_with_provider(
+    provider: ModelProvider, system: str, user: str, response_format: dict | None = None
+) -> str:
+    return await _generate_messages_with_provider(
+        provider,
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        response_format,
+    )
 
 
 async def generate(
@@ -223,6 +236,71 @@ async def generate(
             _record_route(provider, "failed")
             errors.append(str(exc))
     raise LLMError("All eligible model routes failed: " + " | ".join(errors))
+
+
+async def generate_vision(
+    system: str,
+    user: str,
+    images: list[tuple[str, bytes]],
+    response_format: dict | None = None,
+    route: str | None = None,
+    sensitivity: str = "internal",
+    detail: str = "high",
+) -> str:
+    """Call an OpenAI-compatible vision model with inline source images.
+
+    Drawing ingestion uses this only when deterministic PDF/vector extraction
+    cannot recover enough evidence.  Unlike :func:`generate`, vision has no
+    mock reply: an unavailable multimodal provider fails closed so callers can
+    retain the source as ``OCR_REQUIRED`` instead of inventing drawing facts.
+
+    Images are bounded before base64 expansion to keep an accidental drawing
+    book from becoming an unbounded model request.  Callers should render and
+    tile large sheets before invoking this helper.
+    """
+    if not images:
+        raise LLMError("At least one image is required for multimodal analysis.")
+    if len(images) > 8:
+        raise LLMError("Multimodal analysis accepts at most 8 images per request.")
+    total_bytes = sum(len(content) for _mime, content in images)
+    if total_bytes > 20 * 1024 * 1024:
+        raise LLMError("Multimodal image payload exceeds the 20 MiB safety limit.")
+    if detail not in {"low", "high", "auto"}:
+        raise LLMError("Image detail must be low, high, or auto.")
+
+    providers = _route_order(route, sensitivity)
+    if not providers:
+        raise LLMError("No eligible multimodal model route is configured.")
+    content: list[dict[str, Any]] = [{"type": "text", "text": user}]
+    for mime, image in images:
+        if mime not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
+            raise LLMError(f"Unsupported multimodal image type {mime!r}.")
+        encoded = base64.b64encode(image).decode("ascii")
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime};base64,{encoded}",
+                    "detail": detail,
+                },
+            }
+        )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": content},
+    ]
+    errors = []
+    for provider in providers:
+        try:
+            result = await _generate_messages_with_provider(
+                provider, messages, response_format
+            )
+            _record_route(provider, "success")
+            return result
+        except LLMError as exc:
+            _record_route(provider, "failed")
+            errors.append(str(exc))
+    raise LLMError("All eligible multimodal routes failed: " + " | ".join(errors))
 
 async def translate(
     text: str,

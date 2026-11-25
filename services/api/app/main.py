@@ -48,6 +48,8 @@ from .assistant import router as assistant_router
 from .dispatcher import router as dispatcher_router
 from .agent_org.api import router as agent_org_router
 from .field_media import router as field_media_router
+from .drawings import router as drawings_router
+from .drawing_models_api import router as drawing_models_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -81,9 +83,11 @@ app.include_router(assistant_router)
 app.include_router(dispatcher_router)
 app.include_router(agent_org_router)
 app.include_router(field_media_router)
+app.include_router(drawings_router)
+app.include_router(drawing_models_router)
 
 @app.get('/health')
-def health(): return {"status":"ok","service":"globalinfra-api","version":"6.1.0","product_version":"V6.1","architecture":"governed-evidence-action"}
+def health(): return {"status":"ok","service":"globalinfra-api","version":"6.1.0","product_version":"V6.1","architecture":"governed-evidence-action","deployment_profile":settings.deployment_profile}
 
 @app.get('/livez')
 def livez(): return {"status": "alive"}
@@ -96,16 +100,26 @@ def readyz(db: Session = Depends(get_db)):
         settings.environment, settings.railway_environment
     )
     release = production_readiness() if production else None
+    fast_launch = production and settings.competition_fast_launch
     ready = audit["status"] == "ok" and (
-        not production or release["status"] == "READY"
+        not production or release["status"] == "READY" or fast_launch
+    )
+    temporary_exceptions = (
+        [name for name, passed in release["controls"].items() if not passed]
+        if fast_launch and release is not None else []
     )
     payload = {
         "status": "ready" if ready else "not_ready",
+        "readiness_class": (
+            "DEGRADED_COMPETITION" if fast_launch else "STRICT"
+        ),
+        "deployment_profile": settings.deployment_profile,
         "database": "ok",
         "audit": audit,
         "auth_mode": settings.auth_mode,
         "llm_mode": settings.llm_mode,
         "release": None if release is None else release["status"],
+        "temporary_exceptions": temporary_exceptions,
     }
     return payload if ready else JSONResponse(payload, status_code=503)
 

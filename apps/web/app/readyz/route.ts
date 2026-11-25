@@ -7,7 +7,14 @@ export const dynamic = 'force-dynamic';
 export function GET() {
   const authMode = process.env.API_AUTH_MODE?.trim();
   if (authMode === 'disabled') {
-    return NextResponse.json({ status: 'ready', auth_mode: 'disabled' });
+    return NextResponse.json({
+      status: 'ready',
+      readiness_class: process.env.DEPLOYMENT_PROFILE === 'competition_fast_launch'
+        ? 'DEGRADED_COMPETITION'
+        : 'STANDARD',
+      deployment_profile: process.env.DEPLOYMENT_PROFILE ?? 'standard',
+      auth_mode: 'disabled',
+    });
   }
   if (authMode !== 'oidc') {
     return NextResponse.json(

@@ -145,6 +145,11 @@ class Settings(BaseSettings):
     sod_enforced: bool = True
     evidence_bundle_required: bool = True
     sandbox_mode: bool = True
+    # Explicit, temporary finals profile.  This never promotes the platform
+    # readiness/evidence endpoints to READY; it only lets a managed Postgres
+    # deployment start and serve synthetic competition data while enterprise
+    # identity, queue, object storage and external signing are being wired.
+    competition_fast_launch: bool = False
     # Production-readiness metadata is exposed as policy, not as a claim that
     # an external service is configured. Empty endpoints remain NOT_CONFIGURED.
     queue_url: str = ""
@@ -170,6 +175,54 @@ class Settings(BaseSettings):
             return self
 
         mode = self.auth_mode.strip().lower()
+        if self.competition_fast_launch:
+            errors = []
+            if mode not in VALID_AUTH_MODES:
+                errors.append("AUTH_MODE must be disabled, api_key or oidc")
+            if mode == "disabled" and self.require_api_key:
+                errors.append(
+                    "REQUIRE_API_KEY must be false when the fast-launch AUTH_MODE is disabled"
+                )
+            if mode == "api_key" and (
+                len(self.api_key) < 32 or _is_placeholder(self.api_key)
+            ):
+                errors.append(
+                    "API_KEY must be a non-placeholder 32-character secret in api_key mode"
+                )
+            if mode == "oidc" and not all(
+                _is_configured(value)
+                for value in (self.oidc_issuer, self.oidc_audience, self.oidc_jwks_url)
+            ):
+                errors.append(
+                    "OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL are required in oidc mode"
+                )
+            if self.database_url.startswith("sqlite") or _is_placeholder(
+                self.database_url
+            ):
+                errors.append("DATABASE_URL must still use a managed production database")
+            if not self.competition_v6_enabled or not self.sandbox_mode:
+                errors.append(
+                    "COMPETITION_V6_ENABLED and SANDBOX_MODE must remain true in fast-launch mode"
+                )
+            if not self.sod_enforced:
+                errors.append("SOD_ENFORCED must remain true in fast-launch mode")
+            if not self.audit_mutations:
+                errors.append("AUDIT_MUTATIONS must remain true in fast-launch mode")
+            if self.evidence_bundle_required:
+                errors.append(
+                    "EVIDENCE_BUNDLE_REQUIRED must be false so missing release proof stays visibly UNVERIFIED"
+                )
+            if os.getenv("EVIDENCE_SIGNING_PRIVATE_KEY", "").strip():
+                errors.append(
+                    "EVIDENCE_SIGNING_PRIVATE_KEY must remain in CI/KMS and must not be present in the API runtime"
+                )
+            if errors:
+                raise ValueError(
+                    "Competition fast-launch configuration invalid: "
+                    + "; ".join(errors)
+                )
+            return self
+
         errors = []
         if mode != "oidc":
             errors.append(
@@ -328,5 +381,13 @@ class Settings(BaseSettings):
     @property
     def durable_audit_outbox_configured(self) -> bool:
         return _valid_durable_redis_url(self.queue_url)
+
+    @property
+    def deployment_profile(self) -> str:
+        if self.competition_fast_launch:
+            return "competition_fast_launch"
+        if is_production_environment(self.environment, self.railway_environment):
+            return "production_strict"
+        return "development"
 
 settings = Settings()

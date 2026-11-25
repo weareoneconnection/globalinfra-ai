@@ -394,6 +394,108 @@ class SourceDocument(Base):
     original_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+
+# --- V6.1 finals extension: evidence-grounded drawing intelligence ----------
+
+class DrawingDocument(Base):
+    """Immutable, tenant-scoped engineering drawing source."""
+
+    __tablename__ = "drawing_documents"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    file_type: Mapped[str] = mapped_column(String(16), index=True)
+    content_type: Mapped[str] = mapped_column(String(160))
+    byte_size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    storage_ref: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32), default="RECEIVED", index=True)
+    data_classification: Mapped[str] = mapped_column(String(24), default="internal", index=True)
+    discipline: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    drawing_number: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    revision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    scale: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    original_content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class DrawingSheet(Base):
+    """One normalized page with reproducible text/vector parser results."""
+
+    __tablename__ = "drawing_sheets"
+    __table_args__ = (UniqueConstraint("drawing_id", "page_number"),)
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    drawing_id: Mapped[str] = mapped_column(ForeignKey("drawing_documents.id"), index=True)
+    page_number: Mapped[int] = mapped_column(Integer)
+    width: Mapped[float] = mapped_column(Float)
+    height: Mapped[float] = mapped_column(Float)
+    extracted_text: Mapped[str] = mapped_column(Text, default="")
+    word_count: Mapped[int] = mapped_column(Integer, default=0)
+    vector_primitive_count: Mapped[int] = mapped_column(Integer, default=0)
+    parse_status: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DrawingElement(Base):
+    """Structured engineering fact with an exact source-sheet anchor."""
+
+    __tablename__ = "drawing_elements"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    drawing_id: Mapped[str] = mapped_column(ForeignKey("drawing_documents.id"), index=True)
+    sheet_id: Mapped[str] = mapped_column(ForeignKey("drawing_sheets.id"), index=True)
+    element_type: Mapped[str] = mapped_column(String(48), index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    value: Mapped[str] = mapped_column(Text)
+    unit: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    bbox: Mapped[list] = mapped_column(JSON)
+    confidence: Mapped[float] = mapped_column(Float)
+    extraction_method: Mapped[str] = mapped_column(String(48))
+    review_status: Mapped[str] = mapped_column(String(32), default="EXTRACTED", index=True)
+    properties: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DrawingAnalysisRun(Base):
+    """Reproducible parse run and fail-closed model-readiness decision."""
+
+    __tablename__ = "drawing_analysis_runs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    drawing_id: Mapped[str] = mapped_column(ForeignKey("drawing_documents.id"), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    parser_version: Mapped[str] = mapped_column(String(64))
+    source_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    model_ready: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    blockers: Mapped[list] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DrawingModelRun(Base):
+    """P1/P2 artifact slot; generation is separate from source analysis."""
+
+    __tablename__ = "drawing_model_runs"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    drawing_document_id: Mapped[str] = mapped_column(ForeignKey("drawing_documents.id"), index=True)
+    organization_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    assumptions: Mapped[dict] = mapped_column(JSON, default=dict)
+    manifest: Mapped[dict] = mapped_column(JSON, default=dict)
+    validation: Mapped[dict] = mapped_column(JSON, default=dict)
+    gltf_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    ifc_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    gltf_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ifc_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
 # --- V3.0 / Phase 7: production-pilot operating plane -----------------------
 
 class Organization(Base):
