@@ -893,9 +893,10 @@ def _element_specs(
             )
             if not combined or not _SIZE.search(combined):
                 continue
+            row_kind = _schedule_kind(combined) or title_kind
             row = ParsedLine(
                 page=anchor.page,
-                text=f"{title_kind} SCHEDULE: {combined}",
+                text=f"{row_kind} SCHEDULE: {combined}",
                 bbox=[
                     min(line.bbox[0] for line in cells),
                     min(line.bbox[1] for line in cells),
@@ -908,10 +909,10 @@ def _element_specs(
                 for match in _SIZE.finditer(combined)
             ]
             add(
-                "SCHEDULE_ITEM", f"{title_kind.lower()}_schedule_row", combined,
+                "SCHEDULE_ITEM", f"{row_kind.lower()}_schedule_row", combined,
                 row, 0.93,
                 extra_properties={
-                    "schedule_kind": title_kind,
+                    "schedule_kind": row_kind,
                     "row_code": anchor.text.strip(),
                     "material_categories": _material_categories(combined),
                     "quantity": _explicit_quantity(combined),
@@ -1465,6 +1466,12 @@ def ask_drawing(
                 continue
             seen_schedule.add(normalized)
             schedule_items.append(item)
+        reconstructed_rows = [
+            item for item in schedule_items
+            if str(item["label"]).endswith("_schedule_row")
+        ]
+        if reconstructed_rows:
+            schedule_items = reconstructed_rows
         schedule_items.sort(
             key=lambda item: (
                 not str(item["label"]).endswith("_schedule_row"),
