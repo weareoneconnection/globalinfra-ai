@@ -244,16 +244,28 @@ function EvidenceStage({ detail, activePage, selected, onSelect, localPreview, p
   previewIsImage: boolean;
 }) {
   const t = useTranslations('Drawings');
+  const [overlayMode, setOverlayMode] = useState<'review' | 'selected' | 'all'>('review');
   const sheet = detail.sheets.find(item => (item.page ?? item.page_number ?? 1) === activePage) ?? detail.sheets[activePage - 1] ?? detail.sheets[0];
   const sheetWidth = Math.max(1, Number(sheet?.width ?? 1));
   const sheetHeight = Math.max(1, Number(sheet?.height ?? 1));
   const remotePreview = sheet?.preview_url ?? sheet?.image_url ?? '';
   const preview = remotePreview || (previewIsImage ? localPreview : '');
-  const pageElements = detail.elements.filter(item => pageOf(item) === activePage && normalizedBox(item, sheet));
+  const allPageElements = detail.elements.filter(item => pageOf(item) === activePage && normalizedBox(item, sheet));
+  const filteredElements = overlayMode === 'selected'
+    ? allPageElements.filter((item, index) => text(item.id ?? item.element_id, `element-${index}`) === selected)
+    : overlayMode === 'review'
+      ? allPageElements.filter(item => text(item.id ?? item.element_id) === selected || confidenceOf(item) < 80 || text(item.state ?? item.status).toUpperCase() === 'INFERRED')
+      : allPageElements;
+  const pageElements = [...filteredElements]
+    .sort((a, b) => Number(text(b.id ?? b.element_id) === selected) - Number(text(a.id ?? a.element_id) === selected))
+    .slice(0, overlayMode === 'all' ? 500 : 120);
   return <div className="drawing-sheet-stage">
     <div className="drawing-sheet-toolbar">
       <span>{t('sheet')} {activePage}</span>
-      <small>{pageElements.length} {t('anchors')}</small>
+      <div className="drawing-overlay-controls" role="group" aria-label={t('anchors')}>
+        {(['review', 'selected', 'all'] as const).map(mode => <button type="button" className={overlayMode === mode ? 'active' : ''} onClick={() => setOverlayMode(mode)} key={mode}>{t(`overlay.${mode}`)}</button>)}
+      </div>
+      <small>{t('overlay.shown', { shown: pageElements.length, total: allPageElements.length })}</small>
     </div>
     <div className={`drawing-sheet ${preview ? 'has-preview' : ''}`} style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
       {preview ? <Image src={preview} alt={t('previewAlt', { page: activePage })} fill sizes="(max-width: 900px) 100vw, 55vw" unoptimized /> : <div className="drawing-sheet-placeholder" aria-label={t('previewAlt', { page: activePage })}>
@@ -288,7 +300,12 @@ function GatePanel({ gate }: { gate: ModelGate }) {
   </div>;
 }
 
-export function DrawingWorkspace({ projects }: { projects: Project[] }) {
+export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage = 1, initialElementId = '' }: {
+  projects: Project[];
+  initialDrawingId?: string;
+  initialPage?: number;
+  initialElementId?: string;
+}) {
   const t = useTranslations('Drawings');
   const locale = useLocale();
   const [detail, setDetail] = useState<DrawingDetail | null>(null);
@@ -306,6 +323,28 @@ export function DrawingWorkspace({ projects }: { projects: Project[] }) {
   const [model, setModel] = useState<DraftModel | null>(null);
 
   useEffect(() => () => { if (localPreview) URL.revokeObjectURL(localPreview); }, [localPreview]);
+
+  useEffect(() => {
+    if (!initialDrawingId) return;
+    let cancelled = false;
+    setPhase('analyzing');
+    setError('');
+    fetch(`/backend/drawings/${encodeURIComponent(initialDrawingId)}?lang=${locale}`, { cache: 'no-store' })
+      .then(jsonResponse)
+      .then(payload => {
+        if (cancelled) return;
+        setDetail(normalizeDrawing(payload));
+        setActivePage(Math.max(1, initialPage));
+        setSelected(initialElementId);
+        setPhase('ready');
+      })
+      .catch(reason => {
+        if (cancelled) return;
+        setError(reason instanceof Error ? reason.message : 'Drawing operation failed.');
+        setPhase('error');
+      });
+    return () => { cancelled = true; };
+  }, [initialDrawingId, initialElementId, initialPage, locale]);
 
   const rows = useMemo(() => detail ? fieldRows(detail) : [], [detail]);
   const geometryCandidates = useMemo(() => detail?.elements.filter(item => {
@@ -370,6 +409,12 @@ export function DrawingWorkspace({ projects }: { projects: Project[] }) {
       setActivePage(1);
       setSelected('');
       setPhase('ready');
+      if (next.id && typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('drawing_id', next.id);
+        url.searchParams.set('from', 'workbench');
+        window.history.replaceState(null, '', url);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('unknownError'));
       setPhase('error');
@@ -473,7 +518,7 @@ export function DrawingWorkspace({ projects }: { projects: Project[] }) {
 
       <section className="card drawing-canvas-panel">
         <header><div><span className="section-kicker">P0 · {t('evidenceKicker')}</span><h3>{t('evidenceTitle')}</h3></div>{detail && <div className="drawing-page-tabs">{detail.sheets.map((sheet, index) => { const page = sheet.page ?? sheet.page_number ?? index + 1; return <button type="button" className={activePage === page ? 'active' : ''} onClick={() => setActivePage(page)} key={String(sheet.id ?? page)}>{page}</button>; })}</div>}</header>
-        {detail ? <EvidenceStage detail={detail} activePage={activePage} selected={selected} onSelect={setSelected} localPreview={localPreview} previewIsImage={previewIsImage} /> : <div className="drawing-empty"><span>⌁</span><b>{t('emptyTitle')}</b><p>{t('emptyHint')}</p></div>}
+        {detail ? <EvidenceStage detail={detail} activePage={activePage} selected={selected} onSelect={setSelected} localPreview={localPreview} previewIsImage={previewIsImage} /> : <div className="drawing-empty"><span>⌁</span><b>{phase === 'analyzing' && initialDrawingId ? t('loadingDrawing') : t('emptyTitle')}</b><p>{t('emptyHint')}</p></div>}
       </section>
 
       <aside className="card drawing-analysis-panel">

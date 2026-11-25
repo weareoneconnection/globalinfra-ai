@@ -10,7 +10,7 @@ export type AssistantProject = {
   schedule_variance?: number; next_gate?: string; gate_date?: string; risk_level: string;
 };
 
-type Mode = 'auto' | 'incident' | 'knowledge' | 'progress' | 'approvals';
+type Mode = 'auto' | 'drawing' | 'incident' | 'knowledge' | 'progress' | 'approvals';
 type Intent = Exclude<Mode, 'auto'> | 'help' | 'caseStatus' | 'dispatch';
 type Method = 'llm' | 'rules' | 'user';
 type Tool = 'report_incident' | 'search_knowledge' | 'case_status' | 'project_progress' | 'pending_approvals' | 'answer_directly';
@@ -23,6 +23,17 @@ type CaseSummary = {
   route?: string; classification?: string;
 };
 type KnowledgeHit = { id: number; title: string; source_ref: string; jurisdiction: string; version: string; summary: string; relevance: number };
+type DrawingCitation = {
+  element_id?: string; page?: number; bbox?: number[]; source_text?: string;
+  confidence?: number; state?: string;
+};
+type DrawingReply = {
+  kind: 'drawing'; drawingId: string; filename: string; status: string; sha256: string;
+  projectId: number | null; pages: number; elementCount: number; uncertainCount: number;
+  fields: { drawingNumber: string; revision: string; scale: string; unit: string; title: string };
+  categories: Record<string, number>; modelReady: boolean; blockers: string[];
+  question?: string; answer?: string; grounded?: boolean; citations?: DrawingCitation[];
+};
 
 type StepStatus = 'waiting' | 'running' | 'ok' | 'error';
 type IntakeData = { case_id: string; case_type_label: string; risk: string; risk_label: string; country_label: string | null; stage: string | null; deadline: string | null; issues: string[]; team: string[]; method: string };
@@ -55,6 +66,7 @@ type Reply =
   | { kind: 'answer'; text: string }
   | { kind: 'progress'; projectId: number | null }
   | { kind: 'approvals' }
+  | DrawingReply
   | { kind: 'help' }
   | { kind: 'error'; message: string };
 
@@ -72,6 +84,8 @@ const INCIDENT_RE = /通知|整改|事故|隐患|损坏|破损|延误|索赔|违
 const APPROVAL_RE = /审批|待我|批准|approval|approve|sign[- ]?off/i;
 const PROGRESS_RE = /进度|进展|状态|概况|progress|status|schedule|overview/i;
 const KNOWLEDGE_RE = /法规|法律|规定|规范|标准|条款|条例|要求|依据|哪一条|regulation|law|clause|requirement|standard|permit/i;
+const DRAWING_RE = /图纸|图号|版次|墙体|门窗|构件|bim|ifc|drawing|blueprint|floor\s*plan/i;
+const DRAWING_EXT_RE = /\.(pdf|png|jpe?g|tiff?)$/i;
 
 const INTENT_BY_TOOL: Record<Tool, Intent> = {
   report_incident: 'incident', search_knowledge: 'knowledge', case_status: 'caseStatus',
@@ -95,6 +109,9 @@ function historyLine(message: Message): string {
     case 'answer': return reply.text;
     case 'help': return 'Explained what the assistant can do.';
     case 'ocr': return `Received ${reply.filename}; OCR is required.`;
+    case 'drawing': return reply.answer
+      ? `Analyzed drawing ${reply.filename}: ${reply.answer}`
+      : `Analyzed drawing ${reply.filename} with ${reply.elementCount} evidence-linked elements.`;
     case 'error': return 'The request failed.';
     case 'dispatch': return reply.summary?.text ?? reply.reply ?? reply.steps.map(step => `${step.name}: ${step.summary ?? ''}`).join(' ');
   }
@@ -116,6 +133,7 @@ function applyEvent(state: Dispatch, event: DispatchEvent): Dispatch {
 function detectIntent(text: string, hasFile: boolean): Intent {
   if (hasFile) return 'incident';
   if (text.length <= 30 && HELP_RE.test(text.trim())) return 'help';
+  if (DRAWING_RE.test(text)) return 'drawing';
   const incident = INCIDENT_RE.test(text);
   if (!incident && APPROVAL_RE.test(text) && text.length <= 40) return 'approvals';
   if (!incident && PROGRESS_RE.test(text) && text.length <= 60) return 'progress';
@@ -126,6 +144,73 @@ function detectIntent(text: string, hasFile: boolean): Intent {
 
 function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function array<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function valueText(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+}
+
+function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): DrawingReply {
+  const body = object(payload);
+  const document = object(body.document ?? body.drawing ?? body);
+  const elements = array<Record<string, unknown>>(body.elements ?? object(body.analysis).elements);
+  const gate = object(body.model_gate ?? body.modelGate);
+  const categories = elements.reduce<Record<string, number>>((counts, item) => {
+    const category = valueText(item.type ?? item.category).toUpperCase() || 'OTHER';
+    counts[category] = (counts[category] ?? 0) + 1;
+    return counts;
+  }, {});
+  const confidence = (item: Record<string, unknown>) => {
+    const raw = typeof item.confidence === 'number' ? item.confidence : 0;
+    return raw <= 1 ? raw * 100 : raw;
+  };
+  return {
+    kind: 'drawing',
+    drawingId: valueText(document.id ?? document.drawing_id) || previous?.drawingId || '',
+    filename: valueText(document.filename) || previous?.filename || '',
+    status: valueText(document.status ?? body.status) || previous?.status || 'ANALYZED',
+    sha256: valueText(document.sha256 ?? document.checksum) || previous?.sha256 || '',
+    projectId: typeof document.project_id === 'number' ? document.project_id : previous?.projectId ?? null,
+    pages: Number(document.page_count ?? array(body.sheets).length ?? previous?.pages ?? 0),
+    elementCount: elements.length || previous?.elementCount || 0,
+    uncertainCount: elements.length
+      ? elements.filter(item => confidence(item) < 80 || valueText(item.state ?? item.status).toUpperCase() === 'INFERRED').length
+      : previous?.uncertainCount ?? 0,
+    fields: {
+      drawingNumber: valueText(document.drawing_number ?? object(document.metadata).drawing_number) || previous?.fields.drawingNumber || '',
+      revision: valueText(document.revision ?? object(document.metadata).revision) || previous?.fields.revision || '',
+      scale: valueText(document.scale ?? object(document.metadata).scale) || previous?.fields.scale || '',
+      unit: valueText(document.unit ?? object(document.metadata).unit) || previous?.fields.unit || '',
+      title: valueText(document.title ?? object(document.metadata).title) || previous?.fields.title || '',
+    },
+    categories: Object.keys(categories).length ? categories : previous?.categories ?? {},
+    modelReady: Boolean(gate.ready ?? gate.model_ready ?? previous?.modelReady),
+    blockers: array<string>(gate.blockers ?? gate.missing ?? previous?.blockers),
+    question: previous?.question,
+    answer: previous?.answer,
+    grounded: previous?.grounded,
+    citations: previous?.citations,
+  };
+}
+
+function isDrawingFile(file: File): boolean {
+  return DRAWING_EXT_RE.test(file.name) || ['application/pdf', 'image/png', 'image/jpeg', 'image/tiff'].includes(file.type);
+}
+
+function latestDrawing(messages: Message[]): DrawingReply | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'assistant' && message.reply?.kind === 'drawing') return message.reply;
+  }
+  return null;
 }
 
 async function readJson(response: Response) {
@@ -209,6 +294,41 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
         method: intake.classification_method, route: effectiveRoute, classification,
       },
     };
+  }
+
+  async function askDrawing(drawing: DrawingReply, question: string): Promise<DrawingReply> {
+    const body = await readJson(await fetch(`/backend/drawings/${encodeURIComponent(drawing.drawingId)}/ask?lang=${locale}`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ question }),
+    }));
+    return {
+      ...drawing,
+      question,
+      answer: valueText(body.answer),
+      grounded: Boolean(body.grounded),
+      citations: array<DrawingCitation>(body.citations),
+    };
+  }
+
+  async function runDrawingAnalysis(input: string, upload: File): Promise<DrawingReply> {
+    const chosenProject = projectId !== 'auto' ? Number(projectId) : projects[0]?.id ?? null;
+    if (!chosenProject) throw new Error(t('drawingProjectRequired'));
+    const form = new FormData();
+    form.append('file', upload);
+    form.append('project_id', String(chosenProject));
+    form.append('data_classification', restricted ? 'restricted' : 'internal');
+    const body = await readJson(await fetch(`/backend/drawings/analyze?lang=${locale}`, {
+      method: 'POST', headers, body: form,
+    }));
+    let drawing = normalizeDrawingReply(body);
+    drawing = { ...drawing, projectId: chosenProject };
+    const generic = /^(请)?(帮我)?(分析|读取|查看)(一下)?(这张|这个)?(工程)?图纸[。.!！]?$/i;
+    const prompt = input && input !== upload.name && !generic.test(input)
+      ? input
+      : t('drawingDefaultQuestion');
+    if (prompt.trim().length >= 2) drawing = await askDrawing(drawing, prompt.trim());
+    return drawing;
   }
 
   // Server-side planner (LLM when configured, deterministic rules otherwise).
@@ -302,6 +422,8 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     const upload = forced ? null : file;
     if (busy || (!input && !upload)) return;
     const chosen: Intent | undefined = forced?.intent ?? (mode === 'auto' ? undefined : mode);
+    const drawingUpload = Boolean(upload && (mode === 'drawing' || (mode === 'auto' && isDrawingFile(upload))));
+    const drawingContext = latestDrawing(messages);
     const history = messages;
     const assistantId = newId();
     const update = (patch: Partial<Extract<Message, { role: 'assistant' }>>) =>
@@ -309,12 +431,22 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     setMessages(prev => [
       ...prev,
       { id: newId(), role: 'user', text: input, fileName: upload?.name },
-      { id: assistantId, role: 'assistant', intent: upload ? 'incident' : chosen ?? null, reply: null },
+      { id: assistantId, role: 'assistant', intent: drawingUpload ? 'drawing' : upload ? 'incident' : chosen ?? null, reply: null },
     ]);
     setText(''); setFile(null); setMode('auto'); setBusy(true);
     try {
       if (upload) {
-        update({ method: 'user', reply: await runIntake(input || upload.name, upload, null) });
+        update({
+          intent: drawingUpload ? 'drawing' : 'incident',
+          method: 'user',
+          reply: drawingUpload
+            ? await runDrawingAnalysis(input || upload.name, upload)
+            : await runIntake(input || upload.name, upload, null),
+        });
+      } else if ((chosen === 'drawing' || (!chosen && drawingContext)) && drawingContext) {
+        update({ intent: 'drawing', method: 'user', reply: await askDrawing(drawingContext, input) });
+      } else if (chosen === 'drawing') {
+        update({ intent: 'drawing', method: 'user', reply: { kind: 'error', message: t('drawingAttachRequired') } });
       } else if (!chosen && await dispatch(input, history, (reply, method) => update({ intent: 'dispatch', method: method ?? undefined, reply }))) {
         // streamed by the dispatcher
       } else {
@@ -350,7 +482,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   function onFile(event: ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0] ?? null;
     setFile(picked);
-    if (picked) setMode('incident');
+    if (picked) setMode(mode === 'incident' ? 'incident' : isDrawingFile(picked) ? 'drawing' : 'incident');
     event.target.value = '';
   }
 
@@ -360,7 +492,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   }
 
   const empty = messages.length === 0;
-  const placeholder = mode === 'knowledge' ? t('placeholderKnowledge') : mode === 'incident' ? t('placeholderIncident') : t('placeholder');
+  const placeholder = mode === 'drawing' ? t('placeholderDrawing') : mode === 'knowledge' ? t('placeholderKnowledge') : mode === 'incident' ? t('placeholderIncident') : t('placeholder');
 
   const composer = <form className="assistant-composer" onSubmit={submit}>
     {(mode !== 'auto' || file) && <div className="assistant-composer-tags">
@@ -375,7 +507,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
           {projects.map(project => <option key={project.id} value={project.id}>{project.code}</option>)}
         </select>
         <button type="button" className="assistant-icon-button" onClick={() => fileInput.current?.click()} aria-label={t('attach')}>📎<span className="assistant-label"> {t('attach')}</span></button>
-        <input ref={fileInput} type="file" accept=".pdf,.docx,.txt" hidden onChange={onFile} />
+        <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.tif,.tiff" hidden onChange={onFile} />
       </div>
       <div className="assistant-controls">
         <label className={`assistant-restricted ${restricted ? 'on' : ''}`} title={t('restrictedHint')}>
@@ -392,6 +524,7 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   </form>;
 
   const chips = <div className="assistant-chips">
+    <button type="button" onClick={() => { setMode('drawing'); fileInput.current?.click(); }}>▧ {t('chips.drawing')}</button>
     <button type="button" onClick={() => chooseMode('incident')}>⚠ {t('chips.report')}</button>
     <button type="button" onClick={() => { setMode('incident'); fileInput.current?.click(); }}>✉ {t('chips.letter')}</button>
     <button type="button" onClick={() => chooseMode('knowledge')}>⚖ {t('chips.regulation')}</button>
@@ -446,7 +579,7 @@ function Thinking({ intent }: { intent: Intent }) {
     const timer = setInterval(() => setSeconds(value => value + 1), 1000);
     return () => clearInterval(timer);
   }, []);
-  return <div className="assistant-thinking"><span className="assistant-dots"><i /><i /><i /></span>{intent === 'incident' ? t('thinkingIncident') : t('thinking')}{seconds > 2 && <small>{seconds}s</small>}</div>;
+  return <div className="assistant-thinking"><span className="assistant-dots"><i /><i /><i /></span>{intent === 'drawing' ? t('thinkingDrawing') : intent === 'incident' ? t('thinkingIncident') : t('thinking')}{seconds > 2 && <small>{seconds}s</small>}</div>;
 }
 
 function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects: AssistantProject[]; planningAgent: string }) {
@@ -459,10 +592,65 @@ function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects:
     case 'knowledge': return <KnowledgeReply query={reply.query} hits={reply.hits} answer={reply.answer ?? null} />;
     case 'progress': return <ProgressReply projects={reply.projectId ? projects.filter(p => p.id === reply.projectId) : projects} />;
     case 'approvals': return <ApprovalsReply />;
+    case 'drawing': return <DrawingReplyCard reply={reply} />;
     case 'help': return <div className="assistant-text">{t('help')}</div>;
     case 'error': return <div className="assistant-error" role="alert">{t('failed')} · {reply.message}</div>;
     case 'dispatch': return <DispatchReply reply={reply} projects={projects} planningAgent={planningAgent} />;
   }
+}
+
+function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
+  const t = useTranslations('Assistant');
+  const locale = useLocale();
+  const [current, setCurrent] = useState(reply);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { setCurrent(reply); }, [reply]);
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const response = await fetch(`/backend/drawings/${encodeURIComponent(current.drawingId)}?lang=${locale}`, { cache: 'no-store' });
+      setCurrent(normalizeDrawingReply(await readJson(response), current));
+    } finally { setRefreshing(false); }
+  }
+
+  const categories = Object.entries(current.categories).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const firstCitation = current.citations?.[0];
+  const workbench = `/drawings?drawing_id=${encodeURIComponent(current.drawingId)}&page=${firstCitation?.page ?? 1}&element_id=${encodeURIComponent(firstCitation?.element_id ?? '')}&from=assistant`;
+  const facts = [
+    [t('drawingFields.number'), current.fields.drawingNumber],
+    [t('drawingFields.revision'), current.fields.revision],
+    [t('drawingFields.scale'), current.fields.scale],
+    [t('drawingFields.unit'), current.fields.unit],
+  ].filter(([, value]) => value);
+
+  return <div className="assistant-card assistant-drawing-card">
+    <div className="assistant-card-head">
+      <span className="badge info">DRAWING INTELLIGENCE</span>
+      <b>{current.filename || current.drawingId}</b>
+      <span className={`badge ${current.modelReady ? 'ok' : 'medium'}`}>{current.modelReady ? t('drawingModelReady') : t('drawingNeedsReview')}</span>
+    </div>
+    <div className="assistant-drawing-lineage">
+      <span>{current.pages} {t('drawingPages')}</span>
+      <span>{current.elementCount} {t('drawingElements')}</span>
+      <span>{current.uncertainCount} {t('drawingUncertain')}</span>
+      <code>{current.drawingId}</code>
+    </div>
+    {facts.length ? <div className="assistant-facts drawing-facts">{facts.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div> : null}
+    {categories.length ? <div className="assistant-drawing-categories">{categories.map(([category, count]) => <span key={category}><b>{category}</b> {count}</span>)}</div> : null}
+    {current.answer ? <div className={`assistant-drawing-answer ${current.grounded ? 'grounded' : 'unsupported'}`}>
+      <div><b>{current.grounded ? t('drawingGrounded') : t('drawingUnsupported')}</b>{current.question && <small>{current.question}</small>}</div>
+      <p>{current.answer}</p>
+      {current.citations?.length ? <div className="assistant-drawing-citations">{current.citations.slice(0, 6).map((citation, index) => <Link href={`/drawings?drawing_id=${encodeURIComponent(current.drawingId)}&page=${citation.page ?? 1}&element_id=${encodeURIComponent(citation.element_id ?? '')}&from=assistant`} key={`${citation.element_id ?? index}`}><span>S{citation.page ?? 1}</span>{citation.source_text || `E${index + 1}`}</Link>)}</div> : null}
+    </div> : null}
+    {!current.modelReady && current.blockers.length ? <p className="assistant-boundary small">{t('drawingBlockers', { count: current.blockers.length })} · {current.blockers.slice(0, 4).join(' · ')}</p> : null}
+    <div className="assistant-actions">
+      <Link className="button" href={workbench}>{t('drawingOpenWorkbench')}</Link>
+      <button className="button secondary" type="button" onClick={refresh} disabled={refreshing}>{refreshing ? t('drawingRefreshing') : t('drawingRefresh')}</button>
+    </div>
+    <p className="assistant-boundary small">AI_GENERATED_DRAFT · NOT_FOR_CONSTRUCTION</p>
+  </div>;
 }
 
 const STEP_ICON: Record<StepStatus, string> = { waiting: '○', running: '◌', ok: '✓', error: '✕' };
