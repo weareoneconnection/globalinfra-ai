@@ -28,6 +28,7 @@ jobs:
       - name: P3.1 blind-study CLI and safe NOT_RUN smoke
         run: |
           python evals/p3_1_study.py --help
+          python evals/p3_2_championship_pack.py --help
           python evals/p3_1_hybrid_council.py --help
           python evals/p3_1_hybrid_council.py run --study /tmp/not-used.json --packet /tmp/not-used.json --blind-key /tmp/not-used.json --registry /tmp/not-used.json --output /tmp/council-not-run.json
           python -c 'import json; x=json.load(open("/tmp/council-not-run.json")); assert x["status"] == "NOT_RUN" and x["publication_gate"] == "CLOSED"'
