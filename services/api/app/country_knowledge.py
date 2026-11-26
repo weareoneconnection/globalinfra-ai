@@ -182,8 +182,8 @@ def _seed_project_procedures(db: Session) -> None:
 
 
 KNOWLEDGE_DATA_DIR = Path(__file__).resolve().parent / "knowledge_data"
-CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl", "id_regulations.jsonl")
-GLOSSARY_FILES = {"MY": "my_glossary.tsv", "ID": "id_glossary.tsv"}
+CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl", "id_regulations.jsonl", "ae_regulations.jsonl", "sa_regulations.jsonl")
+GLOSSARY_FILES = {"MY": "my_glossary.tsv", "ID": "id_glossary.tsv", "AE": "ae_glossary.tsv", "SA": "sa_glossary.tsv"}
 CLAUSE_DOCUMENT_TYPE = "CLAUSE_SUMMARY"
 _CLAUSE_CATEGORY = {
     "MY-ACT514": ("HSE", "健康安全环保"),
@@ -201,8 +201,13 @@ _CLAUSE_CATEGORY = {
     "ID-UU2": ("Contract", "合同"),
     "ID-UU27": ("Data Protection", "数据保护"),
     "ID-UU23": ("Railway", "铁路"),
+    "AE-FDL33": ("Workforce", "人力资源"),
+    "AE-FDL25": ("Contract", "合同"),
+    "SA-LABOR": ("Workforce", "人力资源"),
+    "SA-CTL": ("Contract", "合同"),
+    "SA-ENV": ("Environment", "环境"),
 }
-_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语"), "id": ("Indonesian (Bahasa Indonesia)", "印尼语")}
+_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语"), "id": ("Indonesian (Bahasa Indonesia)", "印尼语"), "ar": ("Arabic", "阿拉伯语")}
 
 
 def load_clause_library() -> list[dict]:
@@ -271,6 +276,7 @@ def library_manifest() -> dict:
             "No entry has yet been reviewed by local counsel or a native-speaker terminologist.",
             "Rows marked MIRROR_TRANSCRIPTION were read from a third-party transcription because the official site could not be reached; source_url still points to the official record.",
             "Malaysia: Act 133 / UBBL and the Land Public Transport Act 2010 are not yet covered. Indonesia: implementing regulations (e.g. PP 50/2012, PP 22/2020) and the amended UU 2/2017 text are not yet covered.",
+            "UAE and Saudi Arabia: rows marked OFFICIAL_TRANSLATION or read from Arabic are guidance; the Arabic text governs. Personal-data, environment (UAE) and building-code instruments are not yet covered, nor are labour executive regulations.",
         ],
         "disclaimer": LEGAL_DISCLAIMER,
     }

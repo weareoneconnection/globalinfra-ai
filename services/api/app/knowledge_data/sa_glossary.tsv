@@ -1,0 +1,186 @@
+id	domain	en	zh	local	local_lang	local_basis	review_status
+SA-GL-0001	hse	occupational safety and health	职业安全与健康	السلامة والصحة المهنية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0002	hse	occupational safety	职业安全	السلامة المهنية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0003	hse	work injury	工伤	إصابة العمل	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0004	hse	occupational disease	职业病	مرض المهنة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0005	hse	occupational hazards	职业危害	المخاطر المهنية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0006	hse	accident	事故	حادث	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0007	hse	major accident	重大事故	حادث جسيم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0008	hse	first aid	急救	الإسعافات الأولية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0009	hse	first-aid kit	急救箱	صندوق الإسعافات الأولية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0010	hse	personal protective equipment	个人防护装备	معدات الوقاية الشخصية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0011	hse	protective equipment	防护装备	أدوات الوقاية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0012	hse	safety helmet	安全帽	خوذة السلامة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0013	hse	safety harness	安全带	حزام الأمان	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0014	hse	safety instructions	安全须知	تعليمات السلامة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0015	hse	fire	火灾	حريق	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0016	hse	fire prevention	防火	الوقاية من الحريق	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0017	hse	escape route	疏散通道	مخارج الطوارئ	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0018	hse	emergency	紧急情况	الطوارئ	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0019	hse	risk assessment	风险评估	تقييم المخاطر	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0020	hse	hazard	危险源	خطر	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0021	hse	working at height	高处作业	العمل على ارتفاع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0022	hse	scaffolding	脚手架	السقالات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0023	hse	confined space	受限空间	الأماكن المغلقة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0024	hse	hot work	动火作业	الأعمال الساخنة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0025	hse	permit to work	作业许可证	تصريح العمل الآمن	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0026	hse	heat stress	热应激	الإجهاد الحراري	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0027	hse	midday break	午间休息	استراحة منتصف النهار	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0028	hse	medical examination	体检	الفحص الطبي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0029	hse	treatment	治疗	العلاج	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0030	hse	disability	伤残	العجز	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0031	hse	total disability	完全伤残	العجز الكلي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0032	hse	partial disability	部分伤残	العجز الجزئي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0033	hse	safety officer	安全员	مسؤول السلامة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0034	hse	toolbox talk	班前安全会	اجتماع السلامة اليومي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0035	hse	near miss	未遂事件	حادث وشيك	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0036	hse	lighting	照明	الإضاءة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0037	hse	drinking water	饮用水	مياه الشرب	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0038	workforce	employer	雇主	صاحب العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0039	workforce	worker	工人	العامل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0040	workforce	employment contract	劳动合同	عقد العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0041	workforce	work permit	工作许可	تصريح العمل	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0042	workforce	recruitment	招聘	الاستقدام	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0043	workforce	probation period	试用期	فترة التجربة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0044	workforce	working hours	工作时间	ساعات العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0045	workforce	overtime	加班	ساعات العمل الإضافية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0046	workforce	weekly rest	每周休息	الراحة الأسبوعية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0047	workforce	rest period	休息时间	فترة الراحة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0048	workforce	annual leave	年假	الإجازة السنوية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0049	workforce	sick leave	病假	الإجازة المرضية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0050	workforce	wage	工资	الأجر	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0051	workforce	basic wage	基本工资	الأجر الأساسي	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0052	workforce	end-of-service gratuity	服务期满酬金	مكافأة نهاية الخدمة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0053	workforce	notice period	通知期	مدة الإنذار	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0054	workforce	termination of contract	终止合同	إنهاء العقد	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0055	workforce	disciplinary penalty	纪律处分	الجزاءات التأديبية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0056	workforce	accommodation	住宿	السكن	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0057	workforce	transport	交通	النقل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0058	workforce	meals	膳食	الوجبات	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0059	workforce	juvenile	未成年工	الحدث	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0060	workforce	shift work	轮班工作	العمل بنظام الورديات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0061	workforce	labour inspection	劳动监察	تفتيش العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0062	workforce	labour inspector	劳动监察员	مفتش العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0063	workforce	labour dispute	劳动争议	منازعات العمل	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0064	workforce	labour court	劳动法院	المحكمة العمالية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0065	workforce	profession	职业	المهنة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0066	workforce	training	培训	التدريب	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0067	workforce	foreign worker	外籍工人	العامل الأجنبي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0068	workforce	establishment	单位/企业	المنشأة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0069	workforce	work regulations	工作规章	لائحة تنظيم العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0070	contract	construction contract (muqawala)	承揽合同（工程合同）	عقد المقاولة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0071	contract	contractor	承包方	المقاول	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0072	contract	subcontractor	分包方	المقاول من الباطن	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0073	contract	employer (project owner)	业主	صاحب العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0074	contract	engineer	工程师	المهندس	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0075	contract	design	设计	التصميم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0076	contract	supervision	监督	الإشراف	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0077	contract	consideration (price)	对价/价款	البدل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0078	contract	fee	报酬	الأجر	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0079	contract	lump sum	总价	الأجر المقطوع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0080	contract	unit rate	单价	سعر الوحدة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0081	contract	bill of quantities	工程量清单	جدول الكميات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0082	contract	estimate (measurement)	估算（计量）	المقايسة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0083	contract	materials	材料	المواد	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0084	contract	delivery (handover)	交付	التسليم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0085	contract	acceptance	验收	الاستلام	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0086	contract	completion	完工	الإنجاز	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0087	contract	delay	延误	التأخير	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0088	contract	extension of time	工期延长	تمديد مدة التنفيذ	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0089	contract	variation	变更	التعديل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0090	contract	exceptional circumstances	特殊情势	الظروف الاستثنائية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0091	contract	force majeure	不可抗力	القوة القاهرة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0092	contract	compensation	赔偿	التعويض	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0093	contract	agreed compensation (liquidated damages)	约定赔偿金	التعويض الاتفاقي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0094	contract	termination (rescission)	解除合同	فسخ العقد	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0095	contract	notice (formal)	催告/通知	الإعذار	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0096	contract	decennial liability	十年责任	الضمان العشري	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0097	contract	defect	缺陷	العيب	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0098	contract	collapse	倒塌	التهدم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0099	contract	liability	责任	المسؤولية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0100	contract	warranty	担保	الضمان	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0101	contract	claim	索赔	المطالبة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0102	contract	dispute	争议	النزاع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0103	contract	arbitration	仲裁	التحكيم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0104	contract	court	法院	المحكمة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0105	contract	tender	招标	المنافسة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0106	contract	performance bond	履约保函	ضمان حسن التنفيذ	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0107	contract	advance payment	预付款	الدفعة المقدمة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0108	contract	retention	保留金	المبالغ المحتجزة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0109	contract	interim payment	期中付款	الدفعة المرحلية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0110	regulatory	ministry	部	الوزارة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0111	regulatory	minister	部长	الوزير	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0112	regulatory	executive regulation	实施条例	اللائحة التنفيذية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0113	regulatory	ministerial decision	部长决定	قرار وزاري	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0114	regulatory	licence	执照	الترخيص	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0115	regulatory	permit	许可	التصريح	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0116	regulatory	fine	罚款	الغرامة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0117	regulatory	penalty	处罚	العقوبة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0118	regulatory	violation	违规	المخالفة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0119	regulatory	inspection	检查	التفتيش	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0120	regulatory	competent authority	主管机关	الجهة المختصة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0121	regulatory	official gazette	官方公报	الجريدة الرسمية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0122	regulatory	building permit	建筑许可	رخصة البناء	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0123	regulatory	completion certificate	竣工证书	شهادة الإنجاز	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0124	regulatory	civil defence	民防	الدفاع المدني	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0125	regulatory	municipality	市政当局	البلدية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0126	regulatory	environmental impact assessment	环境影响评价	تقييم الأثر البيئي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0127	regulatory	environmental permit	环境许可	التصريح البيئي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0128	regulatory	pollution	污染	التلوث	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0129	regulatory	hazardous waste	危险废物	النفايات الخطرة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0130	regulatory	wastewater	废水	مياه الصرف	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0131	regulatory	emissions	排放	الانبعاثات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0132	civil	building	建筑物	المبنى	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0133	civil	structure	构筑物	المنشأة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0134	civil	foundation	基础	الأساسات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0135	civil	soil	土壤	التربة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0136	civil	excavation	开挖	الحفر	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0137	civil	backfill	回填	الردم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0138	civil	concrete	混凝土	الخرسانة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0139	civil	reinforced concrete	钢筋混凝土	الخرسانة المسلحة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0140	civil	reinforcement steel	钢筋	حديد التسليح	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0141	civil	formwork	模板	القوالب	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0142	civil	pile	桩	الخوازيق	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0143	civil	bridge	桥梁	الجسر	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0144	civil	tunnel	隧道	النفق	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0145	civil	road	道路	الطريق	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0146	civil	railway	铁路	السكة الحديدية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0147	civil	station	车站	المحطة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0148	civil	drainage	排水	التصريف	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0149	civil	retaining wall	挡土墙	الجدار الاستنادي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0150	civil	shop drawings	深化图	المخططات التنفيذية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0151	civil	as-built drawings	竣工图	مخططات ما بعد التنفيذ	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0152	civil	method statement	施工方案	بيان طريقة العمل	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0153	plant	crane	起重机	الرافعة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0154	plant	lifting	吊装	الرفع	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0155	plant	machinery	机械	الآلات	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0156	plant	equipment	设备	المعدات	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0157	plant	tools	工具	الأدوات	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0158	quality	quality control	质量控制	ضبط الجودة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0159	quality	inspection and testing	检验与试验	الفحص والاختبار	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0160	quality	specifications	规格	المواصفات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0161	quality	technical standards	技术标准	المعايير الفنية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0162	data	personal data	个人数据	البيانات الشخصية	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0163	data	data subject	数据主体	صاحب البيانات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0164	data	controller	数据控制者	جهة التحكم	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0165	data	processor	数据处理者	جهة المعالجة	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0166	data	consent	同意	الموافقة	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0167	data	confidentiality	保密	السرية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0168	project	project	项目	المشروع	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0169	project	site	现场	موقع العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0170	project	project manager	项目经理	مدير المشروع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0171	project	site engineer	现场工程师	مهندس الموقع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0172	project	daily report	施工日报	التقرير اليومي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0173	project	minutes of meeting	会议纪要	محضر الاجتماع	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0174	project	correspondence	往来函件	المراسلات	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0175	project	schedule	进度计划	الجدول الزمني	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0176	project	progress	进度	نسبة الإنجاز	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0177	project	handover	移交	التسليم النهائي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0178	regulatory	Ministry of Human Resources and Social Development	人力资源和社会发展部	وزارة الموارد البشرية والتنمية الاجتماعية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0179	workforce	Labour Office	劳动办公室	مكتب العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0180	workforce	Saudisation (Nitaqat)	沙特化（尼塔卡特）	نطاقات	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0181	workforce	Social Insurance	社会保险	التأمينات الاجتماعية	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0182	regulatory	Saudi Building Code	沙特建筑规范	كود البناء السعودي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0183	regulatory	Royal Decree	王室法令	مرسوم ملكي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0184	workforce	major hazard facility	重大危险设施	المنشآت الكبرى المعرضة للمخاطر	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0185	workforce	remote area	偏远地区	المناطق البعيدة عن العمران	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
