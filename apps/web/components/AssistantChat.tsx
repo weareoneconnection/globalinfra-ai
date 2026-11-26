@@ -47,18 +47,51 @@ type StepData = Partial<IntakeData> & {
   query?: string; hits?: KnowledgeHit[]; answer?: string | null; question?: string; reanalyzed?: boolean;
   project_ids?: number[]; count?: number;
   reports?: { id: string; description: string; status: string; risk: string; case_id: string | null; open_questions: number }[];
+  countries?: string[]; retried?: boolean; clarify?: Clarify | null;
+  table?: { country: string; country_name: string; clauses: KnowledgeHit[] }[];
+  terms?: { country: string; id: string; en: string; zh: string; local: string; local_lang: string; attested: boolean }[];
+  gates?: { country: string; stage: string; gates: { code: string; name: string; authority: string; gate: string }[] }[];
+  points?: { text: string; refs: string[] }[]; status?: string; clauses?: KnowledgeHit[];
+  drawings?: { id: string; drawing_number: string | null; title: string | null; status: string }[];
+  drawing_id?: string; drawing_number?: string | null;
+  coverage_gaps?: string[];
+  assets?: { id: string; name: string; status: string; stage: string; health: number; progress: number;
+    sensors: SensorView[]; maintenance: { id: string; type: string; status: string; priority: string; due_at: string; description: string }[] }[];
+  alerts?: SensorView[];
+  items?: { id?: string; system?: string; asset?: string; test_pack?: string; stage?: string; punch_open?: number; documents?: number;
+    readiness?: number; ready?: boolean; kind?: string; ref?: string; risk?: string; text?: string }[];
+  precedents?: { case_id: string; title: string; type: string; risk: string; status: string; resolved: boolean; similarity: number }[];
+  counts?: Record<string, number>;
+  findings?: { category: string; name: string; risk: 'high' | 'medium' | 'low'; finding: string; excerpt: string; basis: string[] }[];
+  related?: (KnowledgeHit & { category: string })[];
+  country?: string | null;
+  agents?: { id: string; name: string; role: string; authority: string }[];
+  coverage?: CoverageRow[]; focus_domains?: string[]; boundaries?: string[];
+  stats?: { clauses: number; countries: number; instruments: number; glossary_terms: number };
 };
-type DispatchStep = { index: number; agent: string; name: string; authority: string; query: string; case_id: string | null; status: StepStatus; summary?: string; data?: StepData };
+type SensorView = { id: string; twin_id: string; type: string; unit: string; value: number; warning: number; critical: number; level: string };
+type CoverageLevel = 'covered' | 'thin' | 'none' | 'legal_only';
+type CoverageRow = { id: string; name: string; note: string; agents: string[]; project_data?: boolean; countries: Record<string, { clauses: number; level: CoverageLevel }> };
+type Clarify = { question: string; options: string[] };
+type TraceStep = { index: number; agent: string; status: string; depends_on: number[]; duration_ms: number; refs: number };
+type Trace = {
+  plan_method: string; summary_method: string | null; dropped_sentences: number; duration_ms: number;
+  steps: TraceStep[]; refs: string[]; model_calls: number; focus_countries: string[];
+};
+type DispatchStep = { index: number; agent: string; name: string; authority: string; query: string; case_id: string | null; depends_on?: number[]; status: StepStatus; summary?: string; data?: StepData; duration_ms?: number };
 type Dispatch = {
   kind: 'dispatch'; method: Method | null; steps: DispatchStep[]; summary: { text: string; method: 'llm' | 'rules' } | null;
   reply: string | null; contextCase: string | null; error: string | null; done: boolean; route: string; classification: string;
+  clarify?: Clarify[]; trace?: Trace | null;
 };
 type DispatchEvent =
   | { type: 'session'; session_id: string; context_case_id: string | null }
   | { type: 'plan'; method: Method; steps: Omit<DispatchStep, 'status'>[] }
   | { type: 'step_start'; index: number }
-  | { type: 'step_done'; index: number; status: 'ok' | 'error'; summary: string; data?: StepData }
-  | { type: 'summary'; text: string; method: 'llm' | 'rules' }
+  | { type: 'step_done'; index: number; status: 'ok' | 'error'; summary: string; data?: StepData; duration_ms?: number }
+  | { type: 'summary'; text: string; method: 'llm' | 'rules'; dropped_sentences?: number }
+  | ({ type: 'clarify'; step: string } & Clarify)
+  | ({ type: 'trace' } & Trace)
   | { type: 'reply'; text: string | null }
   | { type: 'error'; message: string }
   | { type: 'done' };
@@ -129,7 +162,9 @@ function applyEvent(state: Dispatch, event: DispatchEvent): Dispatch {
     case 'session': return { ...state, contextCase: event.context_case_id };
     case 'plan': return { ...state, method: event.method, steps: event.steps.map(step => ({ ...step, status: 'waiting' })) };
     case 'step_start': return { ...state, steps: state.steps.map(step => step.index === event.index ? { ...step, status: 'running' } : step) };
-    case 'step_done': return { ...state, steps: state.steps.map(step => step.index === event.index ? { ...step, status: event.status, summary: event.summary, data: event.data } : step) };
+    case 'step_done': return { ...state, steps: state.steps.map(step => step.index === event.index ? { ...step, status: event.status, summary: event.summary, data: event.data, duration_ms: event.duration_ms } : step) };
+    case 'clarify': return { ...state, clarify: [...(state.clarify ?? []), { question: event.question, options: event.options }] };
+    case 'trace': return { ...state, trace: event };
     case 'summary': return { ...state, summary: { text: event.text, method: event.method } };
     case 'reply': return { ...state, reply: event.text };
     case 'error': return { ...state, error: event.message };
@@ -775,6 +810,7 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
         <div>
           <div className="dispatch-step-head">
             <b>S{index + 1} · {step.name}</b>
+            {(step.depends_on ?? []).length > 0 && <span className="muted small">{t('dispatchAfter', { steps: (step.depends_on ?? []).map(d => `S${d + 1}`).join(', ') })}</span>}
             <span className={`dispatch-authority ${step.authority}`}>{t(`authority.${step.authority}`)}</span>
             <span className="dispatch-status">{t(`dispatchStatus.${step.status}`)}</span>
             {step.status === 'running' && <Elapsed />}
@@ -789,6 +825,10 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
       <div className="assistant-prose">{summary}</div>
     </div>}
     {reply.error && <div className="assistant-error" role="alert">{t('failed')} · {reply.error}</div>}
+    {(reply.clarify ?? []).map((item, index) => <div key={index} className="assistant-card compact dispatch-clarify">
+      <b>{item.question}</b>
+      <div className="dispatch-chips">{item.options.map(code => <span key={code} className="assistant-cite">{code}</span>)}</div>
+    </div>)}
     {reply.steps.map((step, index) => {
       if (step.status !== 'ok' || !step.data) return null;
       const data = step.data;
@@ -806,13 +846,44 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
           <CaseReply caseId={caseId} summary={intake} projects={projects} planningAgent={planningAgent} />
         </>;
       } else if (step.agent === 'knowledge') {
-        body = <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />;
+        body = <>
+          {(data.coverage_gaps ?? []).map((gap, i) => <p key={i} className="assistant-text coverage-gap">{gap}</p>)}
+          <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />
+        </>;
       } else if (step.agent === 'progress') {
-        body = <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />;
+        body = <>
+          {step.summary && <p className="assistant-text">{step.summary}</p>}
+          <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />
+        </>;
+      } else if (step.agent === 'twin') {
+        body = <TwinReply summary={step.summary ?? ''} data={data} />;
+      } else if (step.agent === 'commissioning') {
+        body = <CommissioningReply summary={step.summary ?? ''} items={data.items ?? []} />;
+      } else if (step.agent === 'precedents') {
+        body = <PrecedentsReply summary={step.summary ?? ''} rows={data.precedents ?? []} />;
+      } else if (step.agent === 'briefing') {
+        body = <BriefingReply summary={step.summary ?? ''} items={data.items ?? []} />;
+      } else if (step.agent === 'contract_review') {
+        body = <ContractReviewReply summary={step.summary ?? ''} data={data} />;
       } else if (step.agent === 'approvals') {
         body = <ApprovalsReply />;
       } else if (step.agent === 'field') {
         body = <FieldDispatchReply reports={data.reports ?? []} />;
+      } else if (step.agent === 'compare') {
+        body = <CompareReply table={data.table ?? []} answer={data.answer ?? null} />;
+      } else if (step.agent === 'glossary') {
+        body = <GlossaryReply terms={data.terms ?? []} />;
+      } else if (step.agent === 'gates') {
+        body = <>
+          <GatesReply rows={data.gates ?? []} />
+          {(data.hits ?? []).length > 0 && <KnowledgeReply query={step.query} hits={data.hits ?? []} answer={null} />}
+        </>;
+      } else if (step.agent === 'drawing') {
+        body = <p className="assistant-text assistant-prose">{step.summary}</p>;
+      } else if (step.agent === 'self') {
+        body = <SelfReply summary={step.summary ?? ''} data={data} />;
+      } else if (step.agent === 'draft') {
+        body = <DraftPointsReply points={data.points ?? []} caseId={data.case_id ?? null} />;
       }
       if (!body) return null;
       return <section key={step.index} id={sectionId(index)} className="dispatch-section">
@@ -820,7 +891,177 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
         {body}
       </section>;
     })}
+    {reply.trace && <TraceView trace={reply.trace} steps={reply.steps} />}
   </div>;
+}
+
+const LEVEL_ICON: Record<CoverageLevel, string> = { covered: '●', thin: '◐', none: '○', legal_only: '◔' };
+
+function SelfReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  const focus = new Set(data.focus_domains ?? []);
+  const rows = (data.coverage ?? []).filter(row => focus.size === 0 || focus.has(row.id));
+  const countries = Object.keys(rows[0]?.countries ?? {});
+  return <div>
+    <p className="assistant-text assistant-prose">{summary}</p>
+    {rows.length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('selfDomain')}</th>{countries.map(code => <th key={code}>{code}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.id}>
+        <td><b>{row.name}</b>{focus.size > 0 && <div className="muted small">{row.note}</div>}</td>
+        {countries.map(code => {
+          const cell = row.countries[code];
+          return <td key={code} title={t(`selfLevel.${cell.level}`)} className={`coverage-${cell.level}`}>
+            {LEVEL_ICON[cell.level]} {cell.clauses}
+          </td>;
+        })}
+      </tr>)}</tbody>
+    </table>}
+    <p className="muted small">{(['covered', 'thin', 'legal_only', 'none'] as CoverageLevel[]).map(level => `${LEVEL_ICON[level]} ${t(`selfLevel.${level}`)}`).join(' · ')} · {t('selfCount')}</p>
+    {focus.size === 0 && (data.agents ?? []).length > 0 && <details className="dispatch-trace">
+      <summary>{t('selfAgents', { count: data.agents!.length })}</summary>
+      <ul className="small">{data.agents!.map(agent => <li key={agent.id}><b>{agent.name}</b> · {t(`authority.${agent.authority}`)} — {agent.role}</li>)}</ul>
+    </details>}
+    {(data.boundaries ?? []).length > 0 && <ul className="muted small">{data.boundaries!.map((line, index) => <li key={index}>{line}</li>)}</ul>}
+  </div>;
+}
+
+function TwinReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {(data.assets ?? []).length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('twinAsset')}</th><th>{t('twinStatus')}</th><th>{t('twinHealth')}</th><th>{t('twinMaintenance')}</th></tr></thead>
+      <tbody>{data.assets!.map(asset => <tr key={asset.id}>
+        <td><b>{asset.name}</b><div className="muted small">{asset.id}</div></td>
+        <td>{asset.status}<div className="muted small">{asset.stage} · {asset.progress.toFixed(0)}%</div></td>
+        <td className={asset.health < 70 ? 'coverage-legal_only' : asset.health < 85 ? 'coverage-thin' : 'coverage-covered'}>{asset.health.toFixed(0)}
+          {asset.sensors.filter(s => s.level !== 'NORMAL').map(s => <div key={s.id} className="small">⚠ {s.type} {s.value}{s.unit}</div>)}</td>
+        <td className="small">{asset.maintenance.map(m => <div key={m.id}>{m.id} · {m.priority} · {m.due_at}</div>)}</td>
+      </tr>)}</tbody>
+    </table>}
+    <Link className="assistant-link" href="/twin">{t('twinOpen')} →</Link>
+  </div>;
+}
+
+function CommissioningReply({ summary, items }: { summary: string; items: NonNullable<StepData['items']> }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {items.length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('cxSystem')}</th><th>{t('cxStage')}</th><th>{t('cxPunch')}</th><th>{t('cxDocs')}</th><th>{t('cxReadiness')}</th></tr></thead>
+      <tbody>{items.map(item => <tr key={item.id}>
+        <td><b>{item.system}</b><div className="muted small">{item.test_pack}</div></td>
+        <td className="small">{item.stage}</td><td>{item.punch_open}</td><td>{item.documents?.toFixed(0)}%</td>
+        <td className={item.ready ? 'coverage-covered' : 'coverage-thin'}>{item.readiness?.toFixed(0)}% {item.ready ? '✓' : ''}</td>
+      </tr>)}</tbody>
+    </table>}
+  </div>;
+}
+
+function PrecedentsReply({ summary, rows }: { summary: string; rows: NonNullable<StepData['precedents']> }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {rows.map(row => <div key={row.case_id} className="assistant-card compact">
+      <div className="assistant-card-head"><RiskBadge risk={row.risk} /><b>{row.title}</b></div>
+      <p className="muted small">{row.type} · {row.status} · {row.resolved ? t('precedentClosed') : t('precedentOpen')} · {t('precedentMatch', { pct: Math.round(row.similarity * 100) })} · <Link href={`/cases/${row.case_id}`}>{row.case_id}</Link></p>
+    </div>)}
+  </div>;
+}
+
+function BriefingReply({ summary, items }: { summary: string; items: NonNullable<StepData['items']> }) {
+  const t = useTranslations('Assistant');
+  const label: Record<string, string> = { case: t('briefCase'), sensor: t('briefSensor'), maintenance: t('briefMaintenance'), schedule: t('briefSchedule') };
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    <ul className="dispatch-brief">{items.map((item, index) => <li key={index}>
+      <RiskBadge risk={(item.risk ?? 'MEDIUM').toUpperCase()} /> <span className="muted small">{label[item.kind ?? ''] ?? item.kind}</span> {item.text}
+      {item.kind === 'case' && item.ref && <> · <Link href={`/cases/${item.ref}`}>{item.ref}</Link></>}
+    </li>)}</ul>
+  </div>;
+}
+
+function ContractReviewReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  const head = summary.split('\n')[0];
+  return <div>
+    <p className="assistant-text">{head}</p>
+    <table className="dispatch-table">
+      <thead><tr><th>{t('crRisk')}</th><th>{t('crTerm')}</th><th>{t('crFinding')}</th></tr></thead>
+      <tbody>{(data.findings ?? []).map((finding, index) => <tr key={index}>
+        <td className={`cr-${finding.risk}`}><b>{t(`crLevel.${finding.risk}`)}</b></td>
+        <td>{finding.name}</td>
+        <td>{finding.finding}{finding.basis.map(ref => <span key={ref} className="assistant-cite">{ref}</span>)}
+          {finding.excerpt && <div className="muted small">“{finding.excerpt}”</div>}</td>
+      </tr>)}</tbody>
+    </table>
+    {(data.related ?? []).length > 0 && <KnowledgeReply query={t('crRelated')} hits={data.related ?? []} answer={null} />}
+    <p className="muted small">{t('crBoundary')}</p>
+  </div>;
+}
+
+function CompareReply({ table, answer }: { table: NonNullable<StepData['table']>; answer: string | null }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    {answer && <div className="assistant-prose">{answer}</div>}
+    <table className="dispatch-table">
+      <thead><tr><th>{t('compareCountry')}</th><th>{t('compareClauses')}</th></tr></thead>
+      <tbody>{table.map(row => <tr key={row.country}>
+        <td><b>{row.country_name}</b></td>
+        <td>{row.clauses.length ? row.clauses.map(hit => <div key={hit.source_ref}>
+          <span className="assistant-cite">{hit.source_ref}</span> {hit.title}
+        </div>) : <span className="muted">{t('compareGap')}</span>}</td>
+      </tr>)}</tbody>
+    </table>
+    <p className="muted small">{t('knowledgeBoundary')}</p>
+  </div>;
+}
+
+function GlossaryReply({ terms }: { terms: NonNullable<StepData['terms']> }) {
+  const t = useTranslations('Assistant');
+  if (!terms.length) return <p className="assistant-text">{t('glossaryNone')}</p>;
+  return <table className="dispatch-table">
+    <thead><tr><th>{t('compareCountry')}</th><th>中文 / English</th><th>{t('glossaryLocal')}</th><th>{t('glossaryBasis')}</th></tr></thead>
+    <tbody>{terms.map(term => <tr key={`${term.country}-${term.id}`}>
+      <td>{term.country}</td><td>{term.zh} / {term.en}</td>
+      <td dir={term.local_lang === 'ar' ? 'rtl' : undefined} lang={term.local_lang}><b>{term.local}</b></td>
+      <td className="small">{term.attested ? t('glossaryAttested') : t('glossaryCompiled')}</td>
+    </tr>)}</tbody>
+  </table>;
+}
+
+function GatesReply({ rows }: { rows: NonNullable<StepData['gates']> }) {
+  const t = useTranslations('Assistant');
+  return <div>{rows.map(row => <div key={row.country} className="assistant-card compact">
+    <div className="assistant-section-label">{row.country}</div>
+    {row.gates.length ? <ul>{row.gates.map(gate => <li key={gate.code}><b>{gate.code}</b> {gate.name} <span className="muted small">· {gate.authority} · {gate.gate}</span></li>)}</ul>
+      : <p className="muted small">{t('gatesNone')}</p>}
+  </div>)}</div>;
+}
+
+function DraftPointsReply({ points, caseId }: { points: NonNullable<StepData['points']>; caseId: string | null }) {
+  const t = useTranslations('Assistant');
+  return <div className="assistant-card dispatch-draft">
+    <div className="assistant-section-label">{t('draftNotSent')}</div>
+    <ol>{points.map((point, index) => <li key={index}>{point.text}{point.refs.map(ref => <span key={ref} className="assistant-cite">{ref}</span>)}</li>)}</ol>
+    <p className="muted small">{t('draftBoundary')}{caseId && <> · <Link href={`/cases/${caseId}`}>{caseId}</Link></>}</p>
+  </div>;
+}
+
+function TraceView({ trace, steps }: { trace: Trace; steps: DispatchStep[] }) {
+  const t = useTranslations('Assistant');
+  const names = new Map(steps.map(step => [step.index, step.name]));
+  return <details className="dispatch-trace">
+    <summary>{t('traceTitle', { ms: trace.duration_ms, calls: trace.model_calls, refs: trace.refs.length })}</summary>
+    <ul className="small">
+      <li>{t('tracePlan', { method: trace.plan_method })}{trace.summary_method ? ` · ${t('traceSummary', { method: trace.summary_method, dropped: trace.dropped_sentences })}` : ''}</li>
+      {trace.focus_countries.length > 0 && <li>{t('traceFocus', { countries: trace.focus_countries.join(', ') })}</li>}
+      {trace.steps.map(step => <li key={step.index}>
+        S{step.index + 1} · {names.get(step.index) ?? step.agent} · {step.status} · {step.duration_ms} ms · {t('traceRefs', { count: step.refs })}
+        {step.depends_on.length > 0 && ` · ${t('dispatchAfter', { steps: step.depends_on.map(d => `S${d + 1}`).join(', ') })}`}
+      </li>)}
+    </ul>
+  </details>;
 }
 
 function FieldDispatchReply({ reports }: { reports: NonNullable<StepData['reports']> }) {

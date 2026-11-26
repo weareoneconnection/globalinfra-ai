@@ -2,7 +2,7 @@
 """Answer-level evaluation of the dispatching assistant (deterministic, offline).
 
 ``run_dispatch_eval.py`` checks only which sub-agents a message is routed
-to. This suite checks what comes back. Each of the 40 team-written messages
+to. This suite checks what comes back. Each of the 64 team-written messages
 (Chinese, English, Arabic, Malay, Indonesian) goes to ``/assistant/dispatch``
 with no model, so the rule planner and the retrieval path are measured:
 
@@ -12,7 +12,24 @@ with no model, so the rule planner and the retrieval path are measured:
 - jurisdiction: no source from a country the question did not name
   (cross-country leakage);
 - abstention: a question outside the corpus returns no source;
-- progress: a progress step lists exactly the projects of the named country.
+- progress: a progress step lists exactly the projects of the named country;
+- sub-agents (P1): a comparison reports a country the library has no clause
+  for instead of filling its cell; the glossary returns the expected local term, the permit
+  gates come from the right stage and country, a drawing question without a
+  drawing number never guesses one, and a reply draft is marked not sent,
+  waits for the steps it depends on and cites only clauses they retrieved;
+- self-knowledge: "what can you do?" lists every sub-agent and names the
+  domains the library cannot answer; "can you answer Saudi quality
+  questions?" is scoped to that domain and country; a building-code question
+  states that the library has no technical provisions;
+- lifecycle agents: contract review flags pay-when-paid and an exclusion of
+  structural liability with the clause that voids them (synthetic contract
+  texts); the twin reports the named element; commissioning applies the
+  handover rule; precedents find the related work order and never return the
+  one just created; the briefing stays in the named project; progress sets
+  a requested extension against the schedule variance;
+- focus (P2): a follow-up in the same session ("and overtime?") searches the
+  country the conversation is about, or the one the follow-up names.
 
 Clause ids were chosen by the team from the shipped clause library. With a
 model configured the planner and the wording of the answer change; that run
@@ -35,7 +52,19 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
 DATASET = API / "evals" / "dispatch_answers.jsonl"
-GATE_THRESHOLDS = {"routing": 95.0, "evidence_hit": 90.0, "no_leakage": 100.0, "abstention": 100.0, "progress_scope": 100.0}
+GATE_THRESHOLDS = {"routing": 95.0, "evidence_hit": 90.0, "no_leakage": 100.0, "abstention": 100.0, "progress_scope": 100.0,
+                   "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0, "self_knowledge": 100.0,
+                   "lifecycle_agents": 100.0}
+
+
+def _dispatch(client, message, session_id=None):
+    body = {"message": message, **({"session_id": session_id} if session_id else {})}
+    response = client.post("/assistant/dispatch?lang=zh", json=body)
+    return [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+
+
+def _step(agents, done, agent):
+    return next((done.get(i) for i, a in enumerate(agents) if a == agent), None)
 
 
 def _rate(values: list[bool]) -> float | None:
@@ -47,16 +76,16 @@ def main() -> int:
     results = []
     with TestClient(app) as client:
         for row in rows:
-            response = client.post("/assistant/dispatch?lang=zh", json={"message": row["message"]})
-            events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+            events = _dispatch(client, row["message"])
             plan = next(e for e in events if e["type"] == "plan")
             agents = [s["agent"] for s in plan["steps"]]
             done = {e["index"]: e for e in events if e["type"] == "step_done"}
             expect = row["expect"]
             result = {"id": row["id"], "agents": agents, "routing": agents == row["agents"]}
-            knowledge = next((done.get(i) for i, a in enumerate(agents) if a == "knowledge"), None)
+            knowledge = _step(agents, done, "knowledge") or _step(agents, done, "compare")
             if knowledge is not None:
-                hits = (knowledge.get("data") or {}).get("hits") or []
+                data = knowledge.get("data") or {}
+                hits = data.get("hits") or [c for row_ in data.get("table") or [] for c in row_["clauses"]]
                 refs = [h["source_ref"] for h in hits]
                 countries = {h["country_code"] for h in hits if h.get("country_code")}
                 result.update(refs=refs, searched=(knowledge.get("data") or {}).get("countries"))
@@ -72,6 +101,96 @@ def main() -> int:
             if progress is not None and "projects" in expect:
                 codes = [p["code"] for p in (progress.get("data") or {}).get("projects", [])]
                 result.update(projects=codes, progress_scope=sorted(codes) == sorted(expect["projects"]))
+            if expect.get("gap_countries"):
+                # The library has no clause for that country: the comparison must say so, not fill the cell.
+                table = {row_["country"]: row_["clauses"] for row_ in ((knowledge or {}).get("data") or {}).get("table") or []}
+                result["sub_agents"] = all(c in table and not table[c] for c in expect["gap_countries"]) and \
+                    "未找到" in (knowledge or {}).get("summary", "")
+            if "self" in expect:
+                own = _step(agents, done, "self") or {}
+                data, want = own.get("data") or {}, expect["self"]
+                checks = [own.get("status") == "ok"]
+                if want.get("all_agents"):
+                    from app.dispatcher import AGENTS
+                    checks.append({a["id"] for a in data.get("agents") or []} == set(AGENTS))
+                for domain in want.get("gap_domains", []):
+                    row = next((r for r in data.get("coverage") or [] if r["id"] == domain), None)
+                    checks.append(bool(row) and all(c["level"] != "covered" for c in row["countries"].values())
+                                  and row["name"] in own.get("summary", "").split("较少或没有")[-1])
+                if "domains" in want:
+                    checks.append(data.get("focus_domains") == want["domains"])
+                if "countries" in want:
+                    checks.append(all(sorted(r["countries"]) == want["countries"] for r in data.get("coverage") or []))
+                result["self_knowledge"] = all(checks)
+            lifecycle = []
+            if "contract" in expect:
+                step = _step(agents, done, "contract_review") or {}
+                findings = (step.get("data") or {}).get("findings") or []
+                high = {f["category"] for f in findings if f["risk"] == "high"}
+                lifecycle.append(step.get("status") == "ok" and set(expect["contract"]["basis"]) <= set(step.get("refs") or [])
+                                 and set(expect["contract"]["high_categories"]) <= high)
+            if "twin_element" in expect:
+                matched = ((_step(agents, done, "twin") or {}).get("data") or {}).get("matched") or []
+                lifecycle.append(bool(matched) and all(m.endswith("-" + expect["twin_element"]) for m in matched))
+            if expect.get("commissioning"):
+                items = ((_step(agents, done, "commissioning") or {}).get("data") or {}).get("items") or []
+                lifecycle.append(bool(items) and all(i["ready"] == (i["readiness"] >= 95 and i["punch_open"] == 0) for i in items))
+            if "precedent" in expect:
+                rows_ = ((_step(agents, done, "precedents") or {}).get("data") or {}).get("precedents") or []
+                lifecycle.append(expect["precedent"] in [r["case_id"] for r in rows_])
+            if expect.get("precedent_excludes_new"):
+                new_case = (_step(agents, done, "intake") or {}).get("case_id")
+                rows_ = ((_step(agents, done, "precedents") or {}).get("data") or {}).get("precedents") or []
+                lifecycle.append(bool(new_case) and new_case not in [r["case_id"] for r in rows_])
+            if "briefing_projects" in expect:
+                lifecycle.append(((_step(agents, done, "briefing") or {}).get("data") or {}).get("project_ids") == expect["briefing_projects"])
+            if "eot_days" in expect:
+                data = (_step(agents, done, "progress") or {}).get("data") or {}
+                lifecycle.append(data.get("eot_requested_days") == expect["eot_days"] and all(
+                    p["variance_after_eot"] == p["schedule_variance"] + expect["eot_days"] for p in data.get("projects") or []))
+            if lifecycle:
+                result["lifecycle_agents"] = all(lifecycle)
+            if expect.get("coverage_gap"):
+                gaps = ((knowledge or {}).get("data") or {}).get("coverage_gaps") or []
+                result["self_knowledge"] = bool(gaps) and not any(ch.isdigit() for ch in " ".join(gaps))
+            glossary, gates, drawing, draft = (_step(agents, done, a) for a in ("glossary", "gates", "drawing", "draft"))
+            if "terms" in expect and glossary is not None:
+                terms = (glossary.get("data") or {}).get("terms") or []
+                result["terms"] = [(t["country"], t["local"]) for t in terms]
+                result["sub_agents"] = all(any(t["country"] == c and (local is None or t["local"] == local) for t in terms)
+                                           for c, local in expect["terms"].items())
+            elif "terms" in expect:
+                result["sub_agents"] = False
+            if "gates_fallback_refs" in expect:
+                result["sub_agents"] = set(expect["gates_fallback_refs"]) <= set((gates or {}).get("refs") or [])
+            if "gates" in expect:
+                data = (gates or {}).get("data") or {}
+                result["sub_agents"] = (data.get("stage") == expect["gates"]["stage"]
+                                        and data.get("countries") == expect["gates"]["countries"]
+                                        and all(row_["gates"] for row_ in data.get("gates") or [{}]))
+            if expect.get("drawing_no_guess"):
+                result["sub_agents"] = drawing is not None and "drawing_id" not in (drawing.get("data") or {})
+            if expect.get("draft"):
+                retrieved = {ref for i, a in enumerate(agents) if a != "draft" for ref in (done.get(i) or {}).get("refs") or []}
+                data = (draft or {}).get("data") or {}
+                starts = [e["index"] for e in events if e["type"] == "step_start"]
+                draft_index = agents.index("draft") if "draft" in agents else None
+                result["draft_grounded"] = bool(
+                    draft and draft["status"] == "ok" and data.get("status") == "DRAFT_NOT_SENT"
+                    and all(set(p["refs"]) <= retrieved for p in data.get("points") or [])
+                    and draft_index is not None
+                    and all(starts.index(d) < starts.index(draft_index) for d in plan["steps"][draft_index]["depends_on"]))
+            if row.get("follow_up"):
+                session_id = next(e for e in events if e["type"] == "session")["session_id"]
+                follow = _dispatch(client, row["follow_up"], session_id)
+                follow_plan = next(e for e in follow if e["type"] == "plan")["steps"]
+                follow_done = {e["index"]: e for e in follow if e["type"] == "step_done"}
+                step = _step([s["agent"] for s in follow_plan], follow_done, "knowledge") or {}
+                data = step.get("data") or {}
+                found = {h["country_code"] for h in data.get("hits") or [] if h.get("country_code")}
+                result.update(follow_up_countries=data.get("countries"),
+                              focus=data.get("countries") == expect["follow_up_countries"]
+                              and bool(found) and found <= set(expect["follow_up_countries"]))
             results.append(result)
     metrics = {key: _rate([r[key] for r in results if key in r]) for key in GATE_THRESHOLDS}
     for lang, ids in {"ar": ("A13", "A14", "A15", "A20"), "ms_id": ("A16", "A17", "A18", "A19")}.items():
