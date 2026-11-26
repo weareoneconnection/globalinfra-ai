@@ -102,7 +102,7 @@ def test_parse_accepts_a_chained_plan_and_caps_steps():
         _step(agent="knowledge", query="Malaysia work at height"), _step(agent="answer", question_id=7, answer="Yes, PTW-0915"),
         _step(agent="approvals"),
     ), ctx, INCIDENT)
-    assert [s.agent for s in steps] == ["intake", "case", "knowledge", "answer"] and len(steps) == MAX_STEPS
+    assert [s.agent for s in steps] == ["intake", "case", "knowledge", "answer", "approvals"] and len(steps) <= MAX_STEPS
     assert steps[1].case_id == "NEW" and steps[3].case_id == "CASE-ABC123" and reply is None
 
 

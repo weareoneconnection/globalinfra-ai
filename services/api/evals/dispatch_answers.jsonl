@@ -18,9 +18,9 @@
 {"id": "A18", "message": "Bagaimana peraturan tenaga kerja konstruksi asing di Indonesia?", "agents": ["knowledge"], "expect": {"refs": ["ID-UU2-2017-PASAL-74"], "countries": ["ID"]}}
 {"id": "A19", "message": "Apakah syarat pegawai keselamatan dan kesihatan di Malaysia?", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT514-S29"], "countries": ["MY"]}}
 {"id": "A20", "message": "ما هي شروط رخصة العمل لغير السعوديين في السعودية؟", "agents": ["knowledge"], "expect": {"refs": ["SA-LABOR-ART-33"], "countries": ["SA"]}}
-{"id": "A21", "message": "比较马来西亚和沙特对工伤的规定", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "SA"], "countries": ["MY", "SA"]}}
-{"id": "A22", "message": "Compare Malaysia and Indonesia regulation on safety committees", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "ID"], "countries": ["MY", "ID"]}}
-{"id": "A23", "message": "阿联酋和沙特的加班规定有什么不同？", "agents": ["knowledge"], "expect": {"refs_from_countries": ["AE", "SA"], "countries": ["AE", "SA"]}}
+{"id": "A21", "message": "比较马来西亚和沙特对工伤的规定", "agents": ["compare"], "expect": {"refs_from_countries": ["MY", "SA"], "countries": ["MY", "SA"]}}
+{"id": "A22", "message": "Compare Malaysia and Indonesia regulation on safety committees", "agents": ["compare"], "expect": {"refs_from_countries": ["MY", "ID"], "countries": ["MY", "ID"]}}
+{"id": "A23", "message": "阿联酋和沙特的加班规定有什么不同？", "agents": ["compare"], "expect": {"refs_from_countries": ["AE", "SA"], "countries": ["AE", "SA"]}}
 {"id": "A24", "message": "印尼和马来西亚个人数据保护法的规定", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "ID"], "countries": ["MY", "ID"]}}
 {"id": "A25", "message": "马来西亚项目进度", "agents": ["progress"], "expect": {"projects": ["MY-RAIL-A"]}}
 {"id": "A26", "message": "Saudi project progress", "agents": ["progress"], "expect": {"projects": ["SA-METRO-C"]}}
@@ -38,3 +38,13 @@
 {"id": "A38", "message": "马来西亚雇员的年假规定", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT265-S60E"], "countries": ["MY"]}}
 {"id": "A39", "message": "Indonesia level crossing railway regulation", "agents": ["knowledge"], "expect": {"refs": ["ID-UU23-2007-PASAL-91"], "countries": ["ID"]}}
 {"id": "A40", "message": "沙特民法对约定赔偿金的规定", "agents": ["knowledge"], "expect": {"refs": ["SA-CTL-ART-178-179"], "countries": ["SA"]}}
+{"id": "A41", "message": "服务期满酬金用阿语怎么说？阿联酋", "agents": ["glossary"], "expect": {"terms": {"AE": "مكافأة نهاية الخدمة"}}}
+{"id": "A42", "message": "How do you say work at height in Malay?", "agents": ["glossary"], "expect": {"terms": {"MY": null}}}
+{"id": "A43", "message": "沙特项目施工阶段需要哪些许可？", "agents": ["gates"], "expect": {"gates": {"stage": "construction", "countries": ["SA"]}}}
+{"id": "A44", "message": "What permits are needed in the design stage in Indonesia?", "agents": ["gates"], "expect": {"gates": {"stage": "design", "countries": ["ID"]}}}
+{"id": "A45", "message": "图纸上桥墩的尺寸是多少？", "agents": ["drawing"], "expect": {"drawing_no_guess": true}}
+{"id": "A46", "message": "尊敬的承包商：贵方在印尼雅加达项目施工中占用了我方便道，造成居民通行受阻，请于7日内书面答复并恢复原状。请建工单、查相关条款并起草回函要点。", "agents": ["intake", "knowledge", "draft"], "expect": {"draft": true, "countries": ["ID"]}}
+{"id": "A47", "message": "P47 墩高处作业无防护，业主要求整改。另外查一下马来西亚高处作业规定，并起草回复要点", "agents": ["intake", "knowledge", "draft"], "expect": {"draft": true, "refs": ["MY-HSE-WAH-01"], "countries": ["MY"]}}
+{"id": "A48", "message": "沙特斋月期间每天最多工作几小时？", "follow_up": "那加班费呢？", "agents": ["knowledge"], "expect": {"follow_up_countries": ["SA"]}}
+{"id": "A49", "message": "马来西亚的年假规定是什么？", "follow_up": "那印尼呢？年假规定", "agents": ["knowledge"], "expect": {"follow_up_countries": ["ID"]}}
+{"id": "A50", "message": "Compare UAE and Saudi end-of-service gratuity", "agents": ["compare"], "expect": {"refs": ["AE-FDL33-2021-ART-51"], "countries": ["AE", "SA"], "gap_countries": ["SA"]}}
