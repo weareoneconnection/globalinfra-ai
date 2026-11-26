@@ -1,0 +1,12 @@
+{
+  "authorization_id": "AUTH-2026-001",
+  "grantor_organisation": "<授权单位全称，例如项目业主或总承包商>",
+  "grantor_role": "<授权人职务，例如项目经理 / 法务负责人>",
+  "granted_on": "2026-12-01",
+  "expires_on": "2027-06-30",
+  "purpose": "交融杯决赛演示与试点评估中使用经脱敏的项目往来文件",
+  "permitted_uses": ["competition_demo", "pilot_evaluation"],
+  "document_types": ["CORRESPONDENCE", "NCR", "DAILY_REPORT", "VARIATION_REQUEST"],
+  "countries": ["MY"],
+  "evidence_ref": "<签字授权书的存档编号或位置；授权书原件不要放进代码仓库>"
+}
