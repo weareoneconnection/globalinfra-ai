@@ -551,6 +551,8 @@
     "geometryElement": "确认源几何", "geometryElementHint": "选择工程师已经在原图上核对的房间或构件。", "noGeometry": "尚未提取到几何候选项",
     "confirming": "确认中…", "confirm": "确认参数",
     "modelKicker": "确定性输出", "modelTitle": "3D 与 IFC 草模",
+    "modelSynced": "Draft BIM 已生成并回写助手",
+    "modelAutoSynced": "当前对话已自动同步模型版本、产物与校验结果。",
     "modelHint": "几何由已确认的证据和确定性规则生成，不允许模型自由想象。",
     "generating": "生成中…", "generate": "生成 3D + IFC",
     "draftVersion": "草模版本", "download": "下载",

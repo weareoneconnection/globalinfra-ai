@@ -76,7 +76,7 @@ type DrawingDetail = {
 type Citation = Evidence & { id?: string | number; element_id?: string; label?: string };
 type AskResult = { answer: string; citations: Citation[]; confidence?: number };
 type Artifact = { type: string; url: string; sha256?: string; bytes?: number };
-type DraftModel = {
+export type DrawingModelSnapshot = {
   status: string;
   version?: string;
   gltfUrl?: string;
@@ -84,6 +84,15 @@ type DraftModel = {
   validation: Record<string, unknown>;
   objects: TwinObject[];
 };
+
+export type DrawingReviewUpdate = {
+  drawingId: string;
+  action: 'refreshed' | 'confirmed' | 'model_generated';
+  detail?: unknown;
+  model?: DrawingModelSnapshot;
+};
+
+type DraftModel = DrawingModelSnapshot;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -311,12 +320,13 @@ function GatePanel({ gate }: { gate: ModelGate }) {
   </div>;
 }
 
-export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage = 1, initialElementId = '', reviewMode = false }: {
+export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage = 1, initialElementId = '', reviewMode = false, onUpdate }: {
   projects: Project[];
   initialDrawingId?: string;
   initialPage?: number;
   initialElementId?: string;
   reviewMode?: boolean;
+  onUpdate?: (update: DrawingReviewUpdate) => void;
 }) {
   const t = useTranslations('Drawings');
   const locale = useLocale();
@@ -481,7 +491,10 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
           ...(sourceCalibration ? { source_calibration_m_per_pixel: Number(sourceCalibration) } : {}),
         }),
       });
-      setDetail(normalizeDrawing(await jsonResponse(response)));
+      const payload = await jsonResponse(response);
+      const next = normalizeDrawing(payload);
+      setDetail(next);
+      onUpdate?.({ drawingId: next.id, action: 'confirmed', detail: payload });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('unknownError'));
     } finally { setConfirming(false); }
@@ -496,7 +509,9 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
         method: 'POST', headers: { 'content-type': 'application/json', 'accept-language': locale },
         body: JSON.stringify({ formats: ['GLTF', 'IFC'], publish: false }),
       });
-      setModel(normalizeModel(await jsonResponse(response), detail.id));
+      const next = normalizeModel(await jsonResponse(response), detail.id);
+      setModel(next);
+      onUpdate?.({ drawingId: detail.id, action: 'model_generated', model: next });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('unknownError'));
     } finally { setGenerating(false); }

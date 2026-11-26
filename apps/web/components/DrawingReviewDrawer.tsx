@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import type { DrawingReviewUpdate } from './DrawingWorkspace';
 
 function DrawingReviewLoading() {
   const t = useTranslations('Drawings');
@@ -23,10 +24,11 @@ export type DrawingReviewTarget = {
   elementId: string;
 };
 
-export function DrawingReviewDrawer({ projects, target, onClose }: {
+export function DrawingReviewDrawer({ projects, target, onClose, onUpdate }: {
   projects: Project[];
   target: DrawingReviewTarget;
   onClose: () => void;
+  onUpdate: (update: DrawingReviewUpdate) => void;
 }) {
   const t = useTranslations('Drawings');
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -71,6 +73,7 @@ export function DrawingReviewDrawer({ projects, target, onClose }: {
           initialPage={target.page}
           initialElementId={target.elementId}
           reviewMode
+          onUpdate={onUpdate}
         />
       </div>
     </section>

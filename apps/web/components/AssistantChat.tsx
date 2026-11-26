@@ -5,6 +5,8 @@ import { ChangeEvent, FormEvent, KeyboardEvent, ReactNode, useCallback, useEffec
 import { useLocale, useTranslations } from 'next-intl';
 import { RiskBadge } from './RiskBadge';
 import { DrawingReviewDrawer, type DrawingReviewTarget } from './DrawingReviewDrawer';
+import { DrawingModelReceipt } from './DrawingModelReceipt';
+import type { DrawingModelSnapshot, DrawingReviewUpdate } from './DrawingWorkspace';
 
 export type AssistantProject = {
   id: number; code: string; name: string; country_name: string; phase?: string; progress?: number;
@@ -36,6 +38,7 @@ type DrawingReply = {
   fields: { drawingNumber: string; revision: string; scale: string; unit: string; title: string };
   categories: Record<string, number>; modelReady: boolean; blockers: string[];
   question?: string; answer?: string; grounded?: boolean; citations?: DrawingCitation[];
+  model?: DrawingModelSnapshot;
 };
 
 type StepStatus = 'waiting' | 'running' | 'ok' | 'error';
@@ -218,6 +221,7 @@ function normalizeDrawingReply(payload: unknown, previous?: DrawingReply): Drawi
     answer: previous?.answer,
     grounded: previous?.grounded,
     citations: previous?.citations,
+    model: previous?.model,
   };
 }
 
@@ -260,6 +264,19 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   const textInput = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const closeDrawingReview = useCallback(() => setDrawingReview(null), []);
+  const applyDrawingUpdate = useCallback((update: DrawingReviewUpdate) => {
+    setMessages(current => current.map(message => {
+      if (message.role !== 'assistant' || message.reply?.kind !== 'drawing' || message.reply.drawingId !== update.drawingId) return message;
+      const refreshed = update.detail ? normalizeDrawingReply(update.detail, message.reply) : message.reply;
+      return {
+        ...message,
+        reply: {
+          ...refreshed,
+          model: update.model ?? refreshed.model,
+        },
+      };
+    }));
+  }, []);
 
   useEffect(() => {
     try {
@@ -604,14 +621,14 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
                 {message.intent === 'dispatch' ? t('dispatch') : message.intent ? t(`intents.${message.intent}`) : t('understanding')}
                 {message.intent && message.method && <span className={`assistant-method ${message.method}`}>{t(`methods.${message.method}`)}</span>}
               </div>
-              {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} onOpenDrawing={setDrawingReview} /> : <Thinking intent={message.intent ?? 'help'} />}
+              {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} onOpenDrawing={setDrawingReview} onDrawingUpdate={applyDrawingUpdate} /> : <Thinking intent={message.intent ?? 'help'} />}
             </div>
           </div>)}
         <div ref={endRef} />
       </div>
       <div className="assistant-dock">{composer}{chips}</div>
     </div>
-    {drawingReview ? <DrawingReviewDrawer projects={projects} target={drawingReview} onClose={closeDrawingReview} /> : null}
+    {drawingReview ? <DrawingReviewDrawer projects={projects} target={drawingReview} onClose={closeDrawingReview} onUpdate={applyDrawingUpdate} /> : null}
   </>;
 }
 
@@ -625,11 +642,12 @@ function Thinking({ intent }: { intent: Intent }) {
   return <div className="assistant-thinking"><span className="assistant-dots"><i /><i /><i /></span>{intent === 'drawing' ? t('thinkingDrawing') : intent === 'incident' ? t('thinkingIncident') : t('thinking')}{seconds > 2 && <small>{seconds}s</small>}</div>;
 }
 
-function ReplyView({ reply, projects, planningAgent, onOpenDrawing }: {
+function ReplyView({ reply, projects, planningAgent, onOpenDrawing, onDrawingUpdate }: {
   reply: Reply;
   projects: AssistantProject[];
   planningAgent: string;
   onOpenDrawing: (target: DrawingReviewTarget) => void;
+  onDrawingUpdate: (update: DrawingReviewUpdate) => void;
 }) {
   const t = useTranslations('Assistant');
   switch (reply.kind) {
@@ -640,14 +658,18 @@ function ReplyView({ reply, projects, planningAgent, onOpenDrawing }: {
     case 'knowledge': return <KnowledgeReply query={reply.query} hits={reply.hits} answer={reply.answer ?? null} />;
     case 'progress': return <ProgressReply projects={reply.projectId ? projects.filter(p => p.id === reply.projectId) : projects} />;
     case 'approvals': return <ApprovalsReply />;
-    case 'drawing': return <DrawingReplyCard reply={reply} onOpenDrawing={onOpenDrawing} />;
+    case 'drawing': return <DrawingReplyCard reply={reply} onOpenDrawing={onOpenDrawing} onDrawingUpdate={onDrawingUpdate} />;
     case 'help': return <div className="assistant-text">{t('help')}</div>;
     case 'error': return <div className="assistant-error" role="alert">{t('failed')} · {reply.message}</div>;
     case 'dispatch': return <DispatchReply reply={reply} projects={projects} planningAgent={planningAgent} />;
   }
 }
 
-function DrawingReplyCard({ reply, onOpenDrawing }: { reply: DrawingReply; onOpenDrawing: (target: DrawingReviewTarget) => void }) {
+function DrawingReplyCard({ reply, onOpenDrawing, onDrawingUpdate }: {
+  reply: DrawingReply;
+  onOpenDrawing: (target: DrawingReviewTarget) => void;
+  onDrawingUpdate: (update: DrawingReviewUpdate) => void;
+}) {
   const t = useTranslations('Assistant');
   const locale = useLocale();
   const [current, setCurrent] = useState(reply);
@@ -659,7 +681,9 @@ function DrawingReplyCard({ reply, onOpenDrawing }: { reply: DrawingReply; onOpe
     setRefreshing(true);
     try {
       const response = await fetch(`/backend/drawings/${encodeURIComponent(current.drawingId)}?lang=${locale}`, { cache: 'no-store' });
-      setCurrent(normalizeDrawingReply(await readJson(response), current));
+      const payload = await readJson(response);
+      setCurrent(normalizeDrawingReply(payload, current));
+      onDrawingUpdate({ drawingId: current.drawingId, action: 'refreshed', detail: payload });
     } finally { setRefreshing(false); }
   }
 
@@ -700,6 +724,7 @@ function DrawingReplyCard({ reply, onOpenDrawing }: { reply: DrawingReply; onOpe
       {current.citations?.length ? <div className="assistant-drawing-citations">{current.citations.slice(0, 6).map((citation, index) => <button type="button" onClick={() => onOpenDrawing(reviewTarget(citation))} key={`${citation.element_id ?? index}`}><span>S{citation.page ?? 1}</span>{citation.source_text || `E${index + 1}`}</button>)}</div> : null}
     </div> : null}
     {!current.modelReady && current.blockers.length ? <p className="assistant-boundary small">{t('drawingBlockers', { count: current.blockers.length })} · {current.blockers.slice(0, 4).join(' · ')}</p> : null}
+    {current.model ? <DrawingModelReceipt model={current.model} /> : null}
     <div className="assistant-actions">
       <button className="button" type="button" onClick={() => onOpenDrawing(reviewTarget(firstCitation))}>{t('drawingOpenWorkbench')}</button>
       <button className="button secondary" type="button" onClick={refresh} disabled={refreshing}>{refreshing ? t('drawingRefreshing') : t('drawingRefresh')}</button>
