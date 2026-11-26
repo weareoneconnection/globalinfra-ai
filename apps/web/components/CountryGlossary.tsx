@@ -7,7 +7,8 @@ type GlossaryResponse={country:string;total:number;terms:Term[];domains:string[]
 export type GlossaryLabels={glossaryFull:string;glossarySearch:string;glossaryAll:string;glossaryAttested:string;glossaryCompiled:string;glossaryReview:string;glossaryEmpty:string;glossaryShown:string;glossaryNotice:string;glossaryDomains:Record<string,string>};
 
 const ATTESTED='ATTESTED_IN:';
-const LANGUAGE:Record<string,{short:string;name:string}>={ms:{short:'BM',name:'BAHASA MALAYSIA'},id:{short:'BI',name:'BAHASA INDONESIA'}};
+const LANGUAGE:Record<string,{short:string;name:string}>={ms:{short:'BM',name:'BAHASA MALAYSIA'},id:{short:'BI',name:'BAHASA INDONESIA'},ar:{short:'AR',name:'العربية'}};
+const RTL=new Set(['ar']);
 
 export function CountryGlossary({code,labels}:{code:string;labels:GlossaryLabels}){
   const [data,setData]=useState<GlossaryResponse|null>(null);
@@ -50,7 +51,7 @@ export function CountryGlossary({code,labels}:{code:string;labels:GlossaryLabels
         return <div className="term-row" role="row" key={term.id}>
           <b role="cell">{term.en}<small>{domainLabel(term.domain)}</small></b>
           <span role="cell">{term.zh}</span>
-          <span role="cell" lang={term.local_lang}>{term.local}</span>
+          <span role="cell" lang={term.local_lang} dir={RTL.has(term.local_lang)?'rtl':undefined}>{term.local}</span>
           <em role="cell" className={source?'attested':'compiled'} title={source||labels.glossaryCompiled}>{source?`✓ ${source}`:labels.glossaryCompiled}</em>
         </div>;
       }):<p className="term-empty">{labels.glossaryEmpty}</p>}
