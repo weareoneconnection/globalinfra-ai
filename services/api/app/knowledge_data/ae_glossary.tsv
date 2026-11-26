@@ -182,3 +182,6 @@ AE-GL-0180	workforce	Emiratisation	本地化（阿联酋化）	التوطين	ar
 AE-GL-0181	regulatory	Decree-Law	法令	مرسوم بقانون	ar	ATTESTED_IN:Federal Decree-Law 33/2021 (Arabic)	NATIVE_REVIEW_REQUIRED
 AE-GL-0182	regulatory	Cabinet	内阁	مجلس الوزراء	ar	ATTESTED_IN:Federal Decree-Law 33/2021 (Arabic)	NATIVE_REVIEW_REQUIRED
 AE-GL-0183	workforce	experience certificate	工作经历证明	شهادة خبرة	ar	ATTESTED_IN:Federal Decree-Law 33/2021 (Arabic)	NATIVE_REVIEW_REQUIRED
+AE-GL-0184	workforce	work licence	工作执照	رخصة العمل	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+AE-GL-0185	workforce	periodic medical examination	定期体检	الفحص الطبي الدوري	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+AE-GL-0186	workforce	non-national workers	外籍员工	غير المواطنين	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED

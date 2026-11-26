@@ -41,6 +41,8 @@ import re
 from .classify import DEFAULT_RISK, DEFAULT_TYPE, classify_text
 from .domain import INTELLIGENCE_DOMAINS, LIFECYCLE_STAGES, PROFESSIONAL_DOMAINS
 from .i18n import bi
+from .multilingual import contains, normalize
+from .multilingual import detect_language as _detect_language_ml
 from .workflow import DEFAULT_SPECIALISTS, SPECIALISTS_BY_CASE_TYPE
 
 _CJK_RE = re.compile(r"[一-鿿]")
@@ -84,21 +86,26 @@ def _prof_slug(en_name: str) -> str:
 # matched as-is. A single text may surface several issues.
 ISSUE_SIGNALS: list[tuple[tuple[str, ...], dict]] = [
     (("unprotected edge", "fall protection", "working at height", "fall arrest",
-      "无防护", "坠落", "高处作业"), bi("Fall protection / working at height", "坠落防护 / 高处作业")),
-    (("no ppe", "without ppe", "ppe"), bi("PPE compliance", "个人防护装备合规")),
-    (("concrete crack", "structural crack", "crack", "裂缝"), bi("Structural crack", "结构裂缝")),
-    (("honeycomb", "surface defect", "spalling", "蜂窝", "表面缺陷"),
+      "无防护", "坠落", "高处作业", "tempat tinggi", "di ketinggian", "tepi terbuka", "perlindungan jatuh",
+      "pengaman jatuh", "العمل على ارتفاع", "على ارتفاع", "السقوط", "حافة غير محمية"), bi("Fall protection / working at height", "坠落防护 / 高处作业")),
+    (("no ppe", "without ppe", "ppe", "apd", "kelengkapan pelindung", "معدات الوقاية"), bi("PPE compliance", "个人防护装备合规")),
+    (("concrete crack", "structural crack", "crack", "裂缝", "retak", "rekahan", "تشقق", "شروخ"), bi("Structural crack", "结构裂缝")),
+    (("honeycomb", "surface defect", "spalling", "蜂窝", "表面缺陷", "sarang lebah", "keropos",
+      "cacat permukaan", "تعشيش"),
      bi("Concrete surface defect", "混凝土表面缺陷")),
-    (("access road", "haul road", "便道"), bi("Access road / temporary works", "施工便道 / 临时工程")),
-    (("encroachment", "侵占"), bi("Earthwork encroachment", "土方侵占")),
-    (("rectification", "rectify", "整改"), bi("Rectification request", "整改要求")),
-    (("method statement", "施工方案"), bi("Method statement review", "施工方案审查")),
-    (("permit", "local law", "local compliance", "regulation", "合规", "许可", "当地法规"),
+    (("access road", "haul road", "便道", "jalan masuk", "jalan akses", "jalan sementara", "طريق الوصول"), bi("Access road / temporary works", "施工便道 / 临时工程")),
+    (("encroachment", "侵占", "pencerobohan", "penyerobotan", "تعدي"), bi("Earthwork encroachment", "土方侵占")),
+    (("rectification", "rectify", "整改", "pembaikan", "pembetulan", "perbaikan", "diperbaiki",
+      "dibaiki", "إصلاح", "تصحيح"), bi("Rectification request", "整改要求")),
+    (("method statement", "施工方案", "pernyataan kaedah", "metode kerja", "بيان طريقة العمل"), bi("Method statement review", "施工方案审查")),
+    (("permit", "local law", "local compliance", "regulation", "合规", "许可", "当地法规", "lesen", "pematuhan",
+      "kelulusan", "izin", "perizinan", "kepatuhan", "ترخيص", "تصريح", "رخصة", "الامتثال"),
      bi("Local compliance / permit", "当地合规 / 许可")),
     (("variation order", "variation request", "request for variation", "change order", "变更令", "变更申请", "签证"),
      bi("Variation / change request", "变更 / 签证申请")),
-    (("owner notice", "employer notice", "通知函", "通知"), bi("Owner notice", "业主通知")),
-    (("delay", "extension of time", "eot", "延误", "工期"), bi("Schedule / delay impact", "进度 / 延误影响")),
+    (("owner notice", "employer notice", "通知函", "通知", "notis", "pemberitahuan", "اشعار", "إخطار"), bi("Owner notice", "业主通知")),
+    (("delay", "extension of time", "eot", "延误", "工期", "kelewatan", "keterlambatan", "lanjutan masa",
+      "التأخير", "تأخير", "تمديد مدة"), bi("Schedule / delay impact", "进度 / 延误影响")),
     # "ncr" only as a token: a bare substring also matches "encroachment".
     (("ncr-", " ncr ", "ncr ", "non-conformance", "不符合"), bi("Non-conformance (NCR)", "不符合项（NCR）")),
 ]
@@ -106,10 +113,13 @@ ISSUE_SIGNALS: list[tuple[tuple[str, ...], dict]] = [
 # (country code, bilingual label, keyword tuple). First match wins; drives the
 # project a new Case is attached to when a matching project exists.
 COUNTRY_SIGNALS: list[tuple[str, dict, tuple[str, ...]]] = [
-    ("MY", bi("Malaysia", "马来西亚"), ("malaysia", "malaysian", "kuala lumpur", "马来西亚")),
-    ("ID", bi("Indonesia", "印度尼西亚"), ("indonesia", "jakarta", "nusantara", "印度尼西亚", "印尼")),
-    ("SA", bi("Saudi Arabia", "沙特阿拉伯"), ("saudi", "riyadh", "沙特")),
-    ("AE", bi("United Arab Emirates", "阿拉伯联合酋长国"), ("uae", "dubai", "abu dhabi", "阿联酋", "迪拜")),
+    ("MY", bi("Malaysia", "马来西亚"), ("malaysia", "malaysian", "kuala lumpur", "马来西亚", "ماليزيا", "selangor", "johor", "penang", "pulau pinang",
+                                            "perak", "pahang", "kelantan", "terengganu", "kedah", "melaka", "negeri sembilan",
+                                            "sabah", "sarawak", "putrajaya", "labuan")),
+    ("ID", bi("Indonesia", "印度尼西亚"), ("indonesia", "jakarta", "nusantara", "印度尼西亚", "印尼", "إندونيسيا", "surabaya", "bandung", "jawa", "sumatera",
+                                                    "kalimantan", "sulawesi", "bali", "medan", "semarang")),
+    ("SA", bi("Saudi Arabia", "沙特阿拉伯"), ("saudi", "riyadh", "沙特", "السعودية", "الرياض", "جدة", "المملكة العربية", "jeddah", "dammam", "neom", "الدمام", "مكة", "المدينة المنورة", "نيوم")),
+    ("AE", bi("United Arab Emirates", "阿拉伯联合酋长国"), ("uae", "dubai", "abu dhabi", "阿联酋", "迪拜", "الإمارات", "دبي", "أبوظبي", "ابوظبي", "الشارقة", "sharjah", "ajman", "عجمان", "رأس الخيمة", "الفجيرة")),
 ]
 
 # Reverse lookups used when a Layer-3 (M3) LLM extraction injects a country code
@@ -120,38 +130,47 @@ _ISSUE_LABEL_BY_EN: dict[str, dict] = {label["en"]: label for _, label in ISSUE_
 
 # (lifecycle-stage id, keyword tuple). Falls back to "construction".
 LIFECYCLE_SIGNALS: list[tuple[str, tuple[str, ...]]] = [
-    ("design", ("design", "drawing", "rfi", "设计", "图纸")),
-    ("procurement", ("procurement", "supplier", "material", "采购", "供应商")),
-    ("commissioning", ("commissioning", "testing", "punch list", "调试", "测试")),
-    ("handover", ("handover", "taking-over", "移交")),
-    ("operations", ("maintenance", "operation", "运维", "运行", "维护")),
-    ("planning", ("tender", "bid", "planning", "投标", "规划")),
+    ("design", ("design", "drawing", "rfi", "设计", "图纸", "reka bentuk", "desain", "perancangan", "التصميم", "المخططات")),
+    ("procurement", ("procurement", "supplier", "material", "采购", "供应商", "perolehan", "pembekal", "pengadaan",
+                     "pemasok", "المشتريات", "المورد", "التوريد")),
+    ("commissioning", ("commissioning", "testing", "punch list", "调试", "测试", "pentauliahan", "pengujian",
+                       "komisioning", "التشغيل التجريبي", "الاختبار")),
+    ("handover", ("handover", "taking-over", "移交", "penyerahan", "serah terima", "التسليم")),
+    ("operations", ("maintenance", "operation", "运维", "运行", "维护", "penyelenggaraan", "pemeliharaan",
+                    "operasi", "الصيانة", "التشغيل")),
+    ("planning", ("tender", "bid", "planning", "投标", "规划", "tawaran", "perancangan projek", "التخطيط",
+                  "المناقصة")),
 ]
 _DEFAULT_LIFECYCLE = "construction"
 
 # Reference-like identifiers, e.g. NCR-2026-084, SI-028, RM-03, VO-027, C-14.2.
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Z0-9]*(?:[-/][A-Z0-9][A-Z0-9.]*)+\b")
-_DEADLINE_HOURS_RE = re.compile(r"(\d+)\s*(?:hours?|hrs?|小时)", re.IGNORECASE)
-_DEADLINE_DAYS_RE = re.compile(r"(\d+)\s*(?:days?|天)", re.IGNORECASE)
-_IMMEDIATE_RE = re.compile(r"immediate|立即|即刻", re.IGNORECASE)
+_DEADLINE_HOURS_RE = re.compile(r"(\d+)\s*(?:hours?|hrs?|小时|jam|ساعه|ساعات)", re.IGNORECASE)
+_DEADLINE_DAYS_RE = re.compile(r"(\d+)\s*(?:days?|天|hari|يوم|ايام)", re.IGNORECASE)
+_IMMEDIATE_RE = re.compile(r"immediate|立即|即刻|\bsegera\b|فوري|فورا|علي الفور|علی الفور|على الفور", re.IGNORECASE)
 
 APPROVER_PM = bi("Project Manager approval", "项目经理审批")
 APPROVER_HSE = bi("HSE Manager sign-off", "HSE 经理会签")
 
-LANGUAGE_DISPLAY = {"en": bi("English", "英语"), "zh": bi("Chinese", "中文")}
+LANGUAGE_DISPLAY = {
+    "en": bi("English", "英语"), "zh": bi("Chinese", "中文"), "ms": bi("Malay", "马来语"),
+    "id": bi("Indonesian", "印尼语"), "ar": bi("Arabic", "阿拉伯语"),
+}
+SUPPORTED_LANGUAGES = tuple(LANGUAGE_DISPLAY)
 
 
-def detect_language(text: str) -> str:
+def detect_language(text: str, country_hint: str | None = None) -> str:
     """Deterministic language detection: Chinese if any CJK character is
-    present, otherwise English (the two languages the platform supports)."""
-    return "zh" if _CJK_RE.search(text or "") else "en"
+    present, then Arabic script, then Malay or Indonesian by word lists,
+    otherwise English. See ``multilingual.detect_language``."""
+    return _detect_language_ml(text, country_hint)
 
 
 def _detect_issues(lowered: str) -> tuple[list[dict], bool]:
     issues: list[dict] = []
     seen = set()
     for keywords, label in ISSUE_SIGNALS:
-        if any(k in lowered for k in keywords):
+        if any(contains(lowered, k) for k in keywords):
             key = label["en"]
             if key not in seen:
                 seen.add(key)
@@ -161,14 +180,14 @@ def _detect_issues(lowered: str) -> tuple[list[dict], bool]:
 
 def _detect_country(lowered: str) -> tuple[str | None, dict | None]:
     for code, label, keywords in COUNTRY_SIGNALS:
-        if any(k in lowered for k in keywords):
+        if any(contains(lowered, k) for k in keywords):
             return code, label
     return None, None
 
 
 def _detect_lifecycle(lowered: str) -> str:
     for stage_id, keywords in LIFECYCLE_SIGNALS:
-        if any(k in lowered for k in keywords):
+        if any(contains(lowered, k) for k in keywords):
             return stage_id
     return _DEFAULT_LIFECYCLE
 
@@ -199,7 +218,11 @@ def format_deadline(amount: int | None, unit: str) -> dict | None:
 
 # A response window is phrased "within N days" / "N 天内"; prefer it over other
 # durations in the text (e.g. "an extension of time of 10 days").
-_WITHIN_RE = re.compile(r"within\s+(\d+)\s*(hours?|hrs?|days?)|(\d+)\s*(小时|天)内", re.IGNORECASE)
+_WITHIN_RE = re.compile(
+    r"(?:within|dalam(?:\s+(?:tempoh|masa|waktu))?|خلال)\s+(\d+)\s*(hours?|hrs?|days?|jam|hari|ساعه|ساعات|يوم|ايام)"
+    r"|(\d+)\s*(小时|天)内",
+    re.IGNORECASE,
+)
 
 
 def _detect_deadline(text: str) -> dict | None:
@@ -209,7 +232,7 @@ def _detect_deadline(text: str) -> dict | None:
     if within:
         amount = int(within.group(1) or within.group(3))
         unit = (within.group(2) or within.group(4) or "").lower()
-        return format_deadline(amount, "hours" if unit.startswith(("hour", "hr", "小时")) else "days")
+        return format_deadline(amount, "hours" if unit.startswith(("hour", "hr", "小时", "jam", "ساع")) else "days")
     hours = _DEADLINE_HOURS_RE.search(text or "")
     if hours:
         return format_deadline(int(hours.group(1)), "hours")
@@ -252,7 +275,7 @@ def build_intake_result(
     model leaves them empty.
     """
     text = text or ""
-    lowered = text.lower()
+    lowered = normalize(text)
 
     # --- authoritative case_type + risk (Layer 1 rules, or injected Layer 2) ---
     classified = classification or classify_text(text)
@@ -266,8 +289,8 @@ def build_intake_result(
 
     # --- deterministic enrichment ---
     lang = (language or "").lower()
-    if lang not in ("en", "zh"):
-        lang = detect_language(text)
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = detect_language(text, _detect_country(lowered)[0])
 
     intel_id, prof_en = CASE_TYPE_DOMAIN.get(case_type, _DEFAULT_DOMAIN)
     primary_domain = {"id": intel_id, "name": _DOMAIN_BY_ID[intel_id]["name"]}
@@ -288,14 +311,14 @@ def build_intake_result(
         entities = list(extraction.get("entities", []))
         extracted_lifecycle = extraction.get("lifecycle")
         lifecycle_id = extracted_lifecycle if extracted_lifecycle in _LIFECYCLE_BY_ID else _detect_lifecycle(lowered)
-        deadline = extraction.get("deadline") or _detect_deadline(text)
+        deadline = extraction.get("deadline") or _detect_deadline(lowered)
     else:
         extraction_method = "rules"
         country_code, country_label = _detect_country(lowered)
         issues, real_issues = _detect_issues(lowered)
         entities = _detect_entities(text)
         lifecycle_id = _detect_lifecycle(lowered)
-        deadline = _detect_deadline(text)
+        deadline = _detect_deadline(lowered)
     lifecycle_stage = {"id": lifecycle_id, "name": _LIFECYCLE_BY_ID[lifecycle_id]["name"]}
     if not issues:
         issues = [case_type_label]

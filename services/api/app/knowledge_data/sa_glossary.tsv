@@ -184,3 +184,7 @@ SA-GL-0182	regulatory	Saudi Building Code	沙特建筑规范	كود البناء
 SA-GL-0183	regulatory	Royal Decree	王室法令	مرسوم ملكي	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
 SA-GL-0184	workforce	major hazard facility	重大危险设施	المنشآت الكبرى المعرضة للمخاطر	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
 SA-GL-0185	workforce	remote area	偏远地区	المناطق البعيدة عن العمران	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0186	workforce	work licence	工作执照	رخصة العمل	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED
+SA-GL-0187	workforce	periodic medical examination	定期体检	الفحص الطبي الدوري	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0188	workforce	non-national workers	外籍员工	غير المواطنين	ar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+SA-GL-0189	workforce	non-Saudis	非沙特籍人员	غير السعوديين	ar	ATTESTED_IN:Labor Law M/51 (Arabic, MHRSD)	NATIVE_REVIEW_REQUIRED

@@ -37,6 +37,7 @@ def test_knowledge_search_is_jurisdiction_and_version_aware(client):
     assert body["retrieval"] == {
         "method": "deterministic-tfidf", "jurisdiction_aware": True,
         "version_aware": True, "authority_review_required": True,
+        "query_language": "en", "glossary_expansion": [],
     }
     first = body["results"][0]
     assert first["country_code"] == "MY"

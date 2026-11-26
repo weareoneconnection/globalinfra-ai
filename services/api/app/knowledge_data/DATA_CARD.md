@@ -8,7 +8,7 @@
 | Licence of this compilation | Same as the repository. Statutory texts remain with their publishers; no statutory text is reproduced. |
 | Review status | Clauses: `EXPERT_REVIEW_REQUIRED`. Glossaries: `NATIVE_REVIEW_REQUIRED`. **No review record exists yet.** |
 | Machine-readable card | `GET /knowledge/library` (counts, sources, read quality, review progress) |
-| Evaluation | `python evals/run_clause_retrieval_eval.py`: 95 team-written en/zh queries (57 MY, 14 ID, 12 AE, 12 SA), hit@3 and top-1 per country |
+| Evaluation | `python evals/run_clause_retrieval_eval.py`: 127 team-written queries in five languages (en 57, zh 38, ar 16, ms 8, id 8; MY 65, ID 22, AE 20, SA 20), hit@3 and top-1 per country and language. `python evals/run_multilingual_intake_eval.py`: 24 Malay, Indonesian and Arabic field notices (8 each) |
 
 ## Clause libraries
 
@@ -72,10 +72,12 @@ Read from the official Arabic text published by Dubai Municipality, because the 
 
 | Country | Terms | Local language | Attested in official text |
 | --- | ---: | --- | ---: |
-| MY | 231 | Malay (`ms`) | 91 |
-| ID | 151 | Indonesian (`id`) | 42 |
-| AE | 183 | Arabic (`ar`) | 86 |
-| SA | 185 | Arabic (`ar`) | 70 |
+| MY | 250 | Malay (`ms`) | 101 |
+| ID | 160 | Indonesian (`id`) | 46 |
+| AE | 186 | Arabic (`ar`) | 86 |
+| SA | 189 | Arabic (`ar`) | 72 |
+
+The last rows of each file (MY-GL-0232 on, ID-GL-0152 on, AE-GL-0184 on, SA-GL-0186 on) are core words such as employer, accident and work licence. They were added after local-language search tests showed them missing. Earlier ids are unchanged.
 
 Columns: `id, domain, en, zh, local, local_lang, local_basis, review_status`. `local_basis` is:
 
@@ -107,7 +109,9 @@ At start-up the latest verdict per item sets its status:
 - At start-up, `seed_country_knowledge` upserts each clause as a `KnowledgeDocument` with `document_type = CLAUSE_SUMMARY`, then applies review records, then loads any authorized field records.
 - `KnowledgeIndex` scores clause summaries in their own TF-IDF tier. That tier uses CJK character pairs, so a single shared character such as 天 does not match. The source tier and its calibrated thresholds are unchanged.
 - `GET /knowledge/search?document_type=CLAUSE_SUMMARY&country_code=ID` searches the clauses of one country.
-- `GET /country-packs/{MY|ID}/glossary?q=&domain=` serves the glossaries. The search covers English, Chinese and the local language.
+- `GET /country-packs/{MY|ID|AE|SA}/glossary?q=&domain=` serves the glossaries. The search covers English, Chinese and the local language.
+- **Local-language search.** A Malay, Indonesian or Arabic query to `/knowledge/search` is expanded with the English term of every glossary entry it contains, longest match first. Arabic is matched after the same normalisation as above. The response lists each expansion under `retrieval.glossary_expansion`, and `retrieval.query_language` gives the detected language. This is routing, not translation.
+- **Local-language intake.** `app/multilingual.py` detects `ms`, `id` and `ar`. The intake and classification rules carry Malay, Indonesian and Arabic keywords for country, case type, risk, lifecycle stage and deadline.
 
 ## Known gaps (next batch)
 
@@ -116,3 +120,4 @@ At start-up the latest verdict per item sets its status:
 - UAE: Federal Decree-Law 45/2021 (personal data), Federal Law 24/1999 (environment), the Labour Executive Regulation, and emirate building and fire codes. The UAE Legislation portal and the MOHRE site could not be reached by automated fetch.
 - Saudi Arabia: PDPL (M/19), the new Government Tenders and Procurement Law (2026), OSH implementing rules and the Saudi Building Code. The Bureau of Experts and SDAIA sites could not be reached by automated fetch.
 - Real expert review and authorized field data: the pipelines are ready, but no records have been imported yet.
+- Local-language evaluation: the Malay, Indonesian and Arabic queries and notices were written by the team, and the intake keywords were extended in the same change. That set is for development, not a held-out test. A native-speaker set written by someone else is still needed. Remaining clause-search misses (7 of 127 at top-1, 3 outside the top 3) are kept as they are and not tuned away.

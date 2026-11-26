@@ -230,3 +230,22 @@ MY-GL-0228	project	interface	接口	antara muka	ms	TEAM_COMPILED	NATIVE_REVIEW_R
 MY-GL-0229	project	owner	业主方	pemilik	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
 MY-GL-0230	project	consultant	咨询方	perunding	ms	ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
 MY-GL-0231	project	approval	批准	kelulusan	ms	ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0232	workforce	employer (Malay)	雇主	majikan	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0233	workforce	employee	雇员	pekerja	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0234	hse	safety	安全	keselamatan	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0235	hse	health	健康	kesihatan	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0236	hse	accident	事故	kemalangan	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0237	hse	emergency	紧急情况	kecemasan	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0238	hse	risk	风险	risiko	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0239	hse	hazard	危险源	bahaya	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0240	hse	excavation work	开挖作业	kerja penggalian	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0241	hse	excavation (general)	开挖	penggalian	ms	ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0242	civil	soil stability	土体稳定	kestabilan tanah	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0243	regulatory	improvement notice	改进通知	notis penambahbaikan	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0244	regulatory	department	部门	jabatan	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0245	workforce	general duties	一般职责	tugas am	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0246	workforce	wage	工资	upah	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0247	workforce	working hours	工作时间	waktu bekerja	ms	ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0248	workforce	overtime	加班	kerja lebih masa	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0249	workforce	annual leave	年假	cuti tahunan	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0250	workforce	sick leave	病假	cuti sakit	ms	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
