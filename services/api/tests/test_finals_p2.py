@@ -59,7 +59,7 @@ def test_finals_public_projection_excludes_tenant_roi_details(client):
         body = response.json()
         rendered = json.dumps(body)
         assert secret not in rendered
-        assert row.id not in rendered
+        assert "ROI-P2-PUBLIC-PROJECTION-TEST" not in rendered
         assert "9001" not in rendered
         assert body["business_impact"]["paired_roi"]["baseline_minutes"] is None
         assert body["business_impact"]["paired_roi"]["assisted_minutes"] is None
