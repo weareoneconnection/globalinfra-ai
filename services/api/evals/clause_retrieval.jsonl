@@ -69,3 +69,59 @@
 {"id": "CR-69", "country": "ID", "lang": "zh", "query": "数据保护影响评估 高风险处理", "expected": "ID-UU27-2022-PASAL-34"}
 {"id": "CR-70", "country": "ID", "lang": "en", "query": "level crossing grade separated train priority", "expected": "ID-UU23-2007-PASAL-91"}
 {"id": "CR-71", "country": "ID", "lang": "zh", "query": "铁路基础设施 建设许可 运营许可", "expected": "ID-UU23-2007-PASAL-24"}
+{"id": "CR-72", "country": "AE", "lang": "en", "query": "contractor and engineer liable ten years building collapse", "expected": "AE-FDL25-2025-ART-821"}
+{"id": "CR-73", "country": "AE", "lang": "zh", "query": "排除十年责任的条款是否有效", "expected": "AE-FDL25-2025-ART-823"}
+{"id": "CR-74", "country": "AE", "lang": "en", "query": "lump sum price increase material costs unforeseen circumstances court", "expected": "AE-FDL25-2025-ART-829"}
+{"id": "CR-75", "country": "AE", "lang": "zh", "query": "业主任意解除合同 赔偿承包商利润损失", "expected": "AE-FDL25-2025-ART-836"}
+{"id": "CR-76", "country": "AE", "lang": "en", "query": "subcontract work main contractor remains liable to employer", "expected": "AE-FDL25-2025-ART-832"}
+{"id": "CR-77", "country": "AE", "lang": "zh", "query": "工程量超出估算 承包方须通知业主", "expected": "AE-FDL25-2025-ART-828"}
+{"id": "CR-78", "country": "AE", "lang": "en", "query": "overtime limit 144 hours three weeks night overtime pay", "expected": "AE-FDL33-2021-ART-19"}
+{"id": "CR-79", "country": "AE", "lang": "zh", "query": "连续工作五小时 休息一小时", "expected": "AE-FDL33-2021-ART-18"}
+{"id": "CR-80", "country": "AE", "lang": "en", "query": "worker accommodation licensed housing allowance", "expected": "AE-FDL33-2021-ART-13-4"}
+{"id": "CR-81", "country": "AE", "lang": "zh", "query": "工伤死亡补偿 24个月工资 迪拉姆", "expected": "AE-FDL33-2021-ART-37"}
+{"id": "CR-82", "country": "AE", "lang": "en", "query": "gratuity 21 days basic wage first five years", "expected": "AE-FDL33-2021-ART-51"}
+{"id": "CR-83", "country": "AE", "lang": "zh", "query": "雇主扣押工人护照", "expected": "AE-FDL33-2021-ART-13-2"}
+{"id": "CR-84", "country": "SA", "lang": "en", "query": "Ramadan working hours six hours Muslims", "expected": "SA-LABOR-ART-98"}
+{"id": "CR-85", "country": "SA", "lang": "zh", "query": "开工前告知岗位危害 提供个人防护装备并培训", "expected": "SA-LABOR-ART-123"}
+{"id": "CR-86", "country": "SA", "lang": "en", "query": "safety instructions posted in Arabic and language workers understand", "expected": "SA-LABOR-ART-122"}
+{"id": "CR-87", "country": "SA", "lang": "zh", "query": "偏远地区 营地 住房 膳食", "expected": "SA-LABOR-ART-147"}
+{"id": "CR-88", "country": "SA", "lang": "en", "query": "employer pays iqama work permit renewal fees and return ticket", "expected": "SA-LABOR-ART-40"}
+{"id": "CR-89", "country": "SA", "lang": "zh", "query": "加班工资 基本工资50% 补休", "expected": "SA-LABOR-ART-107"}
+{"id": "CR-90", "country": "SA", "lang": "en", "query": "liquidated damages court reduce excessive agreed compensation", "expected": "SA-CTL-ART-178-179"}
+{"id": "CR-91", "country": "SA", "lang": "zh", "query": "情势变更 履行过于艰难 请求协商", "expected": "SA-CTL-ART-97"}
+{"id": "CR-92", "country": "SA", "lang": "en", "query": "client may hire another contractor to correct defective work at original contractor's expense", "expected": "SA-CTL-ART-466"}
+{"id": "CR-93", "country": "SA", "lang": "zh", "query": "疏浚 填海 海岸工程 许可", "expected": "SA-ENV-ART-21"}
+{"id": "CR-94", "country": "SA", "lang": "en", "query": "discharge wastewater dewatering into wells permit", "expected": "SA-ENV-ART-11"}
+{"id": "CR-95", "country": "SA", "lang": "zh", "query": "取砂 砾石 开采许可", "expected": "SA-ENV-ART-14"}
+{"id": "CR-96", "country": "MY", "lang": "ms", "query": "tugas am majikan terhadap keselamatan dan kesihatan pekerja", "expected": "MY-ACT514-S15"}
+{"id": "CR-97", "country": "MY", "lang": "ms", "query": "pemberitahuan kemalangan dan kejadian berbahaya kepada jabatan", "expected": "MY-ACT514-S32"}
+{"id": "CR-98", "country": "MY", "lang": "ms", "query": "pegawai keselamatan dan kesihatan di tempat kerja", "expected": "MY-ACT514-S29"}
+{"id": "CR-99", "country": "MY", "lang": "ms", "query": "notis penambahbaikan dan notis larangan", "expected": "MY-ACT514-S48"}
+{"id": "CR-100", "country": "MY", "lang": "ms", "query": "penilaian risiko oleh majikan", "expected": "MY-ACT514-S18B"}
+{"id": "CR-101", "country": "MY", "lang": "ms", "query": "jawatankuasa keselamatan dan kesihatan", "expected": "MY-ACT514-S30"}
+{"id": "CR-102", "country": "MY", "lang": "ms", "query": "kerja penggalian dan kestabilan tanah", "expected": "MY-CDM2024-REG24"}
+{"id": "CR-103", "country": "MY", "lang": "ms", "query": "prosedur kecemasan di tapak bina", "expected": "MY-CDM2024-REG32"}
+{"id": "CR-104", "country": "ID", "lang": "id", "query": "laporan kecelakaan kerja", "expected": "ID-UU1-1970-PASAL-11"}
+{"id": "CR-105", "country": "ID", "lang": "id", "query": "panitia pembina keselamatan dan kesehatan kerja", "expected": "ID-UU1-1970-PASAL-10"}
+{"id": "CR-106", "country": "ID", "lang": "id", "query": "biaya SMKK dalam penawaran", "expected": "ID-SMKK2021-PASAL-22"}
+{"id": "CR-107", "country": "ID", "lang": "id", "query": "tenaga kerja konstruksi asing", "expected": "ID-UU2-2017-PASAL-74"}
+{"id": "CR-108", "country": "ID", "lang": "id", "query": "pemberitahuan kegagalan pelindungan data pribadi", "expected": "ID-UU27-2022-PASAL-46"}
+{"id": "CR-109", "country": "ID", "lang": "id", "query": "perpotongan sebidang jalan dengan jalur kereta api", "expected": "ID-UU23-2007-PASAL-91"}
+{"id": "CR-110", "country": "ID", "lang": "id", "query": "subkontraktor pekerjaan konstruksi", "expected": "ID-UU2-2017-PASAL-53"}
+{"id": "CR-111", "country": "ID", "lang": "id", "query": "pemeriksaan kesehatan pekerja", "expected": "ID-UU1-1970-PASAL-8"}
+{"id": "CR-112", "country": "AE", "lang": "ar", "query": "الضمان العشري للمقاول والمهندس", "expected": "AE-FDL25-2025-ART-821"}
+{"id": "CR-113", "country": "AE", "lang": "ar", "query": "ساعات العمل الإضافية", "expected": "AE-FDL33-2021-ART-19"}
+{"id": "CR-114", "country": "AE", "lang": "ar", "query": "مكافأة نهاية الخدمة", "expected": "AE-FDL33-2021-ART-51"}
+{"id": "CR-115", "country": "AE", "lang": "ar", "query": "سكن العمال", "expected": "AE-FDL33-2021-ART-13-4"}
+{"id": "CR-116", "country": "AE", "lang": "ar", "query": "التعاقد مع المقاول من الباطن", "expected": "AE-FDL25-2025-ART-832"}
+{"id": "CR-117", "country": "AE", "lang": "ar", "query": "تهدم البناء بسبب القوة القاهرة", "expected": "AE-FDL25-2025-ART-837"}
+{"id": "CR-118", "country": "AE", "lang": "ar", "query": "فترة التجربة", "expected": "AE-FDL33-2021-ART-9"}
+{"id": "CR-119", "country": "AE", "lang": "ar", "query": "تفتيش العمل", "expected": "AE-FDL33-2021-ART-57"}
+{"id": "CR-120", "country": "SA", "lang": "ar", "query": "ساعات العمل في رمضان", "expected": "SA-LABOR-ART-98"}
+{"id": "CR-121", "country": "SA", "lang": "ar", "query": "صندوق الإسعافات الأولية", "expected": "SA-LABOR-ART-142"}
+{"id": "CR-122", "country": "SA", "lang": "ar", "query": "التعويض الاتفاقي عن التأخير", "expected": "SA-CTL-ART-178-179"}
+{"id": "CR-123", "country": "SA", "lang": "ar", "query": "تصريح تصريف مياه الصرف", "expected": "SA-ENV-ART-11"}
+{"id": "CR-124", "country": "SA", "lang": "ar", "query": "رخصة العمل لغير السعوديين", "expected": "SA-LABOR-ART-33"}
+{"id": "CR-125", "country": "SA", "lang": "ar", "query": "الراحة الأسبوعية", "expected": "SA-LABOR-ART-104"}
+{"id": "CR-126", "country": "SA", "lang": "ar", "query": "الوقاية من الحريق ومخارج الطوارئ", "expected": "SA-LABOR-ART-125"}
+{"id": "CR-127", "country": "SA", "lang": "ar", "query": "الفحص الطبي السنوي للعمال", "expected": "SA-LABOR-ART-143"}

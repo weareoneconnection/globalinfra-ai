@@ -7,6 +7,7 @@ that still requires project-specific confirmation by an authorized reviewer.
 from __future__ import annotations
 
 import csv
+from functools import lru_cache
 import hashlib
 import json
 from collections import Counter
@@ -24,6 +25,7 @@ from .knowledge_review import CLAUSE_STATUS, TERM_STATUS, latest_reviews, load_r
 from .config import settings
 from .i18n import bi, get_lang, localize
 from .models import CountryPack, KnowledgeDocument, Project, utc_now
+from .multilingual import detect_language, expand_query
 from .retrieval import KnowledgeIndex
 from .security import Principal, get_principal, require_roles
 
@@ -182,8 +184,8 @@ def _seed_project_procedures(db: Session) -> None:
 
 
 KNOWLEDGE_DATA_DIR = Path(__file__).resolve().parent / "knowledge_data"
-CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl", "id_regulations.jsonl")
-GLOSSARY_FILES = {"MY": "my_glossary.tsv", "ID": "id_glossary.tsv"}
+CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl", "id_regulations.jsonl", "ae_regulations.jsonl", "sa_regulations.jsonl")
+GLOSSARY_FILES = {"MY": "my_glossary.tsv", "ID": "id_glossary.tsv", "AE": "ae_glossary.tsv", "SA": "sa_glossary.tsv"}
 CLAUSE_DOCUMENT_TYPE = "CLAUSE_SUMMARY"
 _CLAUSE_CATEGORY = {
     "MY-ACT514": ("HSE", "健康安全环保"),
@@ -201,8 +203,13 @@ _CLAUSE_CATEGORY = {
     "ID-UU2": ("Contract", "合同"),
     "ID-UU27": ("Data Protection", "数据保护"),
     "ID-UU23": ("Railway", "铁路"),
+    "AE-FDL33": ("Workforce", "人力资源"),
+    "AE-FDL25": ("Contract", "合同"),
+    "SA-LABOR": ("Workforce", "人力资源"),
+    "SA-CTL": ("Contract", "合同"),
+    "SA-ENV": ("Environment", "环境"),
 }
-_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语"), "id": ("Indonesian (Bahasa Indonesia)", "印尼语")}
+_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语"), "id": ("Indonesian (Bahasa Indonesia)", "印尼语"), "ar": ("Arabic", "阿拉伯语")}
 
 
 def load_clause_library() -> list[dict]:
@@ -232,6 +239,21 @@ def load_glossary(country_code: str) -> list[dict]:
         if row["id"] in reviews:
             row["review_status"] = TERM_STATUS[reviews[row["id"]]["verdict"]]
     return rows
+
+
+@lru_cache(maxsize=8)
+def _glossary_rows(country_code: str) -> tuple[dict, ...]:
+    name = GLOSSARY_FILES.get(country_code)
+    if not name:
+        return ()
+    with (KNOWLEDGE_DATA_DIR / name).open(encoding="utf-8", newline="") as handle:
+        return tuple(csv.DictReader(handle, delimiter="\t"))
+
+
+def _expansion_glossary(country_code: str | None) -> list[dict]:
+    """Glossary rows used to read a Malay, Indonesian or Arabic search query."""
+    codes = [country_code.upper()] if country_code else sorted(GLOSSARY_FILES)
+    return [row for code in codes for row in _glossary_rows(code)]
 
 
 def library_manifest() -> dict:
@@ -271,6 +293,7 @@ def library_manifest() -> dict:
             "No entry has yet been reviewed by local counsel or a native-speaker terminologist.",
             "Rows marked MIRROR_TRANSCRIPTION were read from a third-party transcription because the official site could not be reached; source_url still points to the official record.",
             "Malaysia: Act 133 / UBBL and the Land Public Transport Act 2010 are not yet covered. Indonesia: implementing regulations (e.g. PP 50/2012, PP 22/2020) and the amended UU 2/2017 text are not yet covered.",
+            "UAE and Saudi Arabia: rows marked OFFICIAL_TRANSLATION or read from Arabic are guidance; the Arabic text governs. Personal-data, environment (UAE) and building-code instruments are not yet covered, nor are labour executive regulations.",
         ],
         "disclaimer": LEGAL_DISCLAIMER,
     }
@@ -591,8 +614,10 @@ def knowledge_search(
         _knowledge_scope(principal)
     ).order_by(KnowledgeDocument.updated_at.desc())))
     filtered = [doc for doc in docs if (not country_code or doc.country_code == country_code.upper()) and (not status or doc.status == status.upper()) and (not category or category.lower() in json.dumps(doc.category, ensure_ascii=False).lower()) and (not stage or stage.lower() in [item.lower() for item in (doc.lifecycle_stages or [])]) and (not document_type or (doc.document_type or "").upper() == document_type.upper())]
+    expansion: list[dict] = []
     if q.strip():
-        ranked = KnowledgeIndex(filtered).search(q, top_k=limit)
+        search_query, expansion = expand_query(q, _expansion_glossary(country_code))
+        ranked = KnowledgeIndex(filtered).search(search_query, top_k=limit)
     else:
         ranked = [(1.0, doc) for doc in filtered[:limit]]
     facets = {"countries": Counter(doc.country_code or "GLOBAL" for doc in filtered), "types": Counter(doc.document_type for doc in filtered), "stages": Counter(stage_name for doc in filtered for stage_name in (doc.lifecycle_stages or []))}
@@ -600,7 +625,9 @@ def knowledge_search(
         "query": q, "filters": {"country_code": country_code, "category": category, "stage": stage, "status": status, "document_type": document_type}, "total": len(ranked),
         "results": [_document_payload(doc, score) for score, doc in ranked],
         "facets": {name: [{"value": value, "count": count} for value, count in values.most_common()] for name, values in facets.items()},
-        "retrieval": {"method": "deterministic-tfidf", "jurisdiction_aware": True, "version_aware": True, "authority_review_required": True},
+        "retrieval": {"method": "deterministic-tfidf", "jurisdiction_aware": True, "version_aware": True, "authority_review_required": True,
+                      "query_language": detect_language(q, (country_code or "").upper() or None) if q.strip() else None,
+                      "glossary_expansion": expansion},
     }
     return localize(result, lang)
 

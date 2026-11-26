@@ -52,7 +52,9 @@ from .retrieval import KnowledgeIndex
 router = APIRouter(prefix="/competition", tags=["competition-evidence"])
 
 GOLDEN_CASE_ID = "CASE-GOLDEN-MY-001"
-DATASET_VERSION = "ai-outbound-2026.10.14-v1"
+# v2 (2026-11-26): three rows labelled id/ar whose text is English are relabelled en.
+# Local-language notices are evaluated in evals/multilingual_intake.jsonl.
+DATASET_VERSION = "ai-outbound-2026.11.26-v2"
 DATASET_PATH = Path(__file__).resolve().parent.parent / "evals" / "competition_outbound.jsonl"
 AGENT_ORG_DATASET_PATH = DATASET_PATH.parent / "agent_org.jsonl"
 DISPATCH_DATASET_PATH = DATASET_PATH.parent / "assistant_dispatch.jsonl"

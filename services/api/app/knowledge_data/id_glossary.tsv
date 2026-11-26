@@ -150,3 +150,12 @@ ID-GL-0148	project	correspondence	往来函件	surat-menyurat	id	TEAM_COMPILED	N
 ID-GL-0149	project	minutes of meeting	会议纪要	notulen rapat	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
 ID-GL-0150	project	pre-construction meeting	开工前会议	rapat persiapan pelaksanaan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
 ID-GL-0151	project	site handover	场地移交	penyerahan lapangan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0152	workforce	employer (Indonesian)	雇主	pemberi kerja	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0153	workforce	worker	工人	pekerja	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0154	workforce	labour	劳动力	tenaga kerja	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0155	workforce	foreign construction worker	外籍建筑工人	tenaga kerja konstruksi asing	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0156	hse	accident report	事故报告	laporan kecelakaan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0157	contract	subcontractor	分包商	subkontraktor	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0158	data	personal data protection	个人数据保护	pelindungan data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0159	data	personal data breach (failure of protection)	个人数据泄露（保护失效）	kegagalan pelindungan data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0160	regulatory	notification	通知	pemberitahuan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED

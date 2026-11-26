@@ -7,20 +7,27 @@ from app.retrieval import KnowledgeIndex
 OFFICIAL_HOSTS = (
     "https://dosh.gov.my/", "https://www.cidb.gov.my/", "https://admin.aiac.world/", "https://www.pdp.gov.my/",
     "https://jtksm.mohr.gov.my/", "https://www.importlicensing.wto.org/", "https://lom.agc.gov.my/", "https://peraturan.bpk.go.id/",
+    "https://www.dm.gov.ae/", "https://dm.gov.ae/", "https://misa.gov.sa/", "https://www.hrsd.gov.sa/",
 )
-READ_QUALITIES = {"OFFICIAL_PDF", "OFFICIAL_REPRINT_VIA_MIRROR", "MIRROR_TRANSCRIPTION", "OFFICIAL_EXPLANATORY_NOTE"}
+READ_QUALITIES = {
+    "OFFICIAL_PDF", "OFFICIAL_REPRINT_VIA_MIRROR", "MIRROR_TRANSCRIPTION", "OFFICIAL_EXPLANATORY_NOTE",
+    "OFFICIAL_TRANSLATION", "OFFICIAL_WEB_TEXT",
+}
+COUNTRIES = {"MY", "ID", "AE", "SA"}
 
 
 def test_clause_library_rows_keep_provenance_and_review_flags():
     rows = load_clause_library()
     assert sum(row["country"] == "MY" for row in rows) >= 150
     assert sum(row["country"] == "ID" for row in rows) >= 30
+    assert sum(row["country"] == "AE" for row in rows) >= 30
+    assert sum(row["country"] == "SA" for row in rows) >= 30
     assert len({row["id"] for row in rows}) == len(rows)
     for row in rows:
-        assert row["country"] in {"MY", "ID"} and row["id"].startswith(row["country"] + "-")
+        assert row["country"] in COUNTRIES and row["id"].startswith(row["country"] + "-")
         assert row["source_url"].startswith(OFFICIAL_HOSTS), row["id"]
         assert row["read_quality"] in READ_QUALITIES and row["read_from"]
-        assert row["source_language"] in {"en", "ms", "id"}
+        assert row["source_language"] in {"en", "ms", "id", "ar"}
         assert row["version"] and row["provision"] and row["authority"]
         # Postgres enforces the KnowledgeDocument column sizes that SQLite ignores.
         assert len(row["version"]) <= 64 and len(row["authority"]) <= 160 and len(row["id"]) <= 160, row["id"]
@@ -44,6 +51,11 @@ def test_outdated_or_unconsolidated_sources_are_flagged():
     assert cidb and all("not reflected" in row["currency_note"] for row in cidb)
     # The repealed 1986 construction regulations must never be presented as current.
     assert not any("BOWEC" in row["instrument"] for row in rows)
+    # Translations and Arabic readings must say the Arabic text governs or how the copy was read.
+    gulf = [row for row in rows if row["country"] in {"AE", "SA"}]
+    assert gulf and all(row["currency_note"] for row in gulf)
+    assert all("Arabic text governs" in row["currency_note"] for row in gulf if row["read_quality"] in {"OFFICIAL_TRANSLATION", "OFFICIAL_WEB_TEXT"})
+    assert all(row["source_language"] == "ar" for row in gulf if row["country"] == "AE")
 
 
 def test_seeded_clauses_are_searchable_by_type_and_language(client):
@@ -58,6 +70,10 @@ def test_seeded_clauses_are_searchable_by_type_and_language(client):
     assert top("开挖 坍塌 支护 每班检查")[0][0] == "MY-CDM2024-REG24"
     body = client.get("/knowledge/search", params={"q": "level crossing grade separated", "country_code": "ID", "document_type": CLAUSE_DOCUMENT_TYPE, "limit": 3}).json()
     assert body["results"][0]["source_ref"] == "ID-UU23-2007-PASAL-91"
+    for country, q, expected in (("AE", "decennial liability ten years collapse engineer contractor", "AE-FDL25-2025-ART-821"),
+                                 ("SA", "Ramadan working hours six hours", "SA-LABOR-ART-98")):
+        body = client.get("/knowledge/search", params={"q": q, "country_code": country, "document_type": CLAUSE_DOCUMENT_TYPE, "limit": 3}).json()
+        assert body["results"][0]["source_ref"] == expected
 
 
 def test_clause_documents_carry_caveat_and_source(client):
@@ -83,7 +99,7 @@ def test_tiered_index_keeps_source_scores_stable_when_clauses_are_added():
 
 
 def test_glossaries_are_trilingual_and_mark_attestation():
-    for code, lang, minimum in (("MY", "ms", 200), ("ID", "id", 120)):
+    for code, lang, minimum in (("MY", "ms", 200), ("ID", "id", 120), ("AE", "ar", 150), ("SA", "ar", 150)):
         rows = load_glossary(code)
         assert len(rows) >= minimum
         assert len({(row["domain"], row["en"].lower()) for row in rows}) == len(rows)
@@ -100,6 +116,10 @@ def test_glossary_endpoint_filters_and_rejects_unknown_pack(client):
     assert client.get("/country-packs/MY/glossary", params={"domain": "data"}).json()["total"] >= 10
     indonesian = client.get("/country-packs/ID/glossary", params={"q": "dewan sengketa"}).json()
     assert indonesian["local_language"] == "id" and indonesian["terms"][0]["en"] == "dispute board"
+    arabic = client.get("/country-packs/AE/glossary", params={"q": "decennial"}).json()
+    assert arabic["local_language"] == "ar" and arabic["terms"][0]["local"] == "الضمان العشري"
+    saudi = client.get("/country-packs/SA/glossary", params={"q": "مكتب العمل"}).json()
+    assert saudi["total"] >= 1 and saudi["terms"][0]["en"] == "Labour Office"
     assert client.get("/country-packs/ZZ/glossary").status_code == 404
 
 
@@ -108,8 +128,8 @@ def test_library_manifest_reports_counts_and_limits(client):
     library = body["clause_library"]
     assert library["clauses"] == len(load_clause_library())
     assert sum(item["clauses"] for item in library["instruments"]) == library["clauses"]
-    assert set(library["by_country"]) == {"ID", "MY"}
-    assert {g["country"]: g["terms"] for g in body["glossaries"]} == {"ID": len(load_glossary("ID")), "MY": len(load_glossary("MY"))}
+    assert set(library["by_country"]) == {"ID", "MY", "AE", "SA"}
+    assert {g["country"]: g["terms"] for g in body["glossaries"]} == {code: len(load_glossary(code)) for code in ("ID", "MY", "AE", "SA")}
     assert any("not authentic statutory text" in limit for limit in body["limits"])
 
 
