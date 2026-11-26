@@ -32,6 +32,9 @@ from .models import (
 )
 from .security import Principal, get_principal, require_project, require_roles
 from .ingestion import receipt_payload, record_ingestion_receipt
+from .roi_evidence import (
+    PairedStudy, evidence_sha256, validate_record_against_study,
+)
 from .operations import audit_health_snapshot
 
 router = APIRouter(tags=["Phase 7 production pilot"])
@@ -655,6 +658,7 @@ class PilotMeasurementIn(BaseModel):
 
 class PilotVerificationIn(BaseModel):
     evidence_digest: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+    evidence: PairedStudy | None = None
 
 
 def _measurement_payload(row: PilotMeasurement) -> dict:
@@ -738,15 +742,60 @@ def verify_pilot_measurement(
                 "message": "The recorder cannot verify the same ROI measurement.",
             },
         )
-    if not hmac.compare_digest(
-        payload.evidence_digest.lower(), row.evidence_digest
+    if payload.evidence is None:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "RAW_PAIRED_EVIDENCE_REQUIRED",
+                "message": "A matching declared digest alone cannot verify ROI. "
+                "Submit the canonical paired-study evidence and have its "
+                "underlying source records independently reviewed.",
+            },
+        )
+    supplied_sha = evidence_sha256(payload.evidence)
+    if not (
+        hmac.compare_digest(payload.evidence_digest.lower(), row.evidence_digest)
+        and hmac.compare_digest(supplied_sha, row.evidence_digest)
     ):
         raise HTTPException(
             409,
             detail={
                 "code": "EVIDENCE_DIGEST_MISMATCH",
-                "message": "The supplied pilot evidence does not match the recorded digest.",
+                "message": "The canonical paired study hash does not match the recorded evidence.",
             },
+        )
+    mismatches = validate_record_against_study(
+        payload.evidence,
+        project_id=row.project_id,
+        metric_name=row.metric_name,
+        unit=row.unit,
+        sample_size=row.sample_size,
+        baseline_value=row.baseline_value,
+        assisted_value=row.assisted_value,
+    )
+    if mismatches:
+        raise HTTPException(
+            409, detail={"code": "ROI_RECOMPUTATION_FAILED", "reasons": mismatches},
+        )
+    if payload.evidence.source_type != "AUTHORIZED_REAL":
+        raise HTTPException(
+            409,
+            detail={
+                "code": "REAL_AUTHORIZED_SOURCE_REQUIRED",
+                "message": "Synthetic study values cannot become claimable real-project ROI.",
+            },
+        )
+    if principal.issuer in {"demo", "service-key"}:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "HUMAN_REVIEWER_REQUIRED",
+                "message": "ROI review must use an individual authenticated identity.",
+            },
+        )
+    if not payload.evidence.authorization_ref or not payload.evidence.study_protocol_ref:
+        raise HTTPException(
+            409, detail={"code": "SOURCE_PROVENANCE_REQUIRED"},
         )
     row.status = "VERIFIED"
     row.verified_by = principal.subject
@@ -775,7 +824,13 @@ def pilot_roi_summary(
         "status": "VERIFIED_RESULTS_AVAILABLE" if verified else "NO_VERIFIED_RESULTS",
         "claimable_measurements": len(verified),
         "unverified_measurements": len(rows) - len(verified),
-        "boundary": "Only independently verified measurements may be used in competition ROI claims.",
+        "boundary": (
+            "VERIFIED means a distinct authenticated reviewer submitted a matching "
+            "hash of declared, authorized-real paired samples and reproduced the "
+            "stored means. It is NOT independent proof that source records, "
+            "authorization, or claimed economic impact are truthful. "
+            "Those require separate expert/source audit before public claims."
+        ),
         "measurements": [_measurement_payload(row) for row in rows],
     }
 
