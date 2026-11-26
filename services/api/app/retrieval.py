@@ -46,6 +46,26 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
+_CJK_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+
+
+def tokenize_bigrams(text: str) -> list[str]:
+    """Like ``tokenize`` but splits CJK runs into overlapping character pairs.
+
+    Single characters are too ambiguous for a large corpus of short clause
+    summaries (天 in 露天 "open air" would match 天气 "weather"); pairs keep
+    most of the recall while removing those accidental matches. A one-
+    character run is kept as-is.
+    """
+    if not text:
+        return []
+    lowered = text.lower()
+    tokens = _LATIN_WORD_RE.findall(lowered)
+    for run in _CJK_RUN_RE.findall(lowered):
+        tokens.extend([run] if len(run) == 1 else [run[i:i + 2] for i in range(len(run) - 1)])
+    return tokens
+
+
 def _bilingual_text(value) -> str:
     if isinstance(value, dict):
         return " ".join(str(v) for v in value.values() if v)
@@ -80,9 +100,10 @@ def document_tier(doc) -> str:
 class _TfIdfTier:
     """A tiny in-memory TF-IDF index over a fixed set of documents."""
 
-    def __init__(self, docs: list):
+    def __init__(self, docs: list, tokenizer=tokenize):
         self.docs = list(docs)
-        doc_tokens = [Counter(tokenize(document_text(d))) for d in self.docs]
+        self.tokenizer = tokenizer
+        doc_tokens = [Counter(tokenizer(document_text(d))) for d in self.docs]
         document_frequency: Counter = Counter()
         for counts in doc_tokens:
             for term in counts:
@@ -99,7 +120,10 @@ class _TfIdfTier:
         norm = math.sqrt(sum(v * v for v in vector.values())) or 1.0
         return {term: v / norm for term, v in vector.items()}
 
-    def score(self, query_counts: Counter) -> list[tuple[float, object]]:
+    def score(self, query: str) -> list[tuple[float, object]]:
+        query_counts = Counter(self.tokenizer(query))
+        if not query_counts:
+            return []
         query_vector = self._vectorize(query_counts)
         scored = []
         for doc, doc_vector in zip(self.docs, self.doc_vectors):
@@ -109,12 +133,15 @@ class _TfIdfTier:
         return scored
 
 
+TIER_TOKENIZERS = {"source": tokenize, "clause": tokenize_bigrams}
+
+
 class KnowledgeIndex:
     """TF-IDF cosine search over documents, scored per corpus tier.
 
     Operational source documents and clause-level statutory summaries each
-    get their own IDF statistics; results from both tiers are merged by
-    cosine similarity. A corpus with no clause documents behaves exactly as
+    get their own IDF statistics (and the clause tier uses CJK character
+    pairs); results from both tiers are merged by cosine similarity. A corpus with no clause documents behaves exactly as
     a single TF-IDF index over all documents.
     """
 
@@ -123,14 +150,11 @@ class KnowledgeIndex:
         grouped: dict[str, list] = {}
         for doc in self.docs:
             grouped.setdefault(document_tier(doc), []).append(doc)
-        self.tiers = {name: _TfIdfTier(members) for name, members in grouped.items()}
+        self.tiers = {name: _TfIdfTier(members, TIER_TOKENIZERS[name]) for name, members in grouped.items()}
 
     def search(self, query: str, top_k: int = 3) -> list[tuple[float, object]]:
         """Return up to ``top_k`` ``(cosine_similarity, document)`` pairs,
         highest similarity first, for documents with any term overlap."""
-        query_counts = Counter(tokenize(query))
-        if not query_counts:
-            return []
-        scored = [pair for tier in self.tiers.values() for pair in tier.score(query_counts)]
+        scored = [pair for tier in self.tiers.values() for pair in tier.score(query)]
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return scored[:top_k]

@@ -1,0 +1,152 @@
+id	domain	en	zh	local	local_lang	local_basis	review_status
+ID-GL-0001	hse	occupational safety and health	职业安全与健康	keselamatan dan kesehatan kerja	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0002	hse	work safety	工作安全	keselamatan kerja	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0003	hse	construction safety	施工安全	keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0004	hse	construction safety management system	建筑安全管理体系	sistem manajemen keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0005	hse	construction safety plan	施工安全计划	rencana keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0006	hse	construction safety unit	施工安全单位	unit keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0007	hse	construction safety expert	施工安全专家	ahli keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0008	hse	construction safety officer	施工安全员	petugas keselamatan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0009	hse	construction accident	施工事故	kecelakaan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0010	hse	work accident	工伤事故	kecelakaan kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0011	hse	occupational disease	职业病	penyakit akibat kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0012	hse	risk assessment	风险评估	penilaian risiko	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0013	hse	hazard identification	危害识别	identifikasi bahaya	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0014	hse	risk level	风险等级	tingkat risiko	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0015	hse	personal protective equipment	个人防护装备	alat pelindung diri	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0016	hse	safety helmet	安全帽	helm keselamatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0017	hse	safety harness	安全带	sabuk pengaman	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0018	hse	working at height	高处作业	bekerja di ketinggian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0019	hse	fall from height	高处坠落	jatuh dari ketinggian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0020	hse	scaffolding	脚手架	perancah	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0021	hse	permit to work	作业许可证	izin kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0022	hse	hot work	动火作业	pekerjaan panas	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0023	hse	confined space	受限空间	ruang terbatas	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0024	hse	safety induction	入场安全教育	induksi keselamatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0025	hse	toolbox meeting	班前安全会	safety talk	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0026	hse	first aid	急救	pertolongan pertama	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0027	hse	fire fighting	灭火	pemadaman kebakaran	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0028	hse	emergency response	应急响应	tanggap darurat	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0029	hse	evacuation route	疏散路线	jalur evakuasi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0030	hse	safety and health committee	安全健康委员会	panitia pembina keselamatan dan kesehatan kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0031	hse	health examination	健康检查	pemeriksaan kesehatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0032	hse	noise	噪声	kebisingan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0033	hse	dust	粉尘	debu	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0034	hse	safety sign	安全标志	rambu keselamatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0035	hse	near miss	未遂事件	nyaris celaka	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0036	hse	stop work	停工	penghentian pekerjaan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0037	contract	service user (owner)	业主（服务使用方）	pengguna jasa	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0038	contract	service provider	服务提供方	penyedia jasa	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0039	contract	sub-provider	分包方	subpenyedia jasa	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0040	contract	construction services	建筑服务	jasa konstruksi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0041	contract	construction work	施工作业	pekerjaan konstruksi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0042	contract	construction consultancy	建筑咨询	konsultansi konstruksi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0043	contract	construction contract	施工合同	kontrak kerja konstruksi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0044	contract	subcontract	分包合同	subkontrak	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0045	contract	joint operation	联合经营	kerja sama operasi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0046	contract	owner's estimate	业主估价	harga perkiraan sendiri	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0047	contract	bill of quantities	工程量清单	daftar kuantitas	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0048	contract	contract value	合同价款	nilai pekerjaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0049	contract	advance payment	预付款	uang muka	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0050	contract	progress payment	进度款	pembayaran termin	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0051	contract	performance guarantee	履约保函	jaminan pelaksanaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0052	contract	advance payment guarantee	预付款保函	jaminan uang muka	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0053	contract	maintenance period	维护期	masa pemeliharaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0054	contract	final handover	最终移交	penyerahan akhir	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0055	contract	provisional handover	临时移交	penyerahan pertama	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0056	contract	variation order	变更令	perintah perubahan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0057	contract	addendum	合同补充协议	adendum	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0058	contract	extension of time	工期延长	perpanjangan waktu	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0059	contract	penalty for delay	误期罚款	denda keterlambatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0060	contract	dispute	争议	sengketa	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0061	contract	dispute board	争议委员会	dewan sengketa	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0062	contract	mediation	调解	mediasi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0063	contract	conciliation	和解	konsiliasi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0064	contract	arbitration	仲裁	arbitrase	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0065	contract	deliberation	协商	musyawarah	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0066	contract	building failure	建筑失效	kegagalan bangunan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0067	contract	expert assessor	专家评估人	penilai ahli	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0068	contract	tender	招标	tender	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0069	contract	procurement	采购	pengadaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0070	regulatory	business licence	经营许可	izin usaha	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0071	regulatory	risk-based business licensing	基于风险的经营许可	perizinan berusaha berbasis risiko	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0072	regulatory	business identification number	企业识别号	nomor induk berusaha	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0073	regulatory	business entity certificate	企业资质证书	sertifikat badan usaha	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0074	regulatory	competency certificate	资格证书	sertifikat kompetensi kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0075	regulatory	construction worker	施工人员	tenaga kerja konstruksi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0076	regulatory	foreign worker	外籍劳工	tenaga kerja asing	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0077	regulatory	foreign worker utilisation plan	外籍劳工使用计划	rencana penggunaan tenaga kerja asing	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0078	regulatory	representative office	代表处	kantor perwakilan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0079	regulatory	foreign business entity	外国企业	badan usaha asing	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0080	regulatory	national business entity	本国企业	badan usaha nasional	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0081	regulatory	classification	分类	klasifikasi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0082	regulatory	qualification	资质等级	kualifikasi	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0083	regulatory	building approval	建筑审批	persetujuan bangunan gedung	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0084	regulatory	certificate of function worthiness	功能适用证书	sertifikat laik fungsi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0085	regulatory	environmental impact assessment	环境影响评价	analisis mengenai dampak lingkungan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0086	regulatory	environmental approval	环境批准	persetujuan lingkungan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0087	regulatory	administrative sanction	行政处罚	sanksi administratif	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0088	regulatory	written warning	书面警告	peringatan tertulis	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0089	regulatory	fine	罚款	denda	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0090	regulatory	ministerial regulation	部长条例	peraturan menteri	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0091	regulatory	government regulation	政府条例	peraturan pemerintah	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0092	regulatory	law	法律	undang-undang	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0093	regulatory	explanatory note	释义	penjelasan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0094	regulatory	domestic production	国内产品	produksi dalam negeri	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0095	civil	railway	铁路	kereta api	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0096	civil	railway line	铁路线路	jalur kereta api	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0097	civil	railway infrastructure	铁路基础设施	prasarana perkeretaapian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0098	civil	rolling stock	机车车辆	sarana perkeretaapian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0099	civil	right-of-way space	铁路使用空间	ruang manfaat jalur kereta api	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0100	civil	ownership space	铁路所有权空间	ruang milik jalur kereta api	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0101	civil	supervision space	铁路监管空间	ruang pengawasan jalur kereta api	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0102	civil	level crossing	平交道口	perpotongan sebidang	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0103	civil	grade-separated crossing	立体交叉	perpotongan tidak sebidang	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0104	civil	station	车站	stasiun	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0105	civil	track	轨道	jalan rel	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0106	civil	bridge	桥梁	jembatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0107	civil	tunnel	隧道	terowongan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0108	civil	viaduct	高架桥	jalan layang	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0109	civil	embankment	路堤	timbunan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0110	civil	excavation	开挖	galian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0111	civil	pile	桩	tiang pancang	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0112	civil	bored pile	钻孔桩	tiang bor	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0113	civil	formwork	模板	bekisting	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0114	civil	reinforcement	钢筋	tulangan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0115	civil	concrete	混凝土	beton	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0116	civil	precast	预制	pracetak	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0117	civil	drainage	排水	drainase	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0118	civil	retaining wall	挡土墙	dinding penahan tanah	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0119	civil	shop drawing	深化图	gambar kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0120	civil	as-built drawing	竣工图	gambar terbangun	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0121	civil	method statement	施工方案	metode kerja	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0122	plant	crane	起重机	kran	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0123	plant	heavy equipment	重型设备	alat berat	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0124	plant	lifting	吊装	pengangkatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0125	plant	equipment inspection	设备检验	pemeriksaan peralatan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0126	plant	operator	操作员	operator	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0127	quality	construction quality plan	施工质量计划	rencana mutu pekerjaan konstruksi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0128	quality	quality control	质量控制	pengendalian mutu	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0129	quality	inspection	检查	pemeriksaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0130	quality	testing	试验	pengujian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0131	quality	material	材料	material	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0132	data	personal data	个人数据	data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0133	data	specific personal data	特定个人数据	data pribadi yang bersifat spesifik	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0134	data	data subject	数据主体	subjek data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0135	data	data controller	数据控制者	pengendali data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0136	data	data processor	数据处理者	prosesor data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0137	data	data protection officer	数据保护官	pejabat pelindungan data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0138	data	consent	同意	persetujuan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0139	data	data protection impact assessment	数据保护影响评估	penilaian dampak pelindungan data pribadi	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0140	data	cross-border transfer	跨境传输	transfer data pribadi ke luar wilayah hukum	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0141	project	project manager	项目经理	manajer proyek	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0142	project	site manager	现场经理	manajer lapangan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0143	project	supervision consultant	监理咨询方	konsultan pengawas	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0144	project	daily report	施工日报	laporan harian	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0145	project	weekly report	周报	laporan mingguan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0146	project	progress	进度	kemajuan pekerjaan	id	ATTESTED_IN:TLN 6018 (UU 2/2017 Penjelasan)	NATIVE_REVIEW_REQUIRED
+ID-GL-0147	project	schedule	进度计划	jadwal pelaksanaan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0148	project	correspondence	往来函件	surat-menyurat	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0149	project	minutes of meeting	会议纪要	notulen rapat	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0150	project	pre-construction meeting	开工前会议	rapat persiapan pelaksanaan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+ID-GL-0151	project	site handover	场地移交	penyerahan lapangan	id	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED

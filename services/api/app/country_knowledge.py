@@ -19,6 +19,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from .database import get_db
+from .field_data import seed_field_records
+from .knowledge_review import CLAUSE_STATUS, TERM_STATUS, latest_reviews, load_reviews, review_summary
 from .config import settings
 from .i18n import bi, get_lang, localize
 from .models import CountryPack, KnowledgeDocument, Project, utc_now
@@ -180,8 +182,8 @@ def _seed_project_procedures(db: Session) -> None:
 
 
 KNOWLEDGE_DATA_DIR = Path(__file__).resolve().parent / "knowledge_data"
-CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl",)
-GLOSSARY_FILES = {"MY": "my_glossary.tsv"}
+CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl", "id_regulations.jsonl")
+GLOSSARY_FILES = {"MY": "my_glossary.tsv", "ID": "id_glossary.tsv"}
 CLAUSE_DOCUMENT_TYPE = "CLAUSE_SUMMARY"
 _CLAUSE_CATEGORY = {
     "MY-ACT514": ("HSE", "健康安全环保"),
@@ -190,8 +192,17 @@ _CLAUSE_CATEGORY = {
     "MY-ACT520": ("Compliance & Permits", "合规与许可"),
     "MY-ACT746": ("Contract", "合同"),
     "MY-ACT709": ("Data Protection", "数据保护"),
+    "MY-ACT265": ("Workforce", "人力资源"),
+    "MY-ACT127": ("Environment", "环境"),
+    "MY-ACT463": ("Railway", "铁路"),
+    "MY-A1738": ("Contract", "合同"),
+    "ID-UU1": ("HSE", "健康安全环保"),
+    "ID-SMKK2021": ("HSE", "健康安全环保"),
+    "ID-UU2": ("Contract", "合同"),
+    "ID-UU27": ("Data Protection", "数据保护"),
+    "ID-UU23": ("Railway", "铁路"),
 }
-_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语")}
+_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语"), "id": ("Indonesian (Bahasa Indonesia)", "印尼语")}
 
 
 def load_clause_library() -> list[dict]:
@@ -215,7 +226,12 @@ def load_glossary(country_code: str) -> list[dict]:
     if not name:
         return []
     with (KNOWLEDGE_DATA_DIR / name).open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    reviews = latest_reviews("term")
+    for row in rows:
+        if row["id"] in reviews:
+            row["review_status"] = TERM_STATUS[reviews[row["id"]]["verdict"]]
+    return rows
 
 
 def library_manifest() -> dict:
@@ -226,6 +242,7 @@ def library_manifest() -> dict:
         item = instruments.setdefault(row["instrument"], {
             "instrument": row["instrument"], "instrument_zh": row["instrument_zh"], "country": row["country"],
             "authority": row["authority"], "version": row["version"], "source_url": row["source_url"],
+            "read_from": row["read_from"], "read_quality": row["read_quality"],
             "source_language": row["source_language"], "currency_note": row["currency_note"], "clauses": 0,
         })
         item["clauses"] += 1
@@ -233,23 +250,27 @@ def library_manifest() -> dict:
     for code in sorted(GLOSSARY_FILES):
         rows = load_glossary(code)
         glossaries.append({
-            "country": code, "terms": len(rows), "languages": ["en", "zh", "ms"],
+            "country": code, "terms": len(rows), "languages": ["en", "zh", *sorted({row["local_lang"] for row in rows})],
             "domains": dict(Counter(row["domain"] for row in rows)),
-            "ms_attested_in_official_text": sum(row["ms_basis"].startswith("MS_ATTESTED_IN:") for row in rows),
+            "local_attested_in_official_text": sum(row["local_basis"].startswith("ATTESTED_IN:") for row in rows),
             "review_status": sorted({row["review_status"] for row in rows}),
         })
     return {
         "clause_library": {
-            "clauses": len(clauses), "instruments": list(instruments.values()),
+            "clauses": len(clauses), "by_country": dict(Counter(row["country"] for row in clauses)),
+            "by_read_quality": dict(Counter(row["read_quality"] for row in clauses)),
+            "instruments": list(instruments.values()),
             "text_type": sorted({row["text_type"] for row in clauses}),
             "review_status": sorted({row["review_status"] for row in clauses}),
             "verified_against_source": sorted({row["verified_against_source"] for row in clauses}),
         },
         "glossaries": glossaries,
+        "reviews": review_summary([row["id"] for row in clauses], [row["id"] for code in GLOSSARY_FILES for row in load_glossary(code)], load_reviews()),
         "limits": [
             "Clause entries are paraphrases written for retrieval, not authentic statutory text.",
-            "No entry has yet been reviewed by Malaysian counsel or a native-speaker terminologist.",
-            "Environmental (EQA 1974 / EIA), Street, Drainage and Building Act / UBBL, Employment Act and railway legislation are not yet covered.",
+            "No entry has yet been reviewed by local counsel or a native-speaker terminologist.",
+            "Rows marked MIRROR_TRANSCRIPTION were read from a third-party transcription because the official site could not be reached; source_url still points to the official record.",
+            "Malaysia: Act 133 / UBBL and the Land Public Transport Act 2010 are not yet covered. Indonesia: implementing regulations (e.g. PP 50/2012, PP 22/2020) and the amended UU 2/2017 text are not yet covered.",
         ],
         "disclaimer": LEGAL_DISCLAIMER,
     }
@@ -264,8 +285,10 @@ def _seed_clause_library(db: Session) -> None:
         "Paraphrase for retrieval, not the authentic text; expert review required before reliance.",
         "检索用意译摘要，非法定原文；依赖前须经专业人士复核。",
     )
+    reviews = latest_reviews("clause")
     for row in load_clause_library():
         ref = row["id"]
+        review_status, doc_status = CLAUSE_STATUS[reviews[ref]["verdict"]] if ref in reviews else (row["review_status"], "CURRENT")
         cat_en, cat_zh = _CLAUSE_CATEGORY[_clause_prefix(ref)]
         lang_en, lang_zh = _SOURCE_LANGUAGE[row["source_language"]]
         note = f" {row['currency_note']}" if row.get("currency_note") else ""
@@ -277,9 +300,9 @@ def _seed_clause_library(db: Session) -> None:
             title=bi(f"{row['instrument']} {row['provision']} - {row['heading']['en']}", f"{row['instrument_zh']} {row['provision']} - {row['heading']['zh']}"),
             category=bi(cat_en, cat_zh), jurisdiction=bi(row["country"], row["country"]), language=bi(lang_en, lang_zh),
             source_ref=ref, content=content, summary=row["summary"], country_code=row["country"],
-            document_type=CLAUSE_DOCUMENT_TYPE, authority=row["authority"], version=row["version"], status="CURRENT",
+            document_type=CLAUSE_DOCUMENT_TYPE, authority=row["authority"], version=row["version"], status=doc_status,
             effective_date=None, review_due="2027-05-26", source_url=row["source_url"],
-            content_hash=_digest(content, ref, row["version"]), tags=[*row["topics"], row["text_type"], row["review_status"]],
+            content_hash=_digest(content, ref, row["version"]), tags=[*row["topics"], row["text_type"], review_status, row["read_quality"]],
             lifecycle_stages=row["lifecycle_stages"], confidentiality="PUBLIC", updated_at=datetime(2026, 11, 26),
         )
         document = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.source_ref == ref))
@@ -378,6 +401,7 @@ def seed_country_knowledge(db: Session) -> None:
                 setattr(document, key, value)
     _seed_project_procedures(db)
     _seed_clause_library(db)
+    seed_field_records(db)
     db.commit()
 
 
@@ -534,10 +558,11 @@ def pack_glossary(
         raise HTTPException(404, "Country pack not found")
     rows = load_glossary(code)
     needle = q.strip().lower()
-    matched = [row for row in rows if (not domain or row["domain"] == domain.lower()) and (not needle or any(needle in row[key].lower() for key in ("en", "zh", "ms")))]
+    matched = [row for row in rows if (not domain or row["domain"] == domain.lower()) and (not needle or any(needle in row[key].lower() for key in ("en", "zh", "local")))]
     return {"country": code.upper(), "total": len(matched), "terms": matched[:limit],
             "domains": sorted({row["domain"] for row in rows}),
-            "review_notice": "Native-speaker terminology review required; MS_ATTESTED_IN means the Malay term occurs in the official Malay text read, not that the equivalence was confirmed."}
+            "local_language": rows[0]["local_lang"] if rows else None,
+            "review_notice": "Native-speaker terminology review required; ATTESTED_IN means the local-language term occurs in the official text read, not that the equivalence was confirmed."}
 
 
 @router.get("/knowledge/library")
