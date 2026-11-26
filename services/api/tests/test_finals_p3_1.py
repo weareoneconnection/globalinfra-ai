@@ -184,3 +184,44 @@ def test_reviewer_role_and_statistics_gates(tmp_path):
     assert diff["paired_losses"] == 0
     assert diff["delta_risk_accuracy"] == pytest.approx(2/3, abs=0.0001)
     assert 0 <= diff["exact_sign_test_two_sided_p"] <= 1
+
+
+def test_paired_pilot_reports_descriptive_only_and_rejects_financial_claim():
+    from app.roi_evidence import PairedStudy
+    from evals.p3_1_paired_pilot import paired_pilot_report
+    study = PairedStudy(
+        schema_version="globalinfra.pilot-roi-paired.v1",
+        project_id=1, metric_name="human_minutes_per_case", unit="minutes",
+        source_type="SYNTHETIC",
+        authorization_ref="SYNTHETIC_TEST_ONLY",
+        study_protocol_ref="TEST_ONLY_PAIRED_TIMING_PROTOCOL",
+        cases=[
+            {"case_id": f"TEST-ROI-{i:03d}", "baseline_value": 100,
+             "assisted_value": 60} for i in range(20)
+        ],
+    )
+    report = paired_pilot_report(
+        study, protocol_ref="TEST_ONLY_TIMING",
+        evidence_source_bundle_sha256="a"*64,
+        independent_reviewer_ref="TEST_ONLY_REVIEWER",
+    )
+    assert report["status"] == "SYNTHETIC_TEST_ONLY_NOT_CLAIMABLE"
+    assert report["cases"] == 20
+    assert report["improvement_percent_descriptive"] == 40.0
+    assert report["improvement_percent_bootstrap_case_sampling_95_ci"] == [40.0, 40.0]
+    assert report["financial_roi"] is None
+    assert report["economic_claim"] is None
+    assert report["publication_gate"] == "CLOSED_PENDING_RAW_TIMESHEET_AUDIT_AND_APPROVAL"
+    with pytest.raises(ValueError, match="SOURCE_BUNDLE_SHA256_REQUIRED"):
+        paired_pilot_report(
+            study, protocol_ref="TEST_ONLY_TIMING",
+            evidence_source_bundle_sha256="invalid",
+            independent_reviewer_ref="TEST_ONLY_REVIEWER",
+        )
+    with pytest.raises(ValueError, match="PILOT_SAMPLE_SIZE_OUTSIDE"):
+        paired_pilot_report(
+            study.model_copy(update={"cases": study.cases[:2]}),
+            protocol_ref="TEST_ONLY_TIMING",
+            evidence_source_bundle_sha256="a"*64,
+            independent_reviewer_ref="TEST_ONLY_REVIEWER",
+        )
