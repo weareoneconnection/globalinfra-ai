@@ -28,6 +28,9 @@ jobs:
       - name: P3.1 blind-study CLI and safe NOT_RUN smoke
         run: |
           python evals/p3_1_study.py --help
+          python evals/p3_1_hybrid_council.py --help
+          python evals/p3_1_hybrid_council.py run --study /tmp/not-used.json --packet /tmp/not-used.json --blind-key /tmp/not-used.json --registry /tmp/not-used.json --output /tmp/council-not-run.json
+          python -c 'import json; x=json.load(open("/tmp/council-not-run.json")); assert x["status"] == "NOT_RUN" and x["publication_gate"] == "CLOSED"'
           python evals/run_model_comparison.py --output /tmp/globalinfra-p3-1-not-run.json
           python -c 'import json; p=json.load(open("/tmp/globalinfra-p3-1-not-run.json")); assert p["status"] == "NOT_RUN"; assert not any(g["metrics"] for g in p["groups"])'
       # Alembic migrations must apply cleanly to a bare database and produce the
