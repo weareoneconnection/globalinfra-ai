@@ -17,7 +17,7 @@ export default async function CompetitionPage(){
   return <>
     <div className="command-hero competition-hero">
       <div><div className="eyebrow">{t('eyebrow')}</div><h2 className="page-title">{t('title')}</h2><p className="page-subtitle">{t('subtitle')}</p></div>
-      <div className="competition-hero-actions"><Link className="button" href="/competition/jury">V6.1 JURY MODE ↗</Link><div className="competition-score"><span>{evidence.release.evidence_status}</span><strong>{evidence.release.passed_cases}/{evidence.release.total_cases}</strong><small>{t('verifiedCases')}</small></div></div>
+      <div className="competition-hero-actions"><Link className="button" href="/competition/finals">FINALS MISSION CONTROL ↗</Link><Link className="button" href="/competition/jury">V6.1 JURY MODE ↗</Link><div className="competition-score"><span>{evidence.release.evidence_status}</span><strong>{evidence.release.passed_cases}/{evidence.release.total_cases}</strong><small>{t('verifiedCases')}</small></div></div>
     </div>
     <CompetitionEvidence initialGolden={golden} evidence={evidence} locale={locale}/>
   </>;
