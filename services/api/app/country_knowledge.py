@@ -215,8 +215,25 @@ def seed_country_knowledge(db: Session) -> None:
         if pack is None:
             db.add(CountryPack(code=code, **values))
         else:
+            # The seed job runs at every service start. Never overwrite a
+            # genuine human review merely because the service restarted.
+            # However, a changed source digest or expired review MUST close
+            # the gate and force a fresh qualified human check.
+            preserve_review = bool(
+                pack.status == "REVIEWED"
+                and pack.reviewed_by
+                and not pack.reviewed_by.startswith("seed:")
+                and pack.source_digest == values["source_digest"]
+                and pack.review_due_at
+                and pack.review_due_at > utc_now()
+            )
+            protected_fields = {
+                "status", "reviewed_at", "reviewed_by", "review_due_at",
+                "approval_policy",
+            } if preserve_review else set()
             for key, value in values.items():
-                setattr(pack, key, value)
+                if key not in protected_fields:
+                    setattr(pack, key, value)
 
     # Upgrade legacy records without changing their authored content.
     for doc in db.scalars(select(KnowledgeDocument)).all():
