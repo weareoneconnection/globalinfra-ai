@@ -2,6 +2,7 @@ const PUBLIC_COMPETITION_GET_ROUTES = new Set([
   'competition/golden-thread',
   'competition/evaluation',
   'competition/submission-evidence',
+  'competition/finals/overview',
   'competition/evaluation-artifacts/latest',
   'competition/evidence-bundle',
 ]);
@@ -50,7 +51,8 @@ export function isPublicCompetitionApiRequest(
 export function isPublicWebRequest(method: string, pathname: string): boolean {
   if (
     (pathname === '/competition' || pathname === '/competition/'
-      || pathname === '/competition/jury' || pathname === '/competition/jury/')
+      || pathname === '/competition/jury' || pathname === '/competition/jury/'
+      || pathname === '/competition/finals' || pathname === '/competition/finals/')
     || pathname === '/healthz'
     || pathname === '/readyz'
     || pathname === '/manifest.webmanifest'
