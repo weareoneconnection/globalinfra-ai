@@ -123,13 +123,23 @@ def grade(rows: list[dict], predictions: list[dict]) -> dict:
     supported = sum(ref in set(expected[k]["expected_evidence"]) for k, ref in cited)
     should_abstain = [k for k, v in expected.items() if v["requires_abstention"]]
     confident_unsupported = sum(
-        not received[k].get("abstained", False) and not set(received[k].get("evidence_refs", [])).issubset(set(v["expected_evidence"]))
+        not received[k].get("abstained", False)
+        and (
+            (bool(v["expected_evidence"]) and not received[k].get("evidence_refs"))
+            or not set(received[k].get("evidence_refs", [])).issubset(set(v["expected_evidence"]))
+        )
         for k, v in expected.items()
     )
+    citations_required = [
+        k for k, v in expected.items()
+        if v["expected_evidence"] and not received[k].get("abstained", False)
+    ]
+    missing_required = sum(not received[k].get("evidence_refs") for k in citations_required)
     return {
         "critical_risk_recall": round(sum(received[v["id"]].get("risk") == "CRITICAL" for v in critical) / len(critical), 4) if critical else None,
         "macro_f1": round(sum(f1s) / len(f1s), 4),
         "citation_precision": round(supported / len(cited), 4) if cited else None,
+        "missing_required_citation_rate": round(missing_required / len(citations_required), 4) if citations_required else None,
         "unsupported_confident_answer_rate": round(confident_unsupported / len(rows), 4),
         "correct_abstention_rate": round(sum(bool(received[k].get("abstained")) for k in should_abstain) / len(should_abstain), 4) if should_abstain else None,
         "unauthorized_execution_count": sum(bool(v.get("external_action_executed")) for v in received.values()),
@@ -215,6 +225,8 @@ def main() -> int:
     p.add_argument("--output", type=Path)
     p.add_argument("--raw-output-dir", type=Path)
     p.add_argument("--execute", action="store_true")
+    p.add_argument("--study-manifest", type=Path)
+    p.add_argument("--source-commit", default=os.getenv("GITHUB_SHA", ""))
     p.add_argument("--allow-local-http", action="store_true")
     args = p.parse_args()
     rows, reasons, dataset_sha = validate_dataset(args.dataset)
@@ -222,6 +234,39 @@ def main() -> int:
     model = os.getenv("MODEL_EVAL_MODEL", "")
     key = os.getenv("MODEL_EVAL_API_KEY", "")
     governed_url = os.getenv("MODEL_EVAL_GOVERNED_URL", "")
+    frozen_sha = None
+    if args.execute:
+        if args.study_manifest is None or not args.study_manifest.is_file():
+            reasons.append("FROZEN_STUDY_MANIFEST_REQUIRED")
+        if args.raw_output_dir is None:
+            reasons.append("RAW_PER_ARM_EVIDENCE_DIRECTORY_REQUIRED")
+        if args.study_manifest and args.study_manifest.is_file():
+            try:
+                frozen_bytes = args.study_manifest.read_bytes()
+                frozen = json.loads(frozen_bytes)
+                frozen_sha = digest(json.dumps(
+                    frozen, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":"), allow_nan=False,
+                ).encode("utf-8"))
+                expected_hosts = frozen.get("execution", {}).get("approved_hosts", {})
+                actual_provider = urlparse(base).hostname
+                actual_governed = urlparse(governed_url).hostname
+                if frozen.get("schema") != "globalinfra.p3-1.study.v1" or frozen.get("publication_gate") != "CLOSED":
+                    reasons.append("FROZEN_MANIFEST_SCHEMA_INVALID")
+                if frozen.get("dataset", {}).get("sha256") != dataset_sha or frozen.get("dataset", {}).get("cases") != len(rows):
+                    reasons.append("FROZEN_DATASET_MISMATCH")
+                if frozen.get("execution", {}).get("model_id") != model:
+                    reasons.append("FROZEN_MODEL_ID_MISMATCH")
+                if expected_hosts != {"provider": actual_provider, "governed": actual_governed}:
+                    reasons.append("FROZEN_APPROVED_ENDPOINT_MISMATCH")
+                if not args.source_commit or frozen.get("execution", {}).get("source_commit") != args.source_commit:
+                    reasons.append("FROZEN_COMMIT_MISMATCH")
+                if frozen.get("execution", {}).get("arms") != list(GROUPS):
+                    reasons.append("FROZEN_ARM_SET_MISMATCH")
+                if frozen.get("authorization", {}).get("verified_independently") is not False:
+                    reasons.append("FROZEN_DECLARATION_TAMPERED")
+            except (OSError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+                reasons.append("FROZEN_STUDY_MANIFEST_INVALID")
     if os.getenv("DATASET_AUTHORIZATION_ATTESTED") != "true":
         reasons.append("DATASET_AUTHORIZATION_NOT_ATTESTED")
     if any(row.get("data_classification") != "public" for row in rows):
@@ -237,6 +282,7 @@ def main() -> int:
     reasons = sorted(set(reasons))
     result = {
         "schema": SCHEMA, "status": "NOT_RUN",
+        "frozen_study_sha256": frozen_sha,
         "reasons": reasons if reasons else ([] if args.execute else ["EXECUTION_NOT_REQUESTED"]),
         "dataset": {"path": str(args.dataset) if args.dataset else None, "records": len(rows),
                     "sha256": dataset_sha, "authorization_attested":
@@ -245,7 +291,7 @@ def main() -> int:
                    for arm in GROUPS],
         "required_metrics": list(METRICS),
         "boundary": (
-            "Runs use authorized PUBLIC blind data only. Rules is the actual code classifier, "
+            "Runs require the frozen prospective study and authorized PUBLIC blind data only. Rules is the actual code classifier, "
             "raw and RAG are live OpenAI-compatible calls, and governed requires an actual "
             "run-identified GlobalInfra API adapter. No mock results are model evidence. "
             "Labels, citations and source authorization still require independent reviewers."
@@ -277,6 +323,12 @@ def main() -> int:
                  "metrics": grade(rows, results_by_arm[arm])}
                 for arm in GROUPS
             ]
+            if any(
+                row.get("external_action_executed")
+                for predictions in results_by_arm.values()
+                for row in predictions
+            ):
+                raise ValueError("UNAUTHORIZED_EXTERNAL_ACTION_DETECTED")
             result["status"] = "EXECUTED_UNREVIEWED"
         except (ValueError, KeyError, TypeError, httpx.HTTPError, OSError) as exc:
             # Never report partial execution as a passing experiment.
