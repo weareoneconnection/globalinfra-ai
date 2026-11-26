@@ -22,6 +22,9 @@ def test_clause_library_rows_keep_provenance_and_review_flags():
         assert row["read_quality"] in READ_QUALITIES and row["read_from"]
         assert row["source_language"] in {"en", "ms", "id"}
         assert row["version"] and row["provision"] and row["authority"]
+        # Postgres enforces the KnowledgeDocument column sizes that SQLite ignores.
+        assert len(row["version"]) <= 64 and len(row["authority"]) <= 160 and len(row["id"]) <= 160, row["id"]
+        assert len(row["source_url"]) <= 500, row["id"]
         assert row["heading"]["en"] and row["heading"]["zh"]
         assert row["summary"]["en"] and row["summary"]["zh"]
         assert row["text_type"] == "PARAPHRASE_NOT_AUTHENTIC_TEXT"
