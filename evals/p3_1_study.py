@@ -59,6 +59,8 @@ def freeze(
     rows, problems, sha = validate_dataset(dataset)
     if problems:
         raise ValueError("DATASET_INVALID:" + ",".join(problems))
+    if any(r.get("data_classification") != "public" for r in rows):
+        raise ValueError("NONPUBLIC_DATASET_NOT_ELIGIBLE_FOR_COMPARISON")
     norm = [" ".join(r["input"].lower().split()) for r in rows]
     if len(set(norm)) != len(norm):
         raise ValueError("DUPLICATED_CASE_TEXT")
