@@ -199,7 +199,7 @@ function PrettyStatus({ value }: { value: string }) {
   return <span className={`${styles.state} ${statusTone(value)}`}>{value.replaceAll('_', ' ')}</span>;
 }
 
-function CountryCard({ data, labels }: { data: Country; labels: (typeof COPY)['en'] }) {
+function CountryCard({ data, labels }: { data: Country; labels: { languages: string; authorities: string; permitGates: string } }) {
   return (
     <article className={styles.countryCard}>
       <div className={styles.countryHead}>
