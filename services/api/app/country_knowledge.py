@@ -6,10 +6,12 @@ that still requires project-specific confirmation by an authorized reviewer.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 from collections import Counter
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -177,6 +179,117 @@ def _seed_project_procedures(db: Session) -> None:
                 setattr(document, key, value)
 
 
+KNOWLEDGE_DATA_DIR = Path(__file__).resolve().parent / "knowledge_data"
+CLAUSE_LIBRARY_FILES = ("my_regulations.jsonl",)
+GLOSSARY_FILES = {"MY": "my_glossary.tsv"}
+CLAUSE_DOCUMENT_TYPE = "CLAUSE_SUMMARY"
+_CLAUSE_CATEGORY = {
+    "MY-ACT514": ("HSE", "健康安全环保"),
+    "MY-CDM2024": ("HSE", "健康安全环保"),
+    "MY-ACT835": ("HSE", "健康安全环保"),
+    "MY-ACT520": ("Compliance & Permits", "合规与许可"),
+    "MY-ACT746": ("Contract", "合同"),
+    "MY-ACT709": ("Data Protection", "数据保护"),
+}
+_SOURCE_LANGUAGE = {"en": ("English", "英语"), "ms": ("Malay (Bahasa Malaysia)", "马来语")}
+
+
+def load_clause_library() -> list[dict]:
+    """Read the clause-level regulation library shipped with the API image.
+
+    Every row is a paraphrase of one provision, tied to the exact official
+    PDF, version and source language it was read from. Rows are not
+    authentic statutory text and carry an expert-review flag.
+    """
+    rows: list[dict] = []
+    for name in CLAUSE_LIBRARY_FILES:
+        path = KNOWLEDGE_DATA_DIR / name
+        with path.open(encoding="utf-8") as handle:
+            rows.extend(json.loads(line) for line in handle if line.strip())
+    return rows
+
+
+def load_glossary(country_code: str) -> list[dict]:
+    """Return the engineering glossary rows for a country (empty if none)."""
+    name = GLOSSARY_FILES.get(country_code.upper())
+    if not name:
+        return []
+    with (KNOWLEDGE_DATA_DIR / name).open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def library_manifest() -> dict:
+    """Machine-readable data card for the shipped clause library and glossaries."""
+    clauses = load_clause_library()
+    instruments: dict[str, dict] = {}
+    for row in clauses:
+        item = instruments.setdefault(row["instrument"], {
+            "instrument": row["instrument"], "instrument_zh": row["instrument_zh"], "country": row["country"],
+            "authority": row["authority"], "version": row["version"], "source_url": row["source_url"],
+            "source_language": row["source_language"], "currency_note": row["currency_note"], "clauses": 0,
+        })
+        item["clauses"] += 1
+    glossaries = []
+    for code in sorted(GLOSSARY_FILES):
+        rows = load_glossary(code)
+        glossaries.append({
+            "country": code, "terms": len(rows), "languages": ["en", "zh", "ms"],
+            "domains": dict(Counter(row["domain"] for row in rows)),
+            "ms_attested_in_official_text": sum(row["ms_basis"].startswith("MS_ATTESTED_IN:") for row in rows),
+            "review_status": sorted({row["review_status"] for row in rows}),
+        })
+    return {
+        "clause_library": {
+            "clauses": len(clauses), "instruments": list(instruments.values()),
+            "text_type": sorted({row["text_type"] for row in clauses}),
+            "review_status": sorted({row["review_status"] for row in clauses}),
+            "verified_against_source": sorted({row["verified_against_source"] for row in clauses}),
+        },
+        "glossaries": glossaries,
+        "limits": [
+            "Clause entries are paraphrases written for retrieval, not authentic statutory text.",
+            "No entry has yet been reviewed by Malaysian counsel or a native-speaker terminologist.",
+            "Environmental (EQA 1974 / EIA), Street, Drainage and Building Act / UBBL, Employment Act and railway legislation are not yet covered.",
+        ],
+        "disclaimer": LEGAL_DISCLAIMER,
+    }
+
+
+def _clause_prefix(clause_id: str) -> str:
+    return "-".join(clause_id.split("-")[:2])
+
+
+def _seed_clause_library(db: Session) -> None:
+    caveat = bi(
+        "Paraphrase for retrieval, not the authentic text; expert review required before reliance.",
+        "检索用意译摘要，非法定原文；依赖前须经专业人士复核。",
+    )
+    for row in load_clause_library():
+        ref = row["id"]
+        cat_en, cat_zh = _CLAUSE_CATEGORY[_clause_prefix(ref)]
+        lang_en, lang_zh = _SOURCE_LANGUAGE[row["source_language"]]
+        note = f" {row['currency_note']}" if row.get("currency_note") else ""
+        content = bi(
+            f"{row['instrument']} {row['provision']} ({row['heading']['en']}). {row['summary']['en']}{note} {caveat['en']}",
+            f"{row['instrument_zh']} {row['provision']}（{row['heading']['zh']}）。{row['summary']['zh']} {caveat['zh']}",
+        )
+        values = dict(
+            title=bi(f"{row['instrument']} {row['provision']} - {row['heading']['en']}", f"{row['instrument_zh']} {row['provision']} - {row['heading']['zh']}"),
+            category=bi(cat_en, cat_zh), jurisdiction=bi(row["country"], row["country"]), language=bi(lang_en, lang_zh),
+            source_ref=ref, content=content, summary=row["summary"], country_code=row["country"],
+            document_type=CLAUSE_DOCUMENT_TYPE, authority=row["authority"], version=row["version"], status="CURRENT",
+            effective_date=None, review_due="2027-05-26", source_url=row["source_url"],
+            content_hash=_digest(content, ref, row["version"]), tags=[*row["topics"], row["text_type"], row["review_status"]],
+            lifecycle_stages=row["lifecycle_stages"], confidentiality="PUBLIC", updated_at=datetime(2026, 11, 26),
+        )
+        document = db.scalar(select(KnowledgeDocument).where(KnowledgeDocument.source_ref == ref))
+        if document is None:
+            db.add(KnowledgeDocument(**values))
+        else:
+            for key, value in values.items():
+                setattr(document, key, value)
+
+
 def _digest(content: dict, source_ref: str, version: str) -> str:
     payload = json.dumps([content, source_ref, version], ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()
@@ -264,6 +377,7 @@ def seed_country_knowledge(db: Session) -> None:
             for key, value in values.items():
                 setattr(document, key, value)
     _seed_project_procedures(db)
+    _seed_clause_library(db)
     db.commit()
 
 
@@ -411,6 +525,26 @@ def _document_payload(doc: KnowledgeDocument, score: float | None = None) -> dic
     return payload
 
 
+@router.get("/country-packs/{code}/glossary")
+def pack_glossary(
+    code: str, q: str = Query(default="", max_length=200), domain: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=500, ge=1, le=1000), principal: Principal = Depends(get_principal), db: Session = Depends(get_db),
+):
+    if db.get(CountryPack, code.upper()) is None:
+        raise HTTPException(404, "Country pack not found")
+    rows = load_glossary(code)
+    needle = q.strip().lower()
+    matched = [row for row in rows if (not domain or row["domain"] == domain.lower()) and (not needle or any(needle in row[key].lower() for key in ("en", "zh", "ms")))]
+    return {"country": code.upper(), "total": len(matched), "terms": matched[:limit],
+            "domains": sorted({row["domain"] for row in rows}),
+            "review_notice": "Native-speaker terminology review required; MS_ATTESTED_IN means the Malay term occurs in the official Malay text read, not that the equivalence was confirmed."}
+
+
+@router.get("/knowledge/library")
+def knowledge_library(principal: Principal = Depends(get_principal), lang: str = Depends(get_lang)):
+    return localize(library_manifest(), lang)
+
+
 @router.get("/knowledge/stats")
 def knowledge_stats(principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     docs = db.scalars(select(KnowledgeDocument).where(_knowledge_scope(principal))).all()
@@ -425,19 +559,20 @@ def knowledge_stats(principal: Principal = Depends(get_principal), db: Session =
 def knowledge_search(
     q: str = Query(default="", max_length=500), country_code: str | None = None, category: str | None = None,
     stage: str | None = None, status: str = "CURRENT", limit: int = Query(default=20, ge=1, le=100),
+    document_type: str | None = Query(default=None, max_length=40),
     principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang),
 ):
     docs = list(db.scalars(select(KnowledgeDocument).where(
         _knowledge_scope(principal)
     ).order_by(KnowledgeDocument.updated_at.desc())))
-    filtered = [doc for doc in docs if (not country_code or doc.country_code == country_code.upper()) and (not status or doc.status == status.upper()) and (not category or category.lower() in json.dumps(doc.category, ensure_ascii=False).lower()) and (not stage or stage.lower() in [item.lower() for item in (doc.lifecycle_stages or [])])]
+    filtered = [doc for doc in docs if (not country_code or doc.country_code == country_code.upper()) and (not status or doc.status == status.upper()) and (not category or category.lower() in json.dumps(doc.category, ensure_ascii=False).lower()) and (not stage or stage.lower() in [item.lower() for item in (doc.lifecycle_stages or [])]) and (not document_type or (doc.document_type or "").upper() == document_type.upper())]
     if q.strip():
         ranked = KnowledgeIndex(filtered).search(q, top_k=limit)
     else:
         ranked = [(1.0, doc) for doc in filtered[:limit]]
     facets = {"countries": Counter(doc.country_code or "GLOBAL" for doc in filtered), "types": Counter(doc.document_type for doc in filtered), "stages": Counter(stage_name for doc in filtered for stage_name in (doc.lifecycle_stages or []))}
     result = {
-        "query": q, "filters": {"country_code": country_code, "category": category, "stage": stage, "status": status}, "total": len(ranked),
+        "query": q, "filters": {"country_code": country_code, "category": category, "stage": stage, "status": status, "document_type": document_type}, "total": len(ranked),
         "results": [_document_payload(doc, score) for score, doc in ranked],
         "facets": {name: [{"value": value, "count": count} for value, count in values.most_common()] for name, values in facets.items()},
         "retrieval": {"method": "deterministic-tfidf", "jurisdiction_aware": True, "version_aware": True, "authority_review_required": True},

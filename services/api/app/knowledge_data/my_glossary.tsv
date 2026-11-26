@@ -1,0 +1,232 @@
+id	domain	en	zh	ms	ms_basis	review_status
+MY-GL-0001	hse	occupational safety and health	职业安全与健康	keselamatan dan kesihatan pekerjaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0002	hse	risk assessment	风险评估	penilaian risiko	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0003	hse	risk control	风险控制	kawalan risiko	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0004	hse	hazard identification	危害识别	pengenalpastian bahaya	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0005	hse	hierarchy of controls	控制层级	hierarki kawalan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0006	hse	general principles of prevention	一般预防原则	prinsip am pencegahan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0007	hse	working at height	高处作业	kerja di tempat tinggi	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0008	hse	fall from height	高处坠落	jatuh dari tempat tinggi	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0009	hse	edge protection	临边防护	perlindungan pinggir	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0010	hse	guardrail	防护栏杆	pagar pengadang	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0011	hse	floor opening	楼面开口	bukaan lantai	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0012	hse	safety harness	安全带	abah-abah keselamatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0013	hse	lifeline	生命线	talian hayat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0014	hse	personal protective equipment	个人防护装备	kelengkapan pelindung diri	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0015	hse	safety helmet	安全帽	topi keselamatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0016	hse	safety boots	安全鞋	kasut keselamatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0017	hse	permit to work	作业许可证	permit untuk bekerja	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0018	hse	hot work	动火作业	kerja panas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0019	hse	confined space	受限空间	ruang terkurung	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0020	hse	gas testing	气体检测	ujian gas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0021	hse	lockout tagout	上锁挂牌	kunci dan tag keluar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0022	hse	toolbox talk	班前安全讲话	taklimat keselamatan harian	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0023	hse	safety induction	入场安全教育	induksi keselamatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0024	hse	near miss	未遂事件	nyaris kemalangan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0025	hse	dangerous occurrence	危险事件	kejadian berbahaya	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0026	hse	accident notification	事故通报	pemberitahuan kemalangan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0027	hse	occupational disease	职业病	penyakit pekerjaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0028	hse	occupational poisoning	职业中毒	keracunan pekerjaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0029	hse	imminent danger	迫在眉睫的危险	bahaya yang hampir berlaku	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0030	hse	stop work order	停工令	perintah henti kerja	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0031	hse	improvement notice	改善通知	notis pembaikan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0032	hse	prohibition notice	禁止通知	notis larangan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0033	hse	safety and health officer	安全健康主任	pegawai keselamatan dan kesihatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0034	hse	safety and health committee	安全健康委员会	jawatankuasa keselamatan dan kesihatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0035	hse	site safety supervisor	现场安全监督员	penyelia keselamatan tapak	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0036	hse	competent person	胜任人员	orang kompeten	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0037	hse	emergency procedure	应急程序	prosedur kecemasan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0038	hse	emergency route	应急通道	laluan kecemasan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0039	hse	emergency exit	紧急出口	jalan keluar kecemasan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0040	hse	evacuation	疏散	pemindahan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0041	hse	fire detection	火灾探测	pengesanan kebakaran	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0042	hse	fire-fighting equipment	灭火设备	kelengkapan memadam kebakaran	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0043	hse	first aid	急救	pertolongan cemas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0044	hse	heat stress	热应激	tekanan haba	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0045	hse	ventilation	通风	pengudaraan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0046	hse	lighting	照明	pencahayaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0047	hse	drowning	溺水	lemas	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0048	hse	asphyxiation	窒息	sesak nafas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0049	hse	housekeeping	现场整洁	pengemasan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0050	hse	welfare facilities	福利设施	kemudahan kebajikan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0051	hse	safety data sheet	安全技术说明书	risalah data keselamatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0052	hse	hazardous chemical	危险化学品	bahan kimia berbahaya	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0053	hse	noise exposure	噪声暴露	pendedahan bunyi bising	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0054	hse	occupational health service	职业健康服务	perkhidmatan kesihatan pekerjaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0055	hse	safety and health file	安全健康档案	fail keselamatan dan kesihatan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0056	cdm	client	业主	klien	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0057	cdm	domestic client	家庭业主	klien domestik	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0058	cdm	principal contractor	总承包商	kontraktor prinsipal kerja pembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0059	cdm	principal designer	主设计方	pereka bentuk prinsipal kerja pembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0060	cdm	designer	设计方	pereka bentuk	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0061	cdm	contractor	承包商	kontraktor	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0062	cdm	subcontractor	分包商	subkontraktor	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0063	cdm	construction work	施工作业	kerja pembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0064	cdm	construction project	建设项目	projek pembinaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0065	cdm	construction site	施工现场	tapak bina	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0066	cdm	construction phase	施工阶段	fasa pembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0067	cdm	construction phase plan	施工阶段计划	pelan fasa pembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0068	cdm	pre-construction information	施工前信息	maklumat prapembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0069	cdm	pre-construction phase	施工前阶段	fasa prapembinaan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0070	cdm	high-risk work	高风险作业	kerja berisiko tinggi	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0071	cdm	demolition	拆除	perobohan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0072	cdm	dismantling	拆卸	peleraian	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0073	cdm	explosives	爆破物	bahan letupan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0074	cdm	excavation	开挖	pengorekan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0075	cdm	earthworks	土方工程	kerja tanah	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0076	cdm	shoring	支护	penyokong	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0077	cdm	cofferdam	围堰	empangan kekotak	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0078	cdm	caisson	沉箱	kaison	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0079	cdm	structural stability	结构稳定性	kestabilan struktur	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0080	cdm	traffic route	交通路线	laluan lalu lintas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0081	cdm	site security	现场安保	keselamatan tapak	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0082	cdm	person-day	人日	hari-orang	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0083	cdm	working day	工作日	hari bekerja	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0084	civil	method statement	施工方案	pernyataan kaedah	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0085	civil	temporary works	临时工程	kerja sementara	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0086	civil	falsework	支架	kerja palsu	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0087	civil	formwork	模板	acuan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0088	civil	scaffolding	脚手架	perancah	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0089	civil	reinforcement	钢筋	tetulang	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0090	civil	concrete pour	混凝土浇筑	tuangan konkrit	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0091	civil	curing	养护	pengawetan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0092	civil	precast segment	预制节段	segmen pratuang	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0093	civil	bridge pier	桥墩	tiang jambatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0094	civil	pier cap	墩帽	kepala tiang	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0095	civil	bearing	支座	galas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0096	civil	abutment	桥台	abutmen	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0097	civil	pile	桩	cerucuk	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0098	civil	bored pile	钻孔桩	cerucuk gerek	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0099	civil	pile cap	承台	tukup cerucuk	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0100	civil	retaining wall	挡土墙	tembok penahan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0101	civil	embankment	路堤	tambakan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0102	civil	cutting	路堑	potongan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0103	civil	slope protection	边坡防护	perlindungan cerun	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0104	civil	drainage	排水	saliran	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0105	civil	culvert	涵洞	pembetung	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0106	civil	tunnel	隧道	terowong	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0107	civil	viaduct	高架桥	jejambat	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0108	civil	track	轨道	landasan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0109	civil	ballast	道砟	balast	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0110	civil	sleeper	轨枕	kayu landas	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0111	civil	turnout	道岔	lencongan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0112	civil	overhead line	架空线	talian atas	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0113	civil	setting out	放样	pemancangan tanda	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0114	civil	survey control point	测量控制点	titik kawalan ukur	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0115	civil	as-built drawing	竣工图	lukisan siap bina	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0116	civil	shop drawing	深化图	lukisan kerja	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0117	civil	design change	设计变更	perubahan reka bentuk	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0118	civil	temporary access road	临时便道	jalan akses sementara	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0119	civil	batching plant	搅拌站	loji pencampuran	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0120	civil	soil investigation	地质勘察	penyiasatan tanah	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0121	civil	settlement monitoring	沉降监测	pemantauan enapan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0122	plant	crane	起重机	kren	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0123	plant	mobile crane	汽车吊	kren bergerak	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0124	plant	tower crane	塔吊	kren menara	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0125	plant	heavy lifting	重型吊装	pengangkatan berat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0126	plant	lifting plan	吊装方案	pelan pengangkatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0127	plant	lifting supervisor	吊装指挥	penyelia pengangkatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0128	plant	rigger	司索工	perigger	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0129	plant	signalman	信号工	pemberi isyarat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0130	plant	crane operator	起重机司机	pengendali kren	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0131	plant	safe working load	安全工作载荷	beban kerja selamat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0132	plant	certificate of fitness	合格证书	perakuan kelayakan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0133	plant	periodic inspection	定期检验	pemeriksaan berkala	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0134	plant	plant	设备	loji	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0135	plant	machinery	机械	jentera	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0136	plant	excavator	挖掘机	jengkaut	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0137	plant	aerial work platform	高空作业平台	platform kerja udara	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0138	plant	hoist	提升机	pengangkat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0139	plant	generator	发电机	penjana	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0140	contract	construction contract	施工合同	kontrak pembinaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0141	contract	letter of award	中标通知书	surat setuju terima	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0142	contract	bill of quantities	工程量清单	senarai kuantiti	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0143	contract	variation order	变更令	arahan perubahan kerja	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0144	contract	variation	变更	perubahan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0145	contract	instruction	指令	arahan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0146	contract	claim	索赔	tuntutan	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0147	contract	extension of time	工期顺延	lanjutan masa	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0148	contract	liquidated damages	违约赔偿金	ganti rugi tertentu	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0149	contract	progress payment	进度款	bayaran kemajuan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0150	contract	interim certificate	期中付款证书	sijil interim	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0151	contract	retention sum	保留金	wang tahanan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0152	contract	performance bond	履约保函	bon pelaksanaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0153	contract	defects liability period	缺陷责任期	tempoh liabiliti kecacatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0154	contract	practical completion	实际竣工	siap praktikal	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0155	contract	payment claim	付款申索	tuntutan bayaran	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0156	contract	payment response	付款答复	respons bayaran	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0157	contract	adjudication	审裁	adjudikasi	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0158	contract	adjudicator	审裁员	adjudikator	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0159	contract	adjudication decision	审裁决定	keputusan adjudikasi	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0160	contract	arbitration	仲裁	timbang tara	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0161	contract	conditional payment	附条件付款	bayaran bersyarat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0162	contract	direct payment	直接付款	bayaran terus	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0163	contract	notice	通知	notis	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0164	contract	working days	工作日	hari bekerja	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0165	contract	subcontract	分包合同	subkontrak	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0166	contract	tender	投标	tender	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0167	contract	quantity surveyor	造价工程师	juruukur bahan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0168	quality	non-conformance report	不符合项报告	laporan ketidakpatuhan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0169	quality	inspection and test plan	检验与试验计划	pelan pemeriksaan dan ujian	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0170	quality	request for inspection	报验单	permohonan pemeriksaan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0171	quality	material approval	材料报批	kelulusan bahan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0172	quality	construction materials	建筑材料	bahan binaan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0173	quality	standard	标准	standard	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0174	quality	code of practice	作业守则	tata amalan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0175	quality	quality assurance	质量保证	jaminan kualiti	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0176	quality	quality control	质量控制	kawalan kualiti	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0177	quality	testing and commissioning	测试与调试	pengujian dan pentauliahan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0178	quality	handover	移交	penyerahan	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0179	quality	snag list	缺陷清单	senarai kecacatan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0180	regulatory	registration	注册	pendaftaran	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0181	regulatory	certificate of registration	注册证书	perakuan pendaftaran	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0182	regulatory	contractor registration	承包商注册	pendaftaran kontraktor	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0183	regulatory	accreditation	认证	akreditasi	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0184	regulatory	certification	资格认证	pensijilan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0185	regulatory	construction personnel	建筑人员	personel binaan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0186	regulatory	skilled construction worker	熟练建筑工人	pekerja binaan mahir	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0187	regulatory	site supervisor	工地主管	penyelia tapak binaan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0188	regulatory	levy	税费	levi	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0189	regulatory	offence	犯罪	kesalahan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0190	regulatory	fine	罚款	denda	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0191	regulatory	imprisonment	监禁	penjara	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0192	regulatory	authority	主管机关	pihak berkuasa	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0193	regulatory	Director General	总监	Ketua Pengarah	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0194	regulatory	Minister	部长	Menteri	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0195	regulatory	regulations	条例	peraturan-peraturan	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0196	regulatory	schedule	附表	jadual	MS_ATTESTED_IN:P.U.(A) 147/2024	NATIVE_REVIEW_REQUIRED
+MY-GL-0197	regulatory	exemption	豁免	pengecualian	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0198	regulatory	building plan approval	建筑图纸审批	kelulusan pelan bangunan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0199	regulatory	certificate of completion and compliance	竣工与合规证书	perakuan siap dan pematuhan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0200	regulatory	environmental impact assessment	环境影响评价	penilaian kesan kepada alam sekitar	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0201	regulatory	work permit	工作准证	permit kerja	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0202	regulatory	foreign worker	外籍劳工	pekerja asing	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0203	data	personal data	个人数据	data peribadi	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0204	data	sensitive personal data	敏感个人数据	data peribadi sensitif	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0205	data	data subject	数据主体	subjek data	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0206	data	data controller	数据控制者	pengawal data	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0207	data	data processor	数据处理者	pemproses data	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0208	data	data protection officer	数据保护官	pegawai perlindungan data	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0209	data	personal data breach	个人数据泄露	pelanggaran data peribadi	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0210	data	consent	同意	persetujuan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0211	data	retention	保存	penyimpanan	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0212	data	data portability	数据可携带	kemudahalihan data	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0213	data	cross-border transfer	跨境传输	pemindahan ke luar Malaysia	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0214	data	Commissioner	专员	Pesuruhjaya	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0215	data	security principle	安全原则	Prinsip Keselamatan	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0216	data	notice and choice principle	通知与选择原则	Prinsip Notis dan Pilihan	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0217	project	project manager	项目经理	pengurus projek	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
+MY-GL-0218	project	resident engineer	驻地工程师	jurutera pemastautin	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0219	project	site engineer	现场工程师	jurutera tapak	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0220	project	document controller	文控	pengawal dokumen	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0221	project	transmittal	文件传送单	transmital	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0222	project	correspondence	往来函件	surat-menyurat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0223	project	minutes of meeting	会议纪要	minit mesyuarat	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0224	project	daily report	施工日报	laporan harian	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0225	project	look-ahead schedule	滚动计划	jadual pandang hadapan	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0226	project	critical path	关键路径	laluan kritikal	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0227	project	milestone	里程碑	peristiwa penting	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0228	project	interface	接口	antara muka	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0229	project	owner	业主方	pemilik	TEAM_COMPILED	NATIVE_REVIEW_REQUIRED
+MY-GL-0230	project	consultant	咨询方	perunding	MS_ATTESTED_IN:Act 709	NATIVE_REVIEW_REQUIRED
+MY-GL-0231	project	approval	批准	kelulusan	MS_ATTESTED_IN:Act 520	NATIVE_REVIEW_REQUIRED
