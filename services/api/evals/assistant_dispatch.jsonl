@@ -1,7 +1,7 @@
 {"id": "D01", "message": "马来西亚高处作业有什么要求？", "agents": ["knowledge"]}
 {"id": "D02", "message": "业主通知：P47 墩高处作业无防护，要求48小时内整改", "agents": ["intake"]}
 {"id": "D03", "message": "待我审批", "agents": ["approvals"]}
-{"id": "D04", "message": "你好", "agents": []}
+{"id": "D04", "message": "你好", "agents": ["self"]}
 {"id": "D05", "message": "查一下马来西亚高处作业规定，再看看项目进展", "agents": ["knowledge", "progress"]}
 {"id": "D06", "message": "项目进展，另外待我审批", "agents": ["progress", "approvals"]}
 {"id": "D07", "message": "我的上报处理得怎么样了", "agents": ["field"]}

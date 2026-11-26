@@ -417,6 +417,8 @@ a.assistant-card:hover{border-color:var(--line2)}
 .dispatch-draft ol{margin:6px 0 6px 18px}
 .dispatch-trace{margin-top:10px;font-size:12px;opacity:.85}
 .dispatch-trace summary{cursor:pointer}
+.coverage-covered{color:#6ee7a8}.coverage-thin{color:#f5c26b}.coverage-none{opacity:.5}.coverage-legal_only{color:#f59e8b}
+.coverage-gap{border-left:3px solid #f5c26b;padding-left:8px}
 @keyframes dispatch-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.dispatch-step.running .dispatch-dot{animation:none}}
 .theme-switch{font-size:13px;line-height:1;padding:5px 9px;min-width:32px}

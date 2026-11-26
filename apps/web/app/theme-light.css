@@ -725,3 +725,4 @@
 :root[data-theme="light"] .term-row em.compiled{background:rgba(146,89,0,.07)}
 :root[data-theme="light"] .term-notice{border-top:1px solid rgba(0,0,0,.06);color:#627b82}
 :root[data-theme="light"] .dispatch-table th,:root[data-theme="light"] .dispatch-table td{border-bottom-color:rgba(0,0,0,.08)}
+:root[data-theme="light"] .coverage-covered{color:#0f7a43}:root[data-theme="light"] .coverage-thin{color:#9a6400}:root[data-theme="light"] .coverage-legal_only{color:#b3361f}

@@ -2,7 +2,7 @@
 """Answer-level evaluation of the dispatching assistant (deterministic, offline).
 
 ``run_dispatch_eval.py`` checks only which sub-agents a message is routed
-to. This suite checks what comes back. Each of the 50 team-written messages
+to. This suite checks what comes back. Each of the 56 team-written messages
 (Chinese, English, Arabic, Malay, Indonesian) goes to ``/assistant/dispatch``
 with no model, so the rule planner and the retrieval path are measured:
 
@@ -18,6 +18,10 @@ with no model, so the rule planner and the retrieval path are measured:
   gates come from the right stage and country, a drawing question without a
   drawing number never guesses one, and a reply draft is marked not sent,
   waits for the steps it depends on and cites only clauses they retrieved;
+- self-knowledge: "what can you do?" lists every sub-agent and names the
+  domains the library cannot answer; "can you answer Saudi quality
+  questions?" is scoped to that domain and country; a building-code question
+  states that the library has no technical provisions;
 - focus (P2): a follow-up in the same session ("and overtime?") searches the
   country the conversation is about, or the one the follow-up names.
 
@@ -43,7 +47,7 @@ from app.main import app  # noqa: E402
 
 DATASET = API / "evals" / "dispatch_answers.jsonl"
 GATE_THRESHOLDS = {"routing": 95.0, "evidence_hit": 90.0, "no_leakage": 100.0, "abstention": 100.0, "progress_scope": 100.0,
-                   "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0}
+                   "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0, "self_knowledge": 100.0}
 
 
 def _dispatch(client, message, session_id=None):
@@ -95,6 +99,25 @@ def main() -> int:
                 table = {row_["country"]: row_["clauses"] for row_ in ((knowledge or {}).get("data") or {}).get("table") or []}
                 result["sub_agents"] = all(c in table and not table[c] for c in expect["gap_countries"]) and \
                     "未找到" in (knowledge or {}).get("summary", "")
+            if "self" in expect:
+                own = _step(agents, done, "self") or {}
+                data, want = own.get("data") or {}, expect["self"]
+                checks = [own.get("status") == "ok"]
+                if want.get("all_agents"):
+                    from app.dispatcher import AGENTS
+                    checks.append({a["id"] for a in data.get("agents") or []} == set(AGENTS))
+                for domain in want.get("gap_domains", []):
+                    row = next((r for r in data.get("coverage") or [] if r["id"] == domain), None)
+                    checks.append(bool(row) and all(c["level"] != "covered" for c in row["countries"].values())
+                                  and row["name"] in own.get("summary", "").split("较少或没有")[-1])
+                if "domains" in want:
+                    checks.append(data.get("focus_domains") == want["domains"])
+                if "countries" in want:
+                    checks.append(all(sorted(r["countries"]) == want["countries"] for r in data.get("coverage") or []))
+                result["self_knowledge"] = all(checks)
+            if expect.get("coverage_gap"):
+                gaps = ((knowledge or {}).get("data") or {}).get("coverage_gaps") or []
+                result["self_knowledge"] = bool(gaps) and not any(ch.isdigit() for ch in " ".join(gaps))
             glossary, gates, drawing, draft = (_step(agents, done, a) for a in ("glossary", "gates", "drawing", "draft"))
             if "terms" in expect and glossary is not None:
                 terms = (glossary.get("data") or {}).get("terms") or []
@@ -103,6 +126,8 @@ def main() -> int:
                                            for c, local in expect["terms"].items())
             elif "terms" in expect:
                 result["sub_agents"] = False
+            if "gates_fallback_refs" in expect:
+                result["sub_agents"] = set(expect["gates_fallback_refs"]) <= set((gates or {}).get("refs") or [])
             if "gates" in expect:
                 data = (gates or {}).get("data") or {}
                 result["sub_agents"] = (data.get("stage") == expect["gates"]["stage"]

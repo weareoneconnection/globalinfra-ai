@@ -46,10 +46,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .assistant import (
-    _CASE_ID_RE, _CITATION_RE, _INCIDENT_RE, _JSON_RE, _KNOWLEDGE_RE, MAX_DIRECT_REPLY, ChatTurn,
+    _CASE_ID_RE, _CITATION_RE, _HELP_RE, _INCIDENT_RE, _JSON_RE, _KNOWLEDGE_RE, MAX_DIRECT_REPLY, ChatTurn,
     _grounded_answer, _hit_payload, _model_available, _project_in_text, plan_rules, search_countries,
     search_knowledge,
 )
+from .capabilities import ABOUT_SELF_RE, CAPABILITY_RE, REVIEW_RE, coverage_gaps, detect_domains
 from .intake import detect_countries
 from .database import SessionLocal, get_db
 from .domain import PROJECT_INTELLIGENCE
@@ -65,6 +66,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 MAX_STEPS = 6
+MAX_SELF_LENGTH = 80    # a longer message is a task, not a question about the assistant
 MAX_LETTER_QUERY = 400  # how much of a pasted letter the clause lookup searches with
 MAX_KNOWLEDGE_ANSWERS = 2       # model-written knowledge answers per message
 STEP_TIMEOUT_S = 170
@@ -74,7 +76,7 @@ MAX_SPLIT_LENGTH = 200          # longer messages (letters, notices) are never s
 ANSWER_ROLES = {"engineer", "project_manager", "field_user"}
 
 AgentId = Literal["intake", "knowledge", "case", "answer", "progress", "approvals", "field",
-                  "compare", "draft", "glossary", "drawing", "gates"]
+                  "compare", "draft", "glossary", "drawing", "gates", "self"]
 
 AGENTS: dict[str, dict] = {
     "intake": {
@@ -133,6 +135,12 @@ AGENTS: dict[str, dict] = {
     "gates": {
         "name": bi("Permit gate agent", "许可关口智能体"), "authority": "read_only",
         "role": bi("Lists the permit gates of a country pack for a lifecycle stage.", "列出某国家包在某生命周期阶段的许可关口。"),
+    },
+    "self": {
+        "name": bi("Self-knowledge agent", "自我认知智能体"), "authority": "read_only",
+        "role": bi("Says what the assistant can and cannot answer, per lifecycle domain and country, from the live "
+                   "roster and the clause library's coverage.",
+                   "依据实时的智能体名单和条款库覆盖情况，按生命周期领域和国家说明能答什么、不能答什么。"),
     },
 }
 AGENT_IDS: tuple[str, ...] = tuple(AGENTS)
@@ -200,6 +208,16 @@ _LEAD = r"(?:然后|并且|并|再|同时|另外|还有|顺便|帮我|请|查一
 _SPLIT_RE = re.compile(r"[，,；;。！!？?\n]+\s*(?=" + _LEAD + ")", re.IGNORECASE)
 _LEAD_RE = re.compile(r"^(?:然后|并且|并|再|同时|另外|还有|顺便|and|also|then)\s*", re.IGNORECASE)
 _STEP_TAG_RE = re.compile(r"^S(\d)$")
+# A question about what a rule says, even when it names a delay, defect or
+# breach ("what does the law say about delay penalties?"), is a lookup, not a
+# report. An event report says that something happened.
+_RULE_QUESTION_RE = re.compile(
+    r"(?:有什么|有哪些|怎么|如何)(?:规定|要求|条款|限制)|规定(?:是什么|了什么|多少|多长)|多长时间|多少天|期限(?:是|多长)|"
+    r"责任期|怎么(?:算|计算|规定)|what (?:does|do) the (?:law|rules?|code)|what are the rules|how long|how many days|"
+    r"\bapa (?:peraturan|syarat)|berapa lama|ما (?:هو|هي) (?:حكم|مدة)", re.IGNORECASE)
+_EVENT_RE = re.compile(r"发生|出现|昨天|今天|刚才|现场.{0,4}(?:发现|有)|已经|occurred|happened|yesterday|today|this morning",
+                       re.IGNORECASE)
+_WORKER_RE = re.compile(r"工人|员工|劳工|外籍|雇员|workers?|employees?|staff|pekerja|العمال|عامل", re.IGNORECASE)
 # An explicit request to look clauses up, as opposed to a letter that merely
 # mentions requirements or permits.
 _LOOKUP_RE = re.compile(r"查.{0,6}(?:条款|法规|规定|依据|法律)|相关(?:条款|法规|规定)|"
@@ -305,6 +323,10 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
         if _DRAFT_RE.search(instruction):
             letter.append(Step("draft", depends_on=list(range(len(letter)))))
         return letter
+    # Questions about the assistant itself, or "analyse this contract" with no contract attached.
+    if len(text) <= MAX_SELF_LENGTH and (ABOUT_SELF_RE.search(text) or not detect_countries(text) and (
+            CAPABILITY_RE.search(text) or _HELP_RE.search(text) or (REVIEW_RE.search(text) and len(text) <= 40))):
+        return [Step("self", query=text)]
     steps: list[Step] = []
     draft_wanted = False
     for position, clause in enumerate(_clauses(text)):
@@ -326,10 +348,12 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
         if _DRAWING_RE.search(clause):
             steps.append(Step("drawing", query=clause))
             continue
-        if _GATES_RE.search(clause):
+        if _GATES_RE.search(clause) and not _WORKER_RE.search(clause):
             steps.append(Step("gates", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
             continue
         plan = plan_rules(clause, ctx.project_codes, ctx.known_case_ids)
+        if plan["tool"] == "report_incident" and _RULE_QUESTION_RE.search(clause) and not _EVENT_RE.search(clause):
+            plan.update(tool="search_knowledge", query=clause)
         # A follow-on clause asking for rules ("then check the accident
         # reporting regulation") is a lookup even if it names an incident.
         if position > 0 and plan["tool"] == "report_incident" and _KNOWLEDGE_RE.search(clause):
@@ -382,7 +406,10 @@ def _plan_prompt(lang: str, ctx: PlanContext) -> str:
         "- approvals: what waits for approval, and any request to approve, reject, execute or close (you cannot do "
         "those; the list lets the user press the buttons).\n"
         "- field: the user's own recent field reports.\n"
-        "- Greetings, thanks, questions about what you can do, or requests outside the platform: return no steps "
+        "- self: greetings and questions about the assistant itself: what it can do, which countries and topics it "
+        "covers, whether it can answer a kind of question (contract, local law, building codes, safety, quality, "
+        "schedule ...). ONE step whose query is the user's question. Never describe your abilities in `reply`.\n"
+        "- Thanks or requests outside the platform: return no steps "
         f"and write `reply` in {language} (under 120 words). Never answer engineering, legal, contract or project "
         "facts yourself. Otherwise `reply` is an empty string.\n"
         "Unused fields are empty strings, question_id is 0 when unused, and depends_on is [] unless a step uses "
@@ -476,6 +503,10 @@ async def plan_dispatch(payload: DispatchRequest, lang: str, ctx: PlanContext,
     steps, reply = parsed
     # A reportable incident always reaches the governed intake path, even when
     # the model would only have answered or looked things up.
+    # A question about the assistant is answered from its live coverage, not
+    # from the model's idea of what it can do.
+    if [s.agent for s in rules] == ["self"] and [s.agent for s in steps] != ["self"]:
+        return rules, None, "llm"
     rule_intake = next((s for s in rules if s.agent == "intake"), None)
     if rule_intake and _INCIDENT_RE.search(payload.message) and not any(s.agent == "intake" for s in steps):
         for step in steps:
@@ -619,9 +650,14 @@ async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
         summary = answer
     else:
         summary = _t(run.lang, f"Found {len(hits)} sources: {', '.join(refs)}.", f"找到 {len(hits)} 条依据：{'、'.join(refs)}。")
+    # Say which part of the question the library cannot answer (no Saudi
+    # quality clause, no technical building-code provision) before any source.
+    gaps = coverage_gaps(detect_domains(step.query or run.payload.message), countries, run.lang)
+    if gaps:
+        summary = " ".join(gaps) + "\n" + summary
     return {
         "summary": summary, "refs": refs,
-        "data": {"query": step.query, "countries": countries, "retried": retried, "clarify": clarify,
+        "data": {"query": step.query, "countries": countries, "retried": retried, "clarify": clarify, "coverage_gaps": gaps,
                  "hits": [_hit_payload(score, doc, run.lang) for score, doc in hits],
                  "answer": answer, "answer_method": "llm" if answer else "sources"},
     }

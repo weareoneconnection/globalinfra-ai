@@ -136,7 +136,7 @@ LIFECYCLE_SIGNALS: list[tuple[str, tuple[str, ...]]] = [
     ("commissioning", ("commissioning", "testing", "punch list", "调试", "测试", "pentauliahan", "pengujian",
                        "komisioning", "التشغيل التجريبي", "الاختبار")),
     ("handover", ("handover", "taking-over", "移交", "penyerahan", "serah terima", "التسليم")),
-    ("operations", ("maintenance", "operation", "运维", "运行", "维护", "penyelenggaraan", "pemeliharaan",
+    ("operations", ("maintenance", "operation", "运维", "运行", "运营", "开通", "维护", "penyelenggaraan", "pemeliharaan",
                     "operasi", "الصيانة", "التشغيل")),
     ("planning", ("tender", "bid", "planning", "投标", "规划", "tawaran", "perancangan projek", "التخطيط",
                   "المناقصة")),

@@ -23,9 +23,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .assistant import _JSON_RE, _grounded_answer, _hit_payload, _model_available, core_query, search_knowledge
+from .capabilities import BOUNDARIES, DOMAINS, LEVEL_TEXT, REVIEW_RE, coverage, detect_domains, library_stats
 from .country_knowledge import load_glossary
 from .dispatcher import (
-    MAX_KNOWLEDGE_ANSWERS, Dispatch, Step, StepFailed, _resolve_case, _t, focus_countries,
+    AGENTS, MAX_KNOWLEDGE_ANSWERS, Dispatch, Step, StepFailed, _resolve_case, _t, focus_countries,
 )
 from .i18n import localize
 from .intake import COUNTRY_SIGNALS, _detect_lifecycle, detect_countries
@@ -187,8 +188,18 @@ async def agent_gates(step: Step, run: Dispatch, db: Session) -> dict:
         lines.append(f"{_name(code, run.lang)}：" + ("、".join(f"{g['code']} {g['name']}" for g in gates) or _t(run.lang, "none", "无")))
     from .domain import LIFECYCLE_STAGES
     label = next((localize(x["name"], run.lang) for x in LIFECYCLE_STAGES if x["id"] == stage and "name" in x), stage)
-    return {"summary": _t(run.lang, f"Permit gates at the {label} stage — ", f"{label}阶段的许可关口——") + "；".join(lines),
-            "data": {"stage": stage, "countries": [r["country"] for r in rows], "gates": rows}}
+    summary = _t(run.lang, f"Permit gates at the {label} stage — ", f"{label}阶段的许可关口——") + "；".join(lines)
+    hits: list = []
+    if not any(row["gates"] for row in rows):
+        # The country pack lists no gate for this stage; the clause library may
+        # still hold the licensing rule (e.g. a railway operating licence).
+        hits, _ = search_knowledge(db, step.query or run.payload.message, principal=run.principal, countries=countries)
+        if hits:
+            summary += _t(run.lang, ". Related clauses: ", "。条款库中的相关条款：") + "、".join(d.source_ref for _, d in hits) + \
+                _t(run.lang, ".", "。")
+    return {"summary": summary, "refs": [d.source_ref for _, d in hits],
+            "data": {"stage": stage, "countries": [r["country"] for r in rows], "gates": rows,
+                     "hits": [_hit_payload(score, d, run.lang) for score, d in hits]}}
 
 
 # --- draft ---------------------------------------------------------------------
@@ -305,7 +316,55 @@ async def agent_draft(step: Step, run: Dispatch, db: Session) -> dict:
                      "clauses": hits}}
 
 
+# --- self-knowledge ------------------------------------------------------------
+
+async def agent_self(step: Step, run: Dispatch, db: Session) -> dict:
+    """What the assistant can and cannot answer, from the live roster and clause coverage."""
+    lang = run.lang
+    text = step.query or run.payload.message
+    domains = detect_domains(text)
+    named = detect_countries(text)
+    rows = coverage(lang)
+    if named:  # "can you answer Saudi quality questions?" is about Saudi Arabia only
+        rows = [{**row, "countries": {c: v for c, v in row["countries"].items() if c in named}} for row in rows]
+    stats = library_stats()
+    agents = [{"id": agent_id, "name": localize(spec["name"], lang), "role": localize(spec["role"], lang),
+               "authority": spec["authority"]} for agent_id, spec in AGENTS.items()]
+    name = lambda code: _name(code, lang)  # noqa: E731
+    if domains:
+        lines = []
+        for row in (r for r in rows if r["id"] in domains):
+            cells = "、".join(f"{name(c)} {LEVEL_TEXT[v['level']][lang if lang == 'zh' else 'en']}（{v['clauses']}）"
+                             for c, v in row["countries"].items()) if lang == "zh" else \
+                ", ".join(f"{name(c)} {LEVEL_TEXT[v['level']]['en']} ({v['clauses']})" for c, v in row["countries"].items())
+            lines.append(_t(lang, f"{row['name']}: {cells}. {row['note']}", f"{row['name']}：{cells}。{row['note']}"))
+        if REVIEW_RE.search(text):
+            lines.append(_t(lang, "To have a contract looked at, paste the clauses or letter here, or attach the file.",
+                            "如需分析合同，请把相关条款或来函粘贴到这里，或上传文件。"))
+        summary = "\n".join(lines)
+    else:
+        strong = lambda r: any(v["level"] == "covered" for v in r["countries"].values())  # noqa: E731
+        covered = [r["name"] for r in rows if strong(r)] + [
+            r["name"] + _t(lang, " (project data)", "（项目数据）") for r in rows if not strong(r) and r["project_data"]]
+        gaps = [r["name"] + (_t(lang, " (clauses)", "（条款）") if r["project_data"] else "")
+                for r in rows if not strong(r)]
+        summary = _t(
+            lang,
+            f"I am the dispatcher of GlobalInfra AI. I split a request into tasks for {len(agents)} sub-agents and "
+            f"answer from a clause library of {stats['clauses']} provisions ({stats['instruments']} laws, "
+            f"{stats['countries']} countries) and {stats['glossary_terms']} glossary terms, citing every source. "
+            f"Strongest: {', '.join(covered)}. Thin or missing: {', '.join(gaps) or 'none'}. "
+            "Approvals and sending stay with you.",
+            f"我是 GlobalInfra AI 的总调度。我把你的请求拆成任务，交给 {len(agents)} 个子智能体；依据是 "
+            f"{stats['countries']} 国 {stats['instruments']} 部法律中的 {stats['clauses']} 条条款，以及 "
+            f"{stats['glossary_terms']} 个术语，每个结论都标来源。覆盖较好：{''.join(f'「{n}」' for n in covered)}。较少或没有："
+            f"{''.join(f'「{n}」' for n in gaps) or '无'}。审批和对外发送由你决定。")
+    return {"summary": summary,
+            "data": {"agents": agents, "coverage": rows, "focus_domains": domains, "stats": stats,
+                     "boundaries": [localize(b, lang) for b in BOUNDARIES]}}
+
+
 EXTRA_RUNNERS = {
     "compare": agent_compare, "glossary": agent_glossary, "drawing": agent_drawing,
-    "gates": agent_gates, "draft": agent_draft,
+    "gates": agent_gates, "draft": agent_draft, "self": agent_self,
 }

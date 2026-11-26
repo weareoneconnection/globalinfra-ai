@@ -54,7 +54,13 @@ type StepData = Partial<IntakeData> & {
   points?: { text: string; refs: string[] }[]; status?: string; clauses?: KnowledgeHit[];
   drawings?: { id: string; drawing_number: string | null; title: string | null; status: string }[];
   drawing_id?: string; drawing_number?: string | null;
+  coverage_gaps?: string[];
+  agents?: { id: string; name: string; role: string; authority: string }[];
+  coverage?: CoverageRow[]; focus_domains?: string[]; boundaries?: string[];
+  stats?: { clauses: number; countries: number; instruments: number; glossary_terms: number };
 };
+type CoverageLevel = 'covered' | 'thin' | 'none' | 'legal_only';
+type CoverageRow = { id: string; name: string; note: string; agents: string[]; project_data?: boolean; countries: Record<string, { clauses: number; level: CoverageLevel }> };
 type Clarify = { question: string; options: string[] };
 type TraceStep = { index: number; agent: string; status: string; depends_on: number[]; duration_ms: number; refs: number };
 type Trace = {
@@ -829,7 +835,10 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
           <CaseReply caseId={caseId} summary={intake} projects={projects} planningAgent={planningAgent} />
         </>;
       } else if (step.agent === 'knowledge') {
-        body = <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />;
+        body = <>
+          {(data.coverage_gaps ?? []).map((gap, i) => <p key={i} className="assistant-text coverage-gap">{gap}</p>)}
+          <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />
+        </>;
       } else if (step.agent === 'progress') {
         body = <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />;
       } else if (step.agent === 'approvals') {
@@ -841,9 +850,14 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
       } else if (step.agent === 'glossary') {
         body = <GlossaryReply terms={data.terms ?? []} />;
       } else if (step.agent === 'gates') {
-        body = <GatesReply rows={data.gates ?? []} />;
+        body = <>
+          <GatesReply rows={data.gates ?? []} />
+          {(data.hits ?? []).length > 0 && <KnowledgeReply query={step.query} hits={data.hits ?? []} answer={null} />}
+        </>;
       } else if (step.agent === 'drawing') {
         body = <p className="assistant-text assistant-prose">{step.summary}</p>;
+      } else if (step.agent === 'self') {
+        body = <SelfReply summary={step.summary ?? ''} data={data} />;
       } else if (step.agent === 'draft') {
         body = <DraftPointsReply points={data.points ?? []} caseId={data.case_id ?? null} />;
       }
@@ -854,6 +868,36 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
       </section>;
     })}
     {reply.trace && <TraceView trace={reply.trace} steps={reply.steps} />}
+  </div>;
+}
+
+const LEVEL_ICON: Record<CoverageLevel, string> = { covered: '●', thin: '◐', none: '○', legal_only: '◔' };
+
+function SelfReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  const focus = new Set(data.focus_domains ?? []);
+  const rows = (data.coverage ?? []).filter(row => focus.size === 0 || focus.has(row.id));
+  const countries = Object.keys(rows[0]?.countries ?? {});
+  return <div>
+    <p className="assistant-text assistant-prose">{summary}</p>
+    {rows.length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('selfDomain')}</th>{countries.map(code => <th key={code}>{code}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.id}>
+        <td><b>{row.name}</b>{focus.size > 0 && <div className="muted small">{row.note}</div>}</td>
+        {countries.map(code => {
+          const cell = row.countries[code];
+          return <td key={code} title={t(`selfLevel.${cell.level}`)} className={`coverage-${cell.level}`}>
+            {LEVEL_ICON[cell.level]} {cell.clauses}
+          </td>;
+        })}
+      </tr>)}</tbody>
+    </table>}
+    <p className="muted small">{(['covered', 'thin', 'legal_only', 'none'] as CoverageLevel[]).map(level => `${LEVEL_ICON[level]} ${t(`selfLevel.${level}`)}`).join(' · ')} · {t('selfCount')}</p>
+    {focus.size === 0 && (data.agents ?? []).length > 0 && <details className="dispatch-trace">
+      <summary>{t('selfAgents', { count: data.agents!.length })}</summary>
+      <ul className="small">{data.agents!.map(agent => <li key={agent.id}><b>{agent.name}</b> · {t(`authority.${agent.authority}`)} — {agent.role}</li>)}</ul>
+    </details>}
+    {(data.boundaries ?? []).length > 0 && <ul className="muted small">{data.boundaries!.map((line, index) => <li key={index}>{line}</li>)}</ul>}
   </div>;
 }
 

@@ -48,3 +48,9 @@
 {"id": "A48", "message": "沙特斋月期间每天最多工作几小时？", "follow_up": "那加班费呢？", "agents": ["knowledge"], "expect": {"follow_up_countries": ["SA"]}}
 {"id": "A49", "message": "马来西亚的年假规定是什么？", "follow_up": "那印尼呢？年假规定", "agents": ["knowledge"], "expect": {"follow_up_countries": ["ID"]}}
 {"id": "A50", "message": "Compare UAE and Saudi end-of-service gratuity", "agents": ["compare"], "expect": {"refs": ["AE-FDL33-2021-ART-51"], "countries": ["AE", "SA"], "gap_countries": ["SA"]}}
+{"id": "A51", "message": "你能做什么？", "agents": ["self"], "expect": {"self": {"all_agents": true, "gap_domains": ["building_codes"]}}}
+{"id": "A52", "message": "你能回答沙特的质量问题吗？", "agents": ["self"], "expect": {"self": {"domains": ["quality"], "countries": ["SA"]}}}
+{"id": "A53", "message": "帮我分析这份合同的主要风险", "agents": ["self"], "expect": {"self": {"domains": ["contract"]}}}
+{"id": "A54", "message": "沙特建筑规范对混凝土保护层厚度有什么要求？", "agents": ["knowledge"], "expect": {"coverage_gap": true, "countries": ["SA"]}}
+{"id": "A55", "message": "阿联酋工程缺陷责任期多长？", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL25-2025-ART-821", "AE-FDL25-2025-ART-822"], "countries": ["AE"]}}
+{"id": "A56", "message": "马来西亚铁路开通运营需要什么许可？", "agents": ["gates"], "expect": {"gates_fallback_refs": ["MY-ACT463-S23"]}}

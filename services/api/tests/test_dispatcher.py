@@ -39,7 +39,7 @@ def _of(events, kind):
     ("马来西亚高处作业有什么要求？", ["knowledge"]),
     (INCIDENT, ["intake"]),
     ("待我审批", ["approvals"]),
-    ("你好", []),
+    ("你好", ["self"]),
     ("查一下马来西亚高处作业规定，再看看项目进展", ["knowledge", "progress"]),
     ("项目进展，另外待我审批", ["progress", "approvals"]),
     ("我的上报处理得怎么样了", ["field"]),
@@ -154,8 +154,14 @@ def test_foreign_or_unknown_session_starts_fresh(client):
     assert client.get("/assistant/sessions/not-a-session").status_code == 404
 
 
-def test_greeting_gets_a_reply_without_steps(client):
+def test_greeting_gets_the_self_introduction(client):
     events = _dispatch(client, "你好")
+    assert [s["agent"] for s in _of(events, "plan")[0]["steps"]] == ["self"]
+    assert "总调度" in _of(events, "step_done")[0]["summary"]
+
+
+def test_thanks_gets_a_reply_without_steps(client):
+    events = _dispatch(client, "谢谢")
     assert _of(events, "plan")[0]["steps"] == [] and _of(events, "reply")
 
 
