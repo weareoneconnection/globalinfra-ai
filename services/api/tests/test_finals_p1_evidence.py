@@ -90,3 +90,47 @@ def test_prediction_rejects_invalid_boolean_or_risk():
             "risk": "LOW", "action": "N/A", "evidence_refs": [],
             "abstained": "false",
         }, 1.0, "raw_llm")
+
+
+def test_country_review_survives_restart_but_not_source_revision(client, monkeypatch):
+    from app.main import app
+    from app.database import SessionLocal
+    from app.country_knowledge import COUNTRY_PACKS, seed_country_knowledge
+    from app.security import Principal, get_principal
+
+    reviewer = Principal(
+        subject="oidc:local-country-reviewer",
+        organization_id="globalinfra-demo",
+        roles=frozenset({"platform_admin"}),
+        project_ids=frozenset({1}),
+        display_name="Local reviewer",
+        issuer="https://idp.example.test",
+    )
+    app.dependency_overrides[get_principal] = lambda: reviewer
+    original_version = COUNTRY_PACKS["MY"]["version"]
+    try:
+        initial = client.get("/country-packs/MY").json()
+        response = client.post("/country-packs/MY/review", json={
+            "source_digest": initial["source_digest"],
+            "review_note": "Local qualified source applicability needs separate attestation.",
+            "valid_days": 15,
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()["release_gate"] == "OPEN"
+        with SessionLocal() as db:
+            seed_country_knowledge(db)
+        persisted = client.get("/country-packs/MY").json()
+        assert persisted["release_gate"] == "OPEN"
+        assert persisted["reviewed_by"] == reviewer.subject
+
+        monkeypatch.setitem(COUNTRY_PACKS["MY"], "version", "P1_SOURCE_CHANGED_TEST")
+        with SessionLocal() as db:
+            seed_country_knowledge(db)
+        invalidated = client.get("/country-packs/MY").json()
+        assert invalidated["release_gate"] == "CLOSED"
+        assert invalidated["reviewed_by"].startswith("seed:")
+    finally:
+        monkeypatch.setitem(COUNTRY_PACKS["MY"], "version", original_version)
+        with SessionLocal() as db:
+            seed_country_knowledge(db)
+        app.dependency_overrides.pop(get_principal, None)
