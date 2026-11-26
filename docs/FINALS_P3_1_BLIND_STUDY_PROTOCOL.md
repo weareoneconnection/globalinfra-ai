@@ -157,6 +157,37 @@ independent proof that the claimed governed runtime ran the correct policy.
 The unit tests use **synthetic TEST_ONLY examples** exclusively and are
 not an approved live evaluation.
 
+## Paired pilot human-vs-AI timing (separate from model quality)
+
+P1 records the raw paired case means; the P3.1 pilot reporter adds a
+20–500-case descriptive improvement distribution, a 3000-resample
+case-level bootstrap 95% interval, and the count of cases that became
+better, worse or unchanged. It **does not** calculate monetary ROI or make
+a verified savings claim. The existing `PairedStudy` JSON is consumed as
+a separate local document; do not send private timesheets into a public UI.
+
+```sh
+python evals/p3_1_paired_pilot.py \
+  --paired-study /secure/pilot-paired-study.json \
+  --protocol-ref APPROVED-PAIRING-PROTOCOL \
+  --source-bundle-sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --independent-reviewer-ref REVIEWER-PENDING-SOURCE-AUDIT \
+  --direction LOWER \
+  --output /secure/pilot-descriptive-report.json
+```
+
+The 64-digit hash in the example is a **placeholder**. Generate it from the
+actual restricted source bundle instead. A declared reviewer ID and SHA-256
+do not verify real source records. The reporter returns
+`PAIRED_DESCRIPTIVE_SOURCE_AUDIT_PENDING` for declared authorized-real
+inputs or `SYNTHETIC_TEST_ONLY_NOT_CLAIMABLE` for synthetic fixtures.
+Both carry `publication_gate=CLOSED_PENDING_RAW_TIMESHEET_AUDIT_AND_APPROVAL`.
+
+Before publication, audit original human and assisted time logs, observer
+identity, case comparability, rework quality, sampling protocol and any
+vendor usage/billing evidence independently. No avoided accident values,
+financial cost savings or production superiority are inferred.
+
 ## Done definition for P3.1
 
 - [ ] 50–200 source-authorized, de-identified public records; written consent.
