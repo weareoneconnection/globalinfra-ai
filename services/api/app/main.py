@@ -43,6 +43,7 @@ from .phase8 import router as phase8_router
 from .country_knowledge import router as country_knowledge_router
 from .competition import router as competition_router
 from .competition_sandbox import router as competition_sandbox_router
+from .finals import router as finals_router
 from .ingestion import receipt_payload, record_ingestion_receipt, router as ingestion_router
 from .assistant import router as assistant_router
 from .dispatcher import router as dispatcher_router
@@ -78,6 +79,7 @@ app.include_router(phase7_router)
 app.include_router(country_knowledge_router)
 app.include_router(competition_router)
 app.include_router(competition_sandbox_router)
+app.include_router(finals_router)
 app.include_router(ingestion_router)
 app.include_router(assistant_router)
 app.include_router(dispatcher_router)
