@@ -25,6 +25,11 @@ jobs:
       - run: python evals/run_agent_org_eval.py
       - run: python evals/run_dispatch_eval.py
       - run: python evals/run_country_adaptation.py --country-a MY --country-b AE --stage construction --output /tmp/globalinfra-country-adaptation.json
+      - name: P3.1 blind-study CLI and safe NOT_RUN smoke
+        run: |
+          python evals/p3_1_study.py --help
+          python evals/run_model_comparison.py --output /tmp/globalinfra-p3-1-not-run.json
+          python -c 'import json; p=json.load(open("/tmp/globalinfra-p3-1-not-run.json")); assert p["status"] == "NOT_RUN"; assert not any(g["metrics"] for g in p["groups"])'
       # Alembic migrations must apply cleanly to a bare database and produce the
       # same schema the app's create_all path does (V1.3 M1 introduced them).
       - name: Alembic upgrade on a bare database
