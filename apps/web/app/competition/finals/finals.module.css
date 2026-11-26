@@ -81,8 +81,10 @@
 .scoreTable th{text-align:left;padding:11px;color:var(--muted);font:700 10px ui-monospace,SFMono-Regular,Consolas,monospace;border-bottom:1px solid var(--line)}
 .scoreTable td{padding:12px 11px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.65;vertical-align:top;color:var(--muted)}
 .scoreTable td:first-child{width:24%}
-.scoreTable td:nth-child(2){width:66%}
-.scoreTable td:last-child{text-align:right;width:10%}
+.scoreTable td:nth-child(2){width:52%}
+.scoreTable td:nth-child(3){width:16%}
+.scoreTable td:nth-child(3) .state{white-space:nowrap;overflow-wrap:normal}
+.scoreTable td:last-child{text-align:right;width:8%}
 .scoreTable td strong{color:var(--text)}
 .scoreTable td:first-child strong{display:block;font-size:12px}
 .scoreTable td:first-child small{display:block;font-size:10px;color:var(--muted);margin-top:4px}
@@ -94,3 +96,7 @@
 @media(max-width:1000px){.heroGrid{grid-template-columns:minmax(0,1fr)}.missionBadge{min-height:0}.missionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.proofGrid{grid-template-columns:1fr}.facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:660px){.hero{padding:20px 17px 14px}.heroGrid{margin:23px 0}.heroWords h1{font-size:29px}.section,.issue,.disclaimer{padding:19px}.missionGrid{grid-template-columns:1fr}.accountability{grid-template-columns:1fr}.countryGrid{grid-template-columns:1fr}.countryBetween{font-size:20px}.facts{grid-template-columns:repeat(2,minmax(0,1fr))}.disclaimer ul{grid-template-columns:1fr}.sectionTop{flex-wrap:wrap}.heroFoot{align-items:start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.primaryLink,.secondaryLink{transition:none}}
+.sourceBanner{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin:0 0 16px;padding:10px 14px;border:1px solid rgba(55,178,116,.22);border-radius:10px;background:rgba(36,151,105,.06);font-size:13px;color:var(--muted)}
+.sourceBanner strong{color:var(--green);font-weight:600}
+.sourceBanner small{font-family:var(--mono, ui-monospace, monospace);opacity:.8}
+.sourcePending{border-color:rgba(185,135,36,.23);background:rgba(184,128,24,.06);color:var(--amber)}

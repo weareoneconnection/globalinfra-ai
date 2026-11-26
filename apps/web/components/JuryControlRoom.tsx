@@ -781,9 +781,9 @@ export function JuryControlRoom({
           <blockquote>{localizedText(state?.case.description ?? golden.case.description, locale)}</blockquote>
           <div className="jury-context-grid">
             <article><span>COUNTRY</span><b>{golden.project.country_code}</b><small>{golden.project.code}</small></article>
-            <article><span>TWIN ID</span><b>{state?.case.twin_id ?? twin?.twin_id ?? 'TWIN-MYRAIL-V12-P47'}</b><small>{twin?.name ?? 'P47 SYNTHETIC PIER'}</small></article>
-            <article><span>SCHEDULE</span><b>{twin?.schedule_variance_days ?? -8} DAYS</b><small>governed impact context</small></article>
-            <article><span>COST</span><b>{twin?.cost_variance_m ?? 0.25} M</b><small>illustrative exposure</small></article>
+            <article><span>TWIN ID</span><b>{state?.case.twin_id ?? twin?.twin_id ?? '—'}</b><small>{twin?.name ?? '—'}</small></article>
+            <article><span>SCHEDULE</span><b>{twin ? `${twin.schedule_variance_days} DAYS` : '—'}</b><small>governed impact context</small></article>
+            <article><span>COST</span><b>{twin ? `${twin.cost_variance_m} M` : '—'}</b><small>illustrative exposure</small></article>
           </div>
           <div className="jury-citations">
             <span>{copy.evidence} · {liveEvidence.length}</span>
