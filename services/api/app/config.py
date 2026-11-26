@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     # must provide COMPETITION_SIGNING_SECRET through its secret manager.
     competition_v6_enabled: bool = True
     competition_session_ttl_minutes: int = 30
+    # Model route for the judge sandbox analysis. "mock" keeps the finals
+    # thread deterministic; "auto" lets judges see live model findings on the
+    # synthetic (public) case. Case type, risk and the two-person approval
+    # requirement are fixed when the session is created, so a live model can
+    # change agent findings but never the governance path.
+    competition_model_route: str = "mock"
     competition_signing_secret: str = ""
     # Dedicated key for approval/execution/verification/closure receipts.
     # It must not share a trust domain with judge tickets or release evidence.
@@ -168,6 +174,16 @@ class Settings(BaseSettings):
         ),
     )
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_competition_model_route(self):
+        route = self.competition_model_route.strip().lower()
+        if route not in {"mock", "local", "openai", "auto"}:
+            raise ValueError(
+                "COMPETITION_MODEL_ROUTE must be one of mock, local, openai or auto"
+            )
+        self.competition_model_route = route
+        return self
 
     @model_validator(mode="after")
     def validate_production_security(self):

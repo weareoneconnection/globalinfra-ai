@@ -14,6 +14,12 @@ from pathlib import Path
 API_DIR = Path(__file__).resolve().parent.parent
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
+# The repository-root ``evals`` runners are imported by finals tests. Both
+# ``evals`` directories are namespace packages, so adding the root lets
+# ``cd services/api && pytest tests`` (``make test``) resolve them too.
+REPO_ROOT = API_DIR.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
 
 TEST_DB_PATH = API_DIR / "test_globalinfra.db"
 if TEST_DB_PATH.exists():

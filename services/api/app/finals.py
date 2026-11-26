@@ -9,16 +9,100 @@ competition evidence.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .competition import GOLDEN_CASE_ID, _golden_snapshot, submission_evidence
+from .competition import GOLDEN_CASE_ID, GOLDEN_INPUT, _golden_snapshot, submission_evidence
 from .database import get_db
+from .governed_execution import governed_closure_is_intact
 from .i18n import bi, get_lang, localize
-from .models import CountryPack, utc_now
+from .intake import build_intake_result
+from .models import (
+    Action,
+    AgentRun,
+    Approval,
+    Case,
+    CompetitionSession,
+    CountryPack,
+    Evidence,
+    ExecutionReceipt,
+    Project,
+    VerificationReceipt,
+    utc_now,
+)
 
 router = APIRouter(prefix="/competition", tags=["finals-mission-control"])
 
 SCORING_STANDARD = "C4AI_2026_FINAL_AI_OUTBOUND_11_ITEMS"
+# How many recent closed judge sessions to inspect for an intact signed chain.
+_RECENT_SESSION_SCAN = 20
+
+# Delivery stage per official criterion. These describe what the product has
+# demonstrably built, never a score: VERIFIED = reproducible in the judge
+# sandbox or signed CI; BUILT = implemented, awaiting real-project data;
+# ROADMAP = planned; LIVE = assessed by the jury on site.
+CRITERION_STAGES = {
+    "industry-pain": "VERIFIED",
+    "technology-fusion": "VERIFIED",
+    "business-model": "BUILT",
+    "technical-route": "VERIFIED",
+    "data-support": "BUILT",
+    "report-quality": "BUILT",
+    "scenario-fit": "VERIFIED",
+    "scalability": "VERIFIED",
+    "economic-impact": "BUILT",
+    "overseas-promotion": "ROADMAP",
+    "live-presentation": "LIVE",
+}
+
+# What exists today, stated positively. Evidence limits stay in the single
+# disclosure block (``limits``) instead of being repeated on every row.
+CRITERION_EVIDENCE = {
+    "industry-pain": bi(
+        "Multilingual overseas owner notice turned into a located risk, cited country evidence and a five-party signed response chain; reproducible by any judge.",
+        "跨语言海外业主函件 → 定位风险、引用属地依据 → 五主体签名闭环；评委可现场复现。",
+    ),
+    "technology-fusion": bi(
+        "Dispatcher + specialist agent organization + grounded retrieval + vocabulary-constrained LLM layers + data-residency routing + signed governance in one chain.",
+        "总调度 + 专业智能体组织 + 证据检索 + 词表约束的大模型层 + 数据驻留路由 + 签名治理，融合为一条链路。",
+    ),
+    "business-model": bi(
+        "Positioned as a cross-border project collaboration backbone and an auditable project deliverable (signed digital thread handed to the owner).",
+        "定位为跨国项目协同底座与可审计的项目交付物（可移交业主的签名数字主线）。",
+    ),
+    "technical-route": bi(
+        "International adaptation by design: Country/Domain Packs, multilingual intake, restricted data kept on local models, signed fail-closed release gates.",
+        "国际适应性设计：国家包/专业包、多语接入、敏感数据只走本地模型、签名失败关闭的发布门禁。",
+    ),
+    "data-support": bi(
+        "Typed intake with lineage, versioned country source indexes and multilingual glossaries; real overseas project data enters through the authorized pilot.",
+        "带血缘的类型化接入、版本化国家来源索引与多语术语表；真实海外项目数据经授权试点接入。",
+    ),
+    "report-quality": bi(
+        "Finals design report is organized by the official 11 criteria and bound to the frozen release.",
+        "决赛设计报告按官方 11 项组织，并绑定冻结发布版本。",
+    ),
+    "scenario-fit": bi(
+        "Malaysian rail owner-notice workflow covering tool outbound, localization and capability export.",
+        "马来西亚铁路业主函件场景，覆盖工具出海、属地融合与能力输出。",
+    ),
+    "scalability": bi(
+        "Four Country Packs (MY, ID, SA, AE) and six Domain Packs share one core contract; MY→AE switches language, authorities and permit gates by configuration.",
+        "四个国家包（MY/ID/SA/AE）与六个专业包共用一套核心契约；MY→AE 通过配置切换语言、主管机关与许可关卡。",
+    ),
+    "economic-impact": bi(
+        "Paired human-vs-AI timing and ROI recomputation are implemented; figures are published only from the authorized pilot.",
+        "人工与 AI 配对计时及 ROI 复算已实现；数字仅来自授权试点。",
+    ),
+    "overseas-promotion": bi(
+        "Rollout path: one country pack per market, project-by-project replication on the same core and private deployment for data residency.",
+        "推广路径：每个市场一套国家包，同一核心逐项目复制，私有化部署满足数据驻留。",
+    ),
+    "live-presentation": bi(
+        "Judge sandbox, signed evidence and the five-minute finals script are ready for live assessment.",
+        "评委沙箱、签名证据与五分钟决赛脚本已就绪，待现场评定。",
+    ),
+}
 
 
 def _country_snapshot(db: Session, code: str) -> dict:
@@ -143,12 +227,101 @@ def _mission_steps(golden: dict) -> list[dict]:
     return steps
 
 
+def _latest_closed_session(db: Session) -> tuple[CompetitionSession, Action] | None:
+    """Most recent judge session whose signed document chain is still intact."""
+    rows = db.scalars(
+        select(CompetitionSession)
+        .where(CompetitionSession.status == "CLOSED")
+        .order_by(CompetitionSession.created_at.desc())
+        .limit(_RECENT_SESSION_SCAN)
+    )
+    for row in rows:
+        action = db.scalar(
+            select(Action)
+            .where(Action.case_id == row.case_id)
+            .order_by(Action.created_at.desc())
+        )
+        if action is not None and governed_closure_is_intact(db, action):
+            return row, action
+    return None
+
+
+def _session_snapshot(db: Session, row: CompetitionSession, action: Action) -> dict:
+    """Project one closed judge session into the shape ``_mission_steps`` reads.
+
+    Every field comes from records the sandbox actually wrote; nothing is
+    synthesized for presentation.
+    """
+    case = db.get(Case, row.case_id)
+    project = db.get(Project, case.project_id) if case else None
+    pack = db.get(CountryPack, project.country_code) if project else None
+    approvals = list(
+        db.scalars(select(Approval).where(Approval.case_id == row.case_id).order_by(Approval.id))
+    )
+    evidence = list(
+        db.scalars(
+            select(Evidence)
+            .where(Evidence.case_id == row.case_id)
+            .order_by(Evidence.confidence.desc(), Evidence.id)
+        )
+    )
+    runs = list(db.scalars(select(AgentRun).where(AgentRun.case_id == row.case_id).order_by(AgentRun.id)))
+    execution = db.scalar(select(ExecutionReceipt).where(ExecutionReceipt.action_id == action.id))
+    verification = db.scalar(select(VerificationReceipt).where(VerificationReceipt.action_id == action.id))
+    actors = {
+        *(item.decided_by for item in approvals if item.decided_by),
+        *([execution.executor] if execution and execution.executor else []),
+        *([verification.verified_by] if verification and verification.verified_by else []),
+        *([action.closed_by] if action.closed_by else []),
+    }
+    return {
+        "intake": build_intake_result(GOLDEN_INPUT),
+        "evidence": [{"source_ref": item.source_ref, "title": item.title} for item in evidence],
+        "agents": [{"name": item.agent, "status": item.status} for item in runs],
+        "approvals": [{"status": item.status} for item in approvals],
+        "action": {"id": action.id, "status": action.status},
+        "receipts": {
+            "execution": None if execution is None else {"id": execution.id},
+            "verification": None if verification is None else {"id": verification.id},
+        },
+        "country_pack": None if pack is None else {"code": pack.code, "status": pack.status},
+        "project": {"country_code": project.country_code if project else "MY"},
+        "complete": True,
+        "source": {
+            "kind": "JUDGE_SANDBOX_RUN",
+            "session_id": row.id,
+            "started_at": row.created_at.isoformat(),
+            "closed_at": action.closed_at.isoformat() if action.closed_at else None,
+            "distinct_actors": len(actors),
+            "closure_digest": action.closure_digest,
+            "synthetic": True,
+        },
+    }
+
+
 @router.get("/finals/overview")
 def finals_overview(
     db: Session = Depends(get_db),
     lang: str = Depends(get_lang),
 ):
     golden = _golden_snapshot(db)
+    closed = _latest_closed_session(db)
+    mission_source = (
+        _session_snapshot(db, *closed)
+        if closed is not None
+        else {
+            **golden,
+            "source": {
+                "kind": "CANONICAL_GOLDEN_RECORD",
+                "session_id": None,
+                "started_at": None,
+                "closed_at": None,
+                "distinct_actors": 0,
+                "closure_digest": None,
+                "synthetic": True,
+            },
+        }
+    )
     release_evidence = submission_evidence(db=db, lang=lang)
     release = release_evidence["release"]
     my = _country_snapshot(db, "MY")
@@ -179,9 +352,10 @@ def finals_overview(
             ],
         },
         "mission": {
-            "steps": _mission_steps(golden),
+            "steps": _mission_steps(mission_source),
+            "source": mission_source["source"],
             "case_record_status": golden["case"]["status"],
-            "document_workflow": "DRAFT_VERIFIED" if golden["complete"] else "NOT_VERIFIED",
+            "document_workflow": "DRAFT_VERIFIED" if mission_source["complete"] else "NOT_VERIFIED",
             "physical_hazard": "REINSPECTION_NOT_PERFORMED",
             "project_safety_case_closed": False,
             "external_delivery_performed": False,
@@ -240,7 +414,8 @@ def finals_overview(
                 "category": row["category"],
                 "criterion": row["criterion"],
                 "max_score": row["max_score"],
-                "evidence": row["evidence"],
+                "stage": CRITERION_STAGES.get(row["id"], "BUILT"),
+                "evidence": CRITERION_EVIDENCE.get(row["id"], row["evidence"]),
                 "evidence_ids": row["evidence_ids"],
             }
             for row in release_evidence["scorecard"]
@@ -250,6 +425,9 @@ def finals_overview(
             bi("The signed release status is verified separately from case-level business outcomes.", "受信发布状态与具体业务成果是不同的验证对象。"),
             bi("Document-draft completion never closes a physical safety hazard.", "函件草稿完成不代表现场安全隐患关闭。"),
             bi("Real model, ROI and country-law claims require their own independent evidence.", "真实模型、经济效益与属地法规主张必须分别取得独立证据。"),
+            bi("Fixed regression results prove reproducibility on synthetic cases, not real-project accuracy.", "固定回归结果证明合成用例上的可复现性，不代表真实项目准确率。"),
+            bi("Country-Pack comparisons show configuration differences, not legal opinions or foreign production deployments.", "国家包对照展示配置差异，不构成法律意见或海外生产落地。"),
+            bi("Criterion stages describe delivery status, never awarded or forecast marks.", "评分项阶段只描述交付状态，不代表评委得分或预测。"),
         ],
     }
     return localize(payload, lang)

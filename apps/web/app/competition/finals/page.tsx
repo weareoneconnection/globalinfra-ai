@@ -16,6 +16,7 @@ type ScoreItem = {
   category: string;
   criterion: string;
   max_score: number;
+  stage?: string;
   evidence: string;
   evidence_ids: string[];
 };
@@ -50,6 +51,14 @@ type FinalsOverview = {
   };
   mission: {
     steps: MissionStep[];
+    source?: {
+      kind: 'JUDGE_SANDBOX_RUN' | 'CANONICAL_GOLDEN_RECORD';
+      session_id: string | null;
+      started_at: string | null;
+      closed_at: string | null;
+      distinct_actors: number;
+      closure_digest: string | null;
+    };
     document_workflow: string;
     physical_hazard: string;
     project_safety_case_closed: boolean;
@@ -134,6 +143,13 @@ const COPY = {
     sample: '参赛合成样本',
     modelNone: '真实对照未运行',
     notVerified: '未验证',
+    stage: '交付阶段',
+    sourceRun: '以下状态来自最近一次完整走完的评委沙箱会话',
+    sourceNone: '尚无已完成的评委会话：以下为待执行状态。点击“进入可信执行演示”走完五主体闭环后，本页自动展示该次结果。',
+    sourceSession: '会话',
+    sourceClosed: '关闭于',
+    sourceActors: '个独立责任主体',
+    sourceDigest: '闭环摘要',
   },
   en: {
     eyebrow: 'GLOBALINFRA AI  /  FINALIST EDITION',
@@ -182,11 +198,70 @@ const COPY = {
     sample: 'Synthetic competition fixture',
     modelNone: 'Real comparison NOT_RUN',
     notVerified: 'Not verified',
+    stage: 'Delivery stage',
+    sourceRun: 'Statuses below come from the most recent fully completed judge sandbox session',
+    sourceNone: 'No completed judge session yet: the stages below are pending. Run the five-party chain from “Open governed-action proof” and this page will show that run.',
+    sourceSession: 'Session',
+    sourceClosed: 'closed at',
+    sourceActors: 'distinct accountable parties',
+    sourceDigest: 'Closure digest',
   },
 } as const;
 
+const STATUS_LABELS: Record<'zh' | 'en', Record<string, string>> = {
+  zh: {
+    DETERMINISTIC_REFERENCE: '规则基线已复现',
+    EXPERT_REVIEW_REQUIRED: '待属地专家复核',
+    REVIEW_RECORDED: '已记录专家复核',
+    RECORDED: '已记录运行',
+    NOT_RUN: '未运行',
+    APPROVED: '已双人审批',
+    AWAITING_APPROVAL: '待人工审批',
+    DRAFT_ONLY_NOT_SENT: '草稿已生成 · 未外发',
+    DRAFT_VERIFIED: '草稿已独立核验',
+    AWAITING_VERIFICATION: '待独立核验',
+    NOT_VERIFIED: '未完成核验',
+    REINSPECTION_NOT_PERFORMED: '待现场复检',
+    VERIFIED_PASSED: '签名验证通过',
+    VERIFIED_FAILED: '签名验证未通过',
+    UNVERIFIED: '未验证',
+    NO_AUDITED_PUBLIC_RESULT: '待授权试点数据',
+    CONFIGURATION_COMPARISON_ONLY: '配置对照',
+    CLOSED: '待专家复核后开放',
+    VERIFIED: '已验证',
+    BUILT: '已实现 · 待真实数据',
+    ROADMAP: '规划中',
+    LIVE: '现场评定',
+  },
+  en: {
+    DETERMINISTIC_REFERENCE: 'Rule baseline reproduced',
+    EXPERT_REVIEW_REQUIRED: 'Local expert review pending',
+    REVIEW_RECORDED: 'Expert review recorded',
+    RECORDED: 'Runs recorded',
+    NOT_RUN: 'Not run',
+    APPROVED: 'Two-person approved',
+    AWAITING_APPROVAL: 'Awaiting approval',
+    DRAFT_ONLY_NOT_SENT: 'Draft generated · not sent',
+    DRAFT_VERIFIED: 'Draft independently verified',
+    AWAITING_VERIFICATION: 'Awaiting verification',
+    NOT_VERIFIED: 'Not verified',
+    REINSPECTION_NOT_PERFORMED: 'Site reinspection pending',
+    VERIFIED_PASSED: 'Signature verified',
+    VERIFIED_FAILED: 'Signature failed',
+    UNVERIFIED: 'Unverified',
+    NO_AUDITED_PUBLIC_RESULT: 'Awaiting authorized pilot',
+    CONFIGURATION_COMPARISON_ONLY: 'Configuration comparison',
+    CLOSED: 'Gate closed until expert review',
+    VERIFIED: 'Verified',
+    BUILT: 'Built · awaiting real data',
+    ROADMAP: 'Roadmap',
+    LIVE: 'Assessed live',
+  },
+};
+
 function statusTone(value: string) {
-  if (value === 'VERIFIED_PASSED' || value === 'DRAFT_VERIFIED' || value === 'APPROVED' || value === 'REVIEW_RECORDED') {
+  if (value === 'VERIFIED_PASSED' || value === 'DRAFT_VERIFIED' || value === 'APPROVED' || value === 'REVIEW_RECORDED' ||
+      value === 'RECORDED' || value === 'DRAFT_ONLY_NOT_SENT' || value === 'VERIFIED' || value === 'DETERMINISTIC_REFERENCE') {
     return styles.pass;
   }
   if (value === 'NOT_RUN' || value === 'NOT_VERIFIED' || value === 'NO_AUDITED_PUBLIC_RESULT' || value.includes('REVIEW') || value.includes('AWAITING')) {
@@ -195,11 +270,12 @@ function statusTone(value: string) {
   return styles.neutral;
 }
 
-function PrettyStatus({ value }: { value: string }) {
-  return <span className={`${styles.state} ${statusTone(value)}`}>{value.replaceAll('_', ' ')}</span>;
+function PrettyStatus({ value, locale }: { value: string; locale: 'zh' | 'en' }) {
+  const label = STATUS_LABELS[locale][value] ?? value.replaceAll('_', ' ');
+  return <span className={`${styles.state} ${statusTone(value)}`} title={value}>{label}</span>;
 }
 
-function CountryCard({ data, labels }: { data: Country; labels: { languages: string; authorities: string; permitGates: string } }) {
+function CountryCard({ data, labels, locale }: { data: Country; labels: { languages: string; authorities: string; permitGates: string }; locale: 'zh' | 'en' }) {
   return (
     <article className={styles.countryCard}>
       <div className={styles.countryHead}>
@@ -209,7 +285,7 @@ function CountryCard({ data, labels }: { data: Country; labels: { languages: str
           <small>{data.version ?? 'VERSION NOT CONFIGURED'}</small>
         </div>
       </div>
-      <PrettyStatus value={data.release_gate} />
+      <PrettyStatus value={data.release_gate} locale={locale} />
       <dl className={styles.countrySpecs}>
         <div><dt>{labels.languages}</dt><dd>{data.languages.join(' · ') || '—'}</dd></div>
         <div><dt>{labels.authorities}</dt><dd>{data.authorities.join(' · ') || '—'}</dd></div>
@@ -217,6 +293,12 @@ function CountryCard({ data, labels }: { data: Country; labels: { languages: str
       </dl>
     </article>
   );
+}
+
+function formatTime(iso: string, locale: 'zh' | 'en') {
+  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour12: false });
 }
 
 export default async function FinalsPage() {
@@ -231,6 +313,7 @@ export default async function FinalsPage() {
       overview.scoring_standard !== 'C4AI_2026_FINAL_AI_OUTBOUND_11_ITEMS') {
     throw new Error('Finals evidence boundary failed closed');
   }
+  const source = overview.mission.source;
   const totalWeight = overview.scorecard.reduce((sum, row) => sum + row.max_score, 0);
   if (overview.scorecard.length !== 11 || totalWeight !== 100) {
     throw new Error('Finals scorecard mismatch');
@@ -240,7 +323,7 @@ export default async function FinalsPage() {
       <section className={styles.hero}>
         <div className={styles.topline}>
           <span>{t.eyebrow}</span>
-          <span className={styles.edition}>P2 · {overview.product_version}</span>
+          <span className={styles.edition}>FINALS · {overview.product_version}</span>
         </div>
         <div className={styles.heroGrid}>
           <div className={styles.heroWords}>
@@ -286,10 +369,19 @@ export default async function FinalsPage() {
           <div><span className={styles.kicker}>02 / GOVERNED INTELLIGENCE</span><h2>{t.steps}</h2></div>
           <span className={styles.muted}>{overview.mission.steps.length} STAGES</span>
         </div>
+        {source?.kind === 'JUDGE_SANDBOX_RUN' ? (
+          <p className={styles.sourceBanner}>
+            <strong>{t.sourceRun}</strong>
+            <span>{t.sourceSession} {source.session_id}{source.closed_at ? ` · ${t.sourceClosed} ${formatTime(source.closed_at, locale)}` : ''} · {source.distinct_actors} {t.sourceActors}</span>
+            {source.closure_digest ? <small>{t.sourceDigest} · {source.closure_digest.slice(0, 16)}…</small> : null}
+          </p>
+        ) : (
+          <p className={`${styles.sourceBanner} ${styles.sourcePending}`}>{t.sourceNone}</p>
+        )}
         <div className={styles.missionGrid}>
           {overview.mission.steps.map(step => (
             <article className={styles.stepCard} key={step.id}>
-              <div className={styles.stepTop}><span>{step.index}</span><PrettyStatus value={step.status}/></div>
+              <div className={styles.stepTop}><span>{step.index}</span><PrettyStatus value={step.status} locale={locale}/></div>
               <h3>{step.name}</h3>
               <p>{step.detail}</p>
               <small className={styles.ref}>{step.evidence_ref}</small>
@@ -303,8 +395,8 @@ export default async function FinalsPage() {
             <small>{t.handoff}</small>
           </div>
           <div className={styles.outcomes}>
-            <div><span>{t.doc}</span><PrettyStatus value={overview.mission.document_workflow}/></div>
-            <div><span>{t.field}</span><PrettyStatus value={overview.mission.physical_hazard}/></div>
+            <div><span>{t.doc}</span><PrettyStatus value={overview.mission.document_workflow} locale={locale}/></div>
+            <div><span>{t.field}</span><PrettyStatus value={overview.mission.physical_hazard} locale={locale}/></div>
             <div><span>{t.delivery}</span><strong>{t.notDelivered}</strong></div>
           </div>
         </div>
@@ -318,7 +410,7 @@ export default async function FinalsPage() {
           <article className={styles.proofCard}>
             <span className={styles.cardNum}>01 · INTELLIGENCE</span>
             <h3>{t.realModel}</h3>
-            <PrettyStatus value={overview.business_impact.model_comparison.status}/>
+            <PrettyStatus value={overview.business_impact.model_comparison.status} locale={locale}/>
             <strong className={styles.emptyValue}>{t.noResult}</strong>
             <p>{overview.business_impact.model_comparison.boundary}</p>
             <small>{t.modelHelp}</small>
@@ -326,7 +418,7 @@ export default async function FinalsPage() {
           <article className={styles.proofCard}>
             <span className={styles.cardNum}>02 · BUSINESS</span>
             <h3>{t.roi}</h3>
-            <PrettyStatus value={overview.business_impact.paired_roi.status}/>
+            <PrettyStatus value={overview.business_impact.paired_roi.status} locale={locale}/>
             <strong className={styles.emptyValue}>{overview.business_impact.paired_roi.improvement_percent === null ? '—' : overview.business_impact.paired_roi.improvement_percent + '%'}</strong>
             <p>{overview.business_impact.paired_roi.boundary}</p>
             <small>{t.roiHelp}</small>
@@ -334,7 +426,7 @@ export default async function FinalsPage() {
           <article className={styles.proofCard}>
             <span className={styles.cardNum}>03 · RELEASE INTEGRITY</span>
             <h3>{t.release}</h3>
-            <PrettyStatus value={overview.release.status}/>
+            <PrettyStatus value={overview.release.status} locale={locale}/>
             <strong className={styles.releaseValue}>{overview.release.verified_cases} / {overview.release.total_cases}</strong>
             <p>{t.releaseHelp}</p>
             <small>COMMIT · {overview.release.commit}</small>
@@ -345,13 +437,13 @@ export default async function FinalsPage() {
       <section className={styles.section} id="countries">
         <div className={styles.sectionTop}>
           <div><span className={styles.kicker}>04 / REUSABLE CORE</span><h2>{t.config}</h2></div>
-          <PrettyStatus value={overview.country_adaptation.status}/>
+          <PrettyStatus value={overview.country_adaptation.status} locale={locale}/>
         </div>
         <p className={styles.sectionLead}>{t.configHelp}</p>
         <div className={styles.countryGrid}>
-          <CountryCard data={overview.country_adaptation.first} labels={t}/>
+          <CountryCard data={overview.country_adaptation.first} labels={t} locale={locale}/>
           <div className={styles.countryBetween} aria-hidden>≠</div>
-          <CountryCard data={overview.country_adaptation.second} labels={t}/>
+          <CountryCard data={overview.country_adaptation.second} labels={t} locale={locale}/>
         </div>
         <p className={styles.boundaryText}>{overview.country_adaptation.boundary}</p>
       </section>
@@ -364,9 +456,9 @@ export default async function FinalsPage() {
         <p className={styles.sectionLead}>{t.scoreHelp}</p>
         <div className={styles.scoreWrap}>
           <table className={styles.scoreTable}>
-            <thead><tr><th>{overview.track}</th><th>{t.method}</th><th>{t.weight}</th></tr></thead>
+            <thead><tr><th>{overview.track}</th><th>{t.method}</th><th>{t.stage}</th><th>{t.weight}</th></tr></thead>
             <tbody>{overview.scorecard.map(row => (
-              <tr key={row.id}><td><strong>{row.criterion}</strong><small>{row.category}</small></td><td>{row.evidence}</td><td><strong>{row.max_score}</strong></td></tr>
+              <tr key={row.id}><td><strong>{row.criterion}</strong><small>{row.category}</small></td><td>{row.evidence}</td><td>{row.stage ? <PrettyStatus value={row.stage} locale={locale}/> : '—'}</td><td><strong>{row.max_score}</strong></td></tr>
             ))}</tbody>
           </table>
         </div>

@@ -617,7 +617,8 @@ async def analyze_session(
         await analyze_case(
             db,
             row.case_id,
-            model_route="mock",
+            model_route=settings.competition_model_route,
+            # The sandbox case is a synthetic competition fixture.
             data_classification="public",
         )
     action = db.scalar(
