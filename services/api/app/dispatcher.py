@@ -35,6 +35,7 @@ import json
 import logging
 import re
 import uuid
+from time import perf_counter
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -45,15 +46,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .assistant import (
-    _CASE_ID_RE, _CITATION_RE, _INCIDENT_RE, _JSON_RE, _KNOWLEDGE_RE, MAX_DIRECT_REPLY, ChatTurn,
+    _CASE_ID_RE, _CITATION_RE, _HELP_RE, _INCIDENT_RE, _JSON_RE, _KNOWLEDGE_RE, MAX_DIRECT_REPLY, ChatTurn,
     _grounded_answer, _hit_payload, _model_available, _project_in_text, plan_rules, search_countries,
     search_knowledge,
 )
+from .contract_review import looks_like_contract
+from .capabilities import ABOUT_SELF_RE, CAPABILITY_RE, REVIEW_RE, coverage_gaps, detect_domains
 from .intake import detect_countries
 from .database import SessionLocal, get_db
 from .domain import PROJECT_INTELLIGENCE
 from .i18n import bi, get_lang, localize
-from .llm import LLMError, generate
+from .llm import LLMError, generate, reset_routing_trace, routing_trace
 from .models import (
     AgentTrace, Approval, AssistantSession, Case, CaseInput, ExecutionReceipt, FieldObservation, Project, utc_now,
 )
@@ -63,7 +66,9 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
-MAX_STEPS = 4
+MAX_STEPS = 6
+MAX_SELF_LENGTH = 80    # a longer message is a task, not a question about the assistant
+MAX_LETTER_QUERY = 400  # how much of a pasted letter the clause lookup searches with
 MAX_KNOWLEDGE_ANSWERS = 2       # model-written knowledge answers per message
 STEP_TIMEOUT_S = 170
 MAX_TURNS = 20
@@ -71,7 +76,9 @@ PLANNER_HISTORY = 8
 MAX_SPLIT_LENGTH = 200          # longer messages (letters, notices) are never split
 ANSWER_ROLES = {"engineer", "project_manager", "field_user"}
 
-AgentId = Literal["intake", "knowledge", "case", "answer", "progress", "approvals", "field"]
+AgentId = Literal["intake", "knowledge", "case", "answer", "progress", "approvals", "field",
+                  "compare", "draft", "glossary", "drawing", "gates", "self",
+                  "twin", "commissioning", "precedents", "briefing", "contract_review"]
 
 AGENTS: dict[str, dict] = {
     "intake": {
@@ -107,8 +114,67 @@ AGENTS: dict[str, dict] = {
         "name": bi("Field report agent", "现场上报智能体"), "authority": "read_only",
         "role": bi("Reports the analysis of your recent field reports.", "汇报你最近现场上报的分析结果。"),
     },
+    "compare": {
+        "name": bi("Comparison agent", "条款对比智能体"), "authority": "read_only",
+        "role": bi("Compares the clauses of two or more countries on one topic, country by country, with citations.",
+                   "按国家逐一检索并对比两国或多国在同一主题上的条款，每项带引用。"),
+    },
+    "draft": {
+        "name": bi("Reply drafting agent", "回函起草智能体"), "authority": "drafts_only",
+        "role": bi("Drafts reply points from the work order and the clauses found earlier; never sends anything.",
+                   "依据工单和前面查到的条款起草回函要点；只出草稿，不发送。"),
+    },
+    "glossary": {
+        "name": bi("Terminology agent", "术语智能体"), "authority": "read_only",
+        "role": bi("Gives the Malay, Indonesian or Arabic engineering term and whether official text uses it.",
+                   "给出马来语、印尼语或阿拉伯语的工程术语，并说明官方文本中是否可查。"),
+    },
+    "drawing": {
+        "name": bi("Drawing agent", "图纸智能体"), "authority": "read_only",
+        "role": bi("Answers a question about an uploaded drawing from its extracted facts.",
+                   "依据已解析的图纸事实回答图纸问题。"),
+    },
+    "gates": {
+        "name": bi("Permit gate agent", "许可关口智能体"), "authority": "read_only",
+        "role": bi("Lists the permit gates of a country pack for a lifecycle stage.", "列出某国家包在某生命周期阶段的许可关口。"),
+    },
+    "contract_review": {
+        "name": bi("Contract review agent", "合同审查智能体"), "authority": "read_only",
+        "role": bi("Reviews pasted contract clauses: payment, delay damages, claim notice, variations, liability, retention, "
+                   "termination, disputes; flags risks and checks them against local law. A first pass, not legal advice.",
+                   "审查粘贴的合同条款（付款、误期违约金、索赔通知、变更、责任、保留金、解除、争议解决），标出风险并对照当地法律；仅供初审。"),
+    },
+    "precedents": {
+        "name": bi("Precedent agent", "类案智能体"), "authority": "read_only",
+        "role": bi("Finds earlier work orders like this one, closed ones first.", "查找相似的历史工单，已办结的优先。"),
+    },
+    "twin": {
+        "name": bi("Digital twin agent", "孪生资产智能体"), "authority": "read_only",
+        "role": bi("Reports an asset's status, health, sensor alerts and maintenance from the digital twin.",
+                   "从数字孪生查询构件状态、健康度、传感器告警和维护工单。"),
+    },
+    "commissioning": {
+        "name": bi("Commissioning & handover agent", "调试移交智能体"), "authority": "read_only",
+        "role": bi("Reports test packs, open punch items, document completeness and handover readiness.",
+                   "查询调试测试包、未关闭的整改项、文件完整度和移交就绪度。"),
+    },
+    "briefing": {
+        "name": bi("Project briefing agent", "项目简报智能体"), "authority": "read_only",
+        "role": bi("Sums up what needs attention in a project: open work orders, approvals, sensor alerts, maintenance due, "
+                   "commissioning blockers and schedule slippage.",
+                   "汇总项目今天要关注的事：在办工单、待审批、传感器告警、到期维护、调试卡点和进度落后。"),
+    },
+    "self": {
+        "name": bi("Self-knowledge agent", "自我认知智能体"), "authority": "read_only",
+        "role": bi("Says what the assistant can and cannot answer, per lifecycle domain and country, from the live "
+                   "roster and the clause library's coverage.",
+                   "依据实时的智能体名单和条款库覆盖情况，按生命周期领域和国家说明能答什么、不能答什么。"),
+    },
 }
 AGENT_IDS: tuple[str, ...] = tuple(AGENTS)
+# Agents whose work is defined by their query text (two such steps with
+# different queries are different tasks).
+QUERY_AGENTS = {"knowledge", "compare", "glossary", "drawing", "gates", "twin", "commissioning", "precedents", "briefing"}
 WRITERS = {"intake", "answer"}
 # Queues that should already include the work order this plan creates.
 AFTER_INTAKE = {"approvals", "field"}
@@ -133,9 +199,10 @@ DISPATCH_FORMAT: dict = {
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
-                        "required": ["agent", "query", "case_id", "project_code", "question_id", "answer"],
+                        "required": ["agent", "query", "case_id", "project_code", "question_id", "answer", "depends_on"],
                         "properties": {
                             "agent": {"type": "string", "enum": list(AGENT_IDS)},
+                            "depends_on": {"type": "array", "items": {"type": "integer"}},
                             "query": {"type": "string"},
                             "case_id": {"type": "string"},
                             "project_code": {"type": "string"},
@@ -169,6 +236,42 @@ _LEAD = r"(?:然后|并且|并|再|同时|另外|还有|顺便|帮我|请|查一
 _SPLIT_RE = re.compile(r"[，,；;。！!？?\n]+\s*(?=" + _LEAD + ")", re.IGNORECASE)
 _LEAD_RE = re.compile(r"^(?:然后|并且|并|再|同时|另外|还有|顺便|and|also|then)\s*", re.IGNORECASE)
 _STEP_TAG_RE = re.compile(r"^S(\d)$")
+# A question about what a rule says, even when it names a delay, defect or
+# breach ("what does the law say about delay penalties?"), is a lookup, not a
+# report. An event report says that something happened.
+_RULE_QUESTION_RE = re.compile(
+    r"(?:有什么|有哪些|怎么|如何)(?:规定|要求|条款|限制)|规定(?:是什么|了什么|多少|多长)|多长时间|多少天|期限(?:是|多长)|"
+    r"责任期|怎么(?:算|计算|规定)|what (?:does|do) the (?:law|rules?|code)|what are the rules|how long|how many days|"
+    r"\bapa (?:peraturan|syarat)|berapa lama|ما (?:هو|هي) (?:حكم|مدة)", re.IGNORECASE)
+_EVENT_RE = re.compile(r"发生|出现|昨天|今天|刚才|现场.{0,4}(?:发现|有)|已经|occurred|happened|yesterday|today|this morning",
+                       re.IGNORECASE)
+_EOT_DAYS_RE = re.compile(r"(?:顺延|延长工期|工期延长|延期)\s*(\d{1,3})\s*天|(\d{1,3})\s*天.{0,4}(?:顺延|延期|工期延长)|"
+                          r"extension of time(?: of)?\s*(\d{1,3})\s*days?|(\d{1,3})[- ]days? (?:extension|EOT)", re.IGNORECASE)
+_TWIN_RE = re.compile(r"孪生|构件|资产|传感器|告警|报警|健康度|维护|维保|保养|设备状态|\b(?:P\d{1,3}|AHU\d{2}|BRG\d{1,3}[A-Z]?)\b.{0,8}(?:状态|怎么样|情况|告警)|"
+                      r"digital twin|\btwin\b|sensor|alarm|health score|maintenance|asset status|aset|sensor|التوأم الرقمي|الصيانة",
+                      re.IGNORECASE)
+_COMMISSIONING_RE = re.compile(r"调试|移交|整改项|尾项|测试包|试运行|commissioning|handover|punch|test pack|pentauliahan|serah terima|التسليم|التشغيل التجريبي",
+                               re.IGNORECASE)
+_PRECEDENT_RE = re.compile(r"类似|相似|以前|之前|历史|先例|类案|有没有.{0,6}(?:案例|工单)|precedent|similar|in the past|before\b|serupa|sebelum|مماثل|سابقة",
+                           re.IGNORECASE)
+_BRIEFING_RE = re.compile(r"简报|今天.{0,8}(?:处理|关注|要做|待办)|有什么要(?:处理|关注)|待办|汇总|总览|日报|周报|"
+                          r"brief(?:ing)?|what needs (?:my )?attention|to-?do|what should i (?:do|look at)|ringkasan|ملخص", re.IGNORECASE)
+_WORKER_RE = re.compile(r"工人|员工|劳工|外籍|雇员|workers?|employees?|staff|pekerja|العمال|عامل", re.IGNORECASE)
+# An explicit request to look clauses up, as opposed to a letter that merely
+# mentions requirements or permits.
+_LOOKUP_RE = re.compile(r"查.{0,6}(?:条款|法规|规定|依据|法律)|相关(?:条款|法规|规定)|"
+                        r"\b(?:look up|check|find|cite)\b.{0,24}\b(?:clauses?|regulations?|laws?|provisions?)\b|"
+                        r"semak .{0,20}(?:peraturan|akta|seksyen)|cek .{0,20}(?:pasal|peraturan)|ابحث.{0,20}(?:المادة|القانون|النظام)",
+                        re.IGNORECASE)
+_COMPARE_RE = re.compile(r"比较|对比|区别|异同|有什么不同|\bcompare\b|\bversus\b|\bvs\.?\b|differences?|bandingkan|perbandingan|"
+                         r"مقارنة|قارن|الفرق", re.IGNORECASE)
+_DRAFT_RE = re.compile(r"起草|草拟|拟写|回函|回复要点|答复要点|\bdraft\b|reply points|surat balasan|draf balasan|مسودة|صياغة رد",
+                       re.IGNORECASE)
+_TERM_RE = re.compile(r"(?:阿拉伯语|阿语|马来语|印尼语|当地语言)?(?:怎么说|怎么讲|叫什么)|术语|翻译成|"
+                      r"\bin (?:arabic|malay|indonesian|bahasa)\b|\btranslate\b|\bterminology\b|istilah|مصطلح", re.IGNORECASE)
+_DRAWING_RE = re.compile(r"图纸|\bdrawings?\b|\b(?:DWG|DRW)[-_]\w+|lukisan|gambar kerja|مخطط", re.IGNORECASE)
+_GATES_RE = re.compile(r"许可关口|需要(?:哪些|什么)(?:许可|审批|证照)|要办(?:哪些|什么)(?:许可|证)|permit gates?|which permits|"
+                       r"permits? (?:are )?(?:needed|required)|perizinan apa|lesen apa|التراخيص المطلوبة", re.IGNORECASE)
 
 
 class DispatchRequest(BaseModel):
@@ -189,9 +292,10 @@ class Step:
     project_id: int | None = None
     question_id: int | None = None
     answer: str = ""
+    depends_on: list[int] = field(default_factory=list)   # indices of earlier steps whose results this one uses
 
     def key(self) -> tuple:
-        return (self.agent, self.query.lower() if self.agent == "knowledge" else "", self.case_id, self.project_id)
+        return (self.agent, self.query.lower() if self.agent in QUERY_AGENTS else "", self.case_id, self.project_id)
 
 
 @dataclass
@@ -200,24 +304,39 @@ class PlanContext:
     known_case_ids: set[str]
     case_id: str | None = None                      # what "this case" refers to
     open_questions: dict[int, str] = field(default_factory=dict)  # of that case
+    countries: list[str] = field(default_factory=list)           # the conversation's country focus
     project_id: int | None = None
 
 
 # --- planning -------------------------------------------------------------------
 
 def _dedupe(steps: list[Step]) -> list[Step]:
-    seen, unique = set(), []
-    for step in steps:
-        if step.key() not in seen:
-            seen.add(step.key())
-            unique.append(step)
-    return unique[:MAX_STEPS]
+    """Drop repeated tasks and keep ``depends_on`` pointing at the kept steps."""
+    seen: dict[tuple, int] = {}
+    position: dict[int, int] = {}
+    unique: list[Step] = []
+    for old, step in enumerate(steps):
+        if step.key() in seen:
+            position[old] = seen[step.key()]
+            continue
+        seen[step.key()] = position[old] = len(unique)
+        unique.append(step)
+    unique = unique[:MAX_STEPS]
+    for new, step in enumerate(unique):
+        step.depends_on = sorted({position[d] for d in step.depends_on if d in position and position[d] < new})
+    return unique
 
 
 def _clauses(text: str) -> list[str]:
     if len(text) > MAX_SPLIT_LENGTH:
         return [text]
-    parts = [_LEAD_RE.sub("", part).strip() for part in _SPLIT_RE.split(text)]
+    # A clause keeps its question mark: "...几小时？另外..." is still a question.
+    parts, last = [], 0
+    for match in _SPLIT_RE.finditer(text):
+        parts.append(text[last:match.start()] + ("？" if re.search(r"[？?؟]", match.group()) else ""))
+        last = match.end()
+    parts.append(text[last:])
+    parts = [_LEAD_RE.sub("", part).strip() for part in parts]
     return [part for part in parts if part]
 
 
@@ -232,15 +351,66 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
     text = message.strip()
     if ctx.case_id:
         text = _THIS_CASE_RE.sub(f" {ctx.case_id} ", text)
+    # Pasted contract clauses to review, rather than a letter to act on.
+    if looks_like_contract(text):
+        return [Step("contract_review")]
     # A long message that is not a question is a pasted letter or notice.
     if len(text) > MAX_SPLIT_LENGTH and not re.search(r"[?？؟]\s*$", text):
-        return [Step("intake", query=message.strip(), project_id=plan_rules(text, ctx.project_codes, set())["project_id"])]
+        project_id = plan_rules(text, ctx.project_codes, set())["project_id"]
+        letter = [Step("intake", query=message.strip(), project_id=project_id)]
+        # The closing instruction, not the letter body, says what to do with it.
+        instruction = text[-160:]
+        if _LOOKUP_RE.search(instruction):
+            letter.append(Step("knowledge", query=text[:MAX_LETTER_QUERY], project_id=project_id))
+        if _DRAFT_RE.search(instruction):
+            letter.append(Step("draft", depends_on=list(range(len(letter)))))
+        return letter
+    # Questions about the assistant itself, or "analyse this contract" with no contract attached.
+    if len(text) <= MAX_SELF_LENGTH and (ABOUT_SELF_RE.search(text) or not detect_countries(text) and (
+            CAPABILITY_RE.search(text) or _HELP_RE.search(text) or (REVIEW_RE.search(text) and len(text) <= 40))):
+        return [Step("self", query=text)]
     steps: list[Step] = []
+    draft_wanted = False
     for position, clause in enumerate(_clauses(text)):
         if _FIELD_RE.search(clause):
             steps.append(Step("field"))
             continue
+        if _DRAFT_RE.search(clause) and not _INCIDENT_RE.search(clause):
+            draft_wanted = True
+            if _LOOKUP_RE.search(clause):
+                # "check the clauses and draft a reply": search with the issue itself.
+                steps.append(Step("knowledge", query=text[:MAX_LETTER_QUERY]))
+            continue
+        if _COMPARE_RE.search(clause) and len(detect_countries(clause) or detect_countries(text)) >= 2:
+            steps.append(Step("compare", query=clause))
+            continue
+        if _TERM_RE.search(clause):
+            steps.append(Step("glossary", query=clause))
+            continue
+        if _DRAWING_RE.search(clause):
+            steps.append(Step("drawing", query=clause))
+            continue
+        if _BRIEFING_RE.search(clause):
+            steps.append(Step("briefing", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
+        if _PRECEDENT_RE.search(clause) and re.search(r"案例|工单|案子|处理|纠纷|事故|case|work order|incident|dispute", clause, re.IGNORECASE):
+            if _INCIDENT_RE.search(clause) and _EVENT_RE.search(clause):
+                # "P47 collapsed yesterday; any similar cases before?" reports an event and asks for precedents.
+                steps.insert(0, Step("intake", query=message.strip(), project_id=_project_in_text(clause, ctx.project_codes)))
+            steps.append(Step("precedents", query=clause))
+            continue
+        if _COMMISSIONING_RE.search(clause) and not _KNOWLEDGE_RE.search(clause):
+            steps.append(Step("commissioning", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
+        if _TWIN_RE.search(clause) and not _RULE_QUESTION_RE.search(clause):
+            steps.append(Step("twin", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
+        if _GATES_RE.search(clause) and not _WORKER_RE.search(clause):
+            steps.append(Step("gates", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
         plan = plan_rules(clause, ctx.project_codes, ctx.known_case_ids)
+        if plan["tool"] == "report_incident" and _RULE_QUESTION_RE.search(clause) and not _EVENT_RE.search(clause):
+            plan.update(tool="search_knowledge", query=clause)
         # A follow-on clause asking for rules ("then check the accident
         # reporting regulation") is a lookup even if it names an incident.
         if position > 0 and plan["tool"] == "report_incident" and _KNOWLEDGE_RE.search(clause):
@@ -253,7 +423,14 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
     intakes = [s for s in steps if s.agent == "intake"]
     if len(intakes) > 1:
         steps = [intakes[0], *(s for s in steps if s.agent != "intake")]
-    return _dedupe(steps)
+    steps = _dedupe(steps)
+    if steps and steps[0].agent == "intake":
+        for step in steps:
+            if step.agent == "precedents":  # compare with the new work order, and never return it as its own precedent
+                step.depends_on = [0]
+    if draft_wanted:
+        steps = steps[:MAX_STEPS - 1] + [Step("draft", depends_on=list(range(min(len(steps), MAX_STEPS - 1))))]
+    return steps
 
 
 def _plan_prompt(lang: str, ctx: PlanContext) -> str:
@@ -270,8 +447,16 @@ def _plan_prompt(lang: str, ctx: PlanContext) -> str:
         "- intake: the user reports a NEW site issue, incident, hazard, damage, delay or claim, or pastes an owner "
         "notice or letter. Put the full issue text in `query`. Use it at most once.\n"
         "- knowledge: questions on regulations, laws, standards, permits or contract clauses. Put a concise search "
-        "query in `query`, keeping country and topic words and the user's own key terms. A comparison of several "
-        "countries is ONE knowledge step whose query names every country.\n"
+        "query in `query`, keeping country and topic words and the user's own key terms.\n"
+        "- compare: the user asks to compare or contrast two or more countries on one topic. ONE step whose query "
+        "names every country and the topic. Never split a comparison into knowledge steps.\n"
+        "- draft: the user asks for a reply, response letter or reply points. Put it AFTER the steps it uses and "
+        "list their indices (0-based) in `depends_on` (the intake or case step, and the knowledge/compare steps).\n"
+        "- glossary: how a term is said in Malay, Indonesian or Arabic (or the reverse). Put the term and country "
+        "in `query`.\n"
+        "- drawing: a question about an uploaded engineering drawing. Copy the drawing number and question into "
+        "`query`.\n"
+        "- gates: which permits or approval gates apply in a country at a stage. Put country and stage in `query`.\n"
         "- case: status, plan, evidence or questions of an existing work order. Set `case_id` to an id from the "
         "message, the conversation or the current case, exactly as written, or to NEW for the work order created "
         "by an intake step earlier in this plan.\n"
@@ -282,10 +467,27 @@ def _plan_prompt(lang: str, ctx: PlanContext) -> str:
         "- approvals: what waits for approval, and any request to approve, reject, execute or close (you cannot do "
         "those; the list lets the user press the buttons).\n"
         "- field: the user's own recent field reports.\n"
-        "- Greetings, thanks, questions about what you can do, or requests outside the platform: return no steps "
+        "- contract_review: the user pastes contract clauses (or a subcontract) and wants them reviewed or checked for "
+        "risk. ONE step; leave query empty (the agent reads the whole message). A letter from the owner that only "
+        "cites a clause is intake, not contract_review.\n"
+        "- precedents: earlier or similar work orders, how a similar problem was handled before. Put the topic in "
+        "`query`; if the plan also creates a work order, put precedents AFTER intake with depends_on [that index].\n"
+        "- twin: the status, health, sensor alerts or maintenance of an asset or element (e.g. P47, AHU01) from the "
+        "digital twin. Put the element and project words in `query`.\n"
+        "- commissioning: commissioning, test packs, punch items, handover readiness.\n"
+        "- briefing: what needs attention today / a project summary across work orders, approvals, alerts, "
+        "maintenance and schedule. Set `project_code` when one project is meant.\n"
+        "- progress also answers cost forecast vs budget and the effect of an extension of time on the schedule.\n"
+        "- self: greetings and questions about the assistant itself: what it can do, which countries and topics it "
+        "covers, whether it can answer a kind of question (contract, local law, building codes, safety, quality, "
+        "schedule ...). ONE step whose query is the user's question. Never describe your abilities in `reply`.\n"
+        "- Thanks or requests outside the platform: return no steps "
         f"and write `reply` in {language} (under 120 words). Never answer engineering, legal, contract or project "
         "facts yourself. Otherwise `reply` is an empty string.\n"
-        "Unused fields are empty strings, and question_id is 0 when unused.\n"
+        "Unused fields are empty strings, question_id is 0 when unused, and depends_on is [] unless a step uses "
+        "an earlier step's result.\n"
+        f"Countries the conversation is about so far: {', '.join(ctx.countries) or 'none'} (use them when the "
+        "user does not name a country).\n"
         f"Known project codes: {', '.join(ctx.project_codes) or 'none'}.\n"
         f"Current case: {ctx.case_id or 'none'}. Its open questions: {questions}."
     )
@@ -319,9 +521,17 @@ def parse_dispatch(raw: str, ctx: PlanContext, message: str) -> tuple[list[Step]
             if code not in ctx.project_codes:
                 return None
             step.project_id = ctx.project_codes[code]
-        if step.agent in {"knowledge", "intake"} and not step.query:
+        if step.agent in QUERY_AGENTS | {"intake"} and not step.query:
             step.query = message.strip()
-        if step.agent in {"progress", "intake"} and step.project_id is None:
+        raw_deps = item.get("depends_on") or []
+        if not isinstance(raw_deps, list) or any(not isinstance(d, int) or not 0 <= d < len(steps) for d in raw_deps):
+            return None
+        step.depends_on = sorted(set(raw_deps))
+        if step.agent == "draft" and not step.depends_on:
+            step.depends_on = list(range(len(steps)))
+        if step.agent == "draft" and not steps:
+            return None
+        if step.agent in {"progress", "intake", "twin", "commissioning", "briefing"} and step.project_id is None:
             step.project_id = _project_in_text(f"{step.query} {message}", ctx.project_codes)
         if step.agent == "intake" and any(s.agent == "intake" for s in steps):
             return None
@@ -365,8 +575,14 @@ async def plan_dispatch(payload: DispatchRequest, lang: str, ctx: PlanContext,
     steps, reply = parsed
     # A reportable incident always reaches the governed intake path, even when
     # the model would only have answered or looked things up.
+    # A question about the assistant is answered from its live coverage, not
+    # from the model's idea of what it can do.
+    if [s.agent for s in rules] == ["self"] and [s.agent for s in steps] != ["self"]:
+        return rules, None, "llm"
     rule_intake = next((s for s in rules if s.agent == "intake"), None)
     if rule_intake and _INCIDENT_RE.search(payload.message) and not any(s.agent == "intake" for s in steps):
+        for step in steps:
+            step.depends_on = [0, *(d + 1 for d in step.depends_on)] if step.agent == "draft" else [d + 1 for d in step.depends_on]
         steps, reply = _dedupe([rule_intake, *steps]), None
     return steps, reply, "llm"
 
@@ -382,6 +598,11 @@ class Dispatch:
     case_ready: asyncio.Event = field(default_factory=asyncio.Event)
     new_case_id: str | None = None
     knowledge_answers: int = 0
+    countries: list[str] = field(default_factory=list)            # the conversation's country focus
+    results: dict[int, dict] = field(default_factory=dict)         # finished steps, for dependants
+    finished: dict[int, asyncio.Event] = field(default_factory=dict)
+    timings: dict[int, dict] = field(default_factory=dict)
+    clarifications: list[dict] = field(default_factory=list)
 
     # ``_grounded_answer`` reads the route and sensitivity from its request.
     @property
@@ -395,6 +616,18 @@ class Dispatch:
 
 def _t(lang: str, en: str, zh: str) -> str:
     return zh if lang == "zh" else en
+
+
+def focus_countries(run: "Dispatch") -> list[str]:
+    """The countries earlier turns of this conversation were about."""
+    return list(run.countries)
+
+
+REWRITE_SYSTEM = (
+    "Rewrite the user's question as a short English search query for statutory clause summaries (labour, safety, "
+    "contract, environment, data protection law). Keep the topic and legal terms, drop the country names and "
+    "filler. Reply with the query only, under 12 words."
+)
 
 
 class StepFailed(Exception):
@@ -449,13 +682,35 @@ async def agent_intake(step: Step, run: Dispatch, db: Session) -> dict:
 
 async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
     project_id = step.project_id or run.payload.project_id
-    # The step's query names the countries of this task; the whole message is
-    # a fallback (it may also name the countries of other steps).
-    countries = search_countries(db, [step.query], project_id) or search_countries(db, [run.payload.message], None)
+    # The step's query names the countries of this task; the whole message,
+    # then the conversation's focus, are fallbacks (the message may also name
+    # the countries of other steps).
+    countries = (search_countries(db, [step.query], project_id) or search_countries(db, [run.payload.message], None)
+                 or focus_countries(run))
     hits, countries = search_knowledge(
         db, step.query, run.payload.message,
         principal=run.principal, project_id=project_id, countries=countries,
     )
+    retried = False
+    if not hits and _model_available(run.payload):
+        # One bounded retry: a model rewrite of the question in the corpus's
+        # legal English, searched in the same countries. Never more than one.
+        try:
+            rewrite = (await generate(REWRITE_SYSTEM, step.query or run.payload.message,
+                                      route=run.payload.model_route, sensitivity=run.payload.data_classification)).strip()[:200]
+        except LLMError:
+            rewrite = ""
+        if rewrite:
+            retried = True
+            hits, countries = search_knowledge(db, rewrite, principal=run.principal, project_id=project_id,
+                                               countries=countries)
+    clarify = None
+    found_in = sorted({doc.country_code for _, doc in hits if doc.country_code})
+    if not countries and len(found_in) > 1:
+        # The question named no country and the answer differs by country.
+        clarify = {"question": _t(run.lang, "Which country do you mean? The rules differ.", "你指的是哪个国家？各国规定不同。"),
+                   "options": found_in}
+        run.clarifications.append({"step": step.query, **clarify})
     answer = None
     if hits and run.knowledge_answers < MAX_KNOWLEDGE_ANSWERS:
         run.knowledge_answers += 1
@@ -467,9 +722,14 @@ async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
         summary = answer
     else:
         summary = _t(run.lang, f"Found {len(hits)} sources: {', '.join(refs)}.", f"找到 {len(hits)} 条依据：{'、'.join(refs)}。")
+    # Say which part of the question the library cannot answer (no Saudi
+    # quality clause, no technical building-code provision) before any source.
+    gaps = coverage_gaps(detect_domains(step.query or run.payload.message), countries, run.lang)
+    if gaps:
+        summary = " ".join(gaps) + "\n" + summary
     return {
         "summary": summary, "refs": refs,
-        "data": {"query": step.query, "countries": countries,
+        "data": {"query": step.query, "countries": countries, "retried": retried, "clarify": clarify, "coverage_gaps": gaps,
                  "hits": [_hit_payload(score, doc, run.lang) for score, doc in hits],
                  "answer": answer, "answer_method": "llm" if answer else "sources"},
     }
@@ -575,18 +835,40 @@ async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
         ):
             continue
         info = PROJECT_INTELLIGENCE.get(project.id, {})
+        budget, forecast = info.get("budget"), info.get("forecast")
         rows.append(localize({
-            "id": project.id, "code": project.code, "progress": info.get("progress"),
+            "id": project.id, "code": project.code, "progress": info.get("progress"), "phase": info.get("phase"),
             "schedule_variance": info.get("schedule_variance"), "next_gate": info.get("next_gate"),
             "gate_date": info.get("gate_date"), "risk_level": project.risk_level,
+            "budget_m": budget, "committed_m": info.get("committed"), "forecast_m": forecast,
+            "headroom_m": round(budget - forecast, 1) if budget is not None and forecast is not None else None,
         }, run.lang))
-    lines = [
-        _t(run.lang, f"{r['code']} {r['progress']}% (variance {r['schedule_variance']} d, next gate {r['next_gate']} {r['gate_date']})",
-           f"{r['code']} 进度 {r['progress']}%（偏差 {r['schedule_variance']} 天，下一关口 {r['next_gate']} {r['gate_date']}）")
-        for r in rows if r["progress"] is not None
-    ]
+    # "Can we absorb a 20-day extension?": set the requested days against the current variance.
+    eot = next((int(g) for m in [_EOT_DAYS_RE.search(f"{step.query} {run.payload.message}")] if m for g in m.groups() if g), None)
+    lines = []
+    for r in rows:
+        if r["progress"] is None:
+            continue
+        variance = r["schedule_variance"] or 0
+        state = _t(run.lang, f"{abs(variance)} d behind" if variance < 0 else f"{variance} d ahead",
+                   f"落后 {abs(variance)} 天" if variance < 0 else f"超前 {variance} 天")
+        cost = ""
+        if r["headroom_m"] is not None:
+            cost = _t(run.lang, f", forecast {r['forecast_m']}M vs budget {r['budget_m']}M ({r['headroom_m']:+}M)",
+                      f"，预测成本 {r['forecast_m']}M / 预算 {r['budget_m']}M（余量 {r['headroom_m']:+}M）")
+        lines.append(_t(run.lang, f"{r['code']} {r['progress']}% ({state}, next gate {r['next_gate']} {r['gate_date']}{cost})",
+                        f"{r['code']} 进度 {r['progress']}%（{state}，下一关口 {r['next_gate']} {r['gate_date']}{cost}）"))
+        if eot is not None:
+            r["eot_requested_days"] = eot
+            r["variance_after_eot"] = variance + eot
+    if eot is not None and rows:
+        lines.append(_t(run.lang, f"An extension of {eot} days would move the variance to "
+                        + ", ".join(f"{r['code']} {r['variance_after_eot']:+} d" for r in rows if "variance_after_eot" in r)
+                        + "; the contract decides whether it is granted.",
+                        f"若顺延 {eot} 天，偏差变为 " + "、".join(f"{r['code']} {r['variance_after_eot']:+} 天" for r in rows if "variance_after_eot" in r)
+                        + "；是否批准以合同约定为准。"))
     return {"summary": "; ".join(lines) or _t(run.lang, "No project in scope.", "没有可查看的项目。"),
-            "data": {"project_ids": [r["id"] for r in rows], "projects": rows, "countries": countries}}
+            "data": {"project_ids": [r["id"] for r in rows], "projects": rows, "countries": countries, "eot_requested_days": eot}}
 
 
 async def agent_approvals(step: Step, run: Dispatch, db: Session) -> dict:
@@ -636,6 +918,9 @@ RUNNERS = {
 async def run_step(index: int, step: Step, run: Dispatch, emit) -> dict:
     if step.agent in AFTER_INTAKE:
         await run.case_ready.wait()
+    for dependency in step.depends_on:
+        await run.finished[dependency].wait()
+    started = perf_counter()
     await emit({"type": "step_start", "index": index})
     db = SessionLocal()
     try:
@@ -657,7 +942,11 @@ async def run_step(index: int, step: Step, run: Dispatch, emit) -> dict:
         db.close()
         if step.agent == "intake":
             run.case_ready.set()
-    await emit({"type": "step_done", "index": index, **result})
+    run.results[index] = result
+    run.timings[index] = {"index": index, "agent": step.agent, "status": result["status"], "depends_on": step.depends_on,
+                          "duration_ms": round((perf_counter() - started) * 1000), "refs": len(result.get("refs") or [])}
+    run.finished[index].set()
+    await emit({"type": "step_done", "index": index, "duration_ms": run.timings[index]["duration_ms"], **result})
     return result
 
 
@@ -676,10 +965,46 @@ def validate_summary(text: str, step_count: int, refs: set[str]) -> bool:
     return bool(tags) and all(1 <= t <= step_count for t in tags) and others <= refs
 
 
-async def summarise(steps: list[Step], results: list[dict], run: Dispatch) -> tuple[str, str]:
+_LEADING_CITATIONS_RE = re.compile(r"^((?:\s*\[[^\[\]]{1,80}\])+)[\s.。]*")
+_SENTENCE_END_RE = re.compile(r"(?<=[。！？!?؟])|(?<=\.)\s+|\n+")
+
+
+def _sentences(text: str) -> list[str]:
+    """Split a summary into sentences; a citation left after the full stop stays with its sentence."""
+    out: list[str] = []
+    for part in (p.strip() for p in _SENTENCE_END_RE.split(text) if p):
+        lead = _LEADING_CITATIONS_RE.match(part) if out else None
+        if lead:  # "... capped. [S1] Next sentence" — the tag belongs to the sentence before
+            out[-1] = f"{out[-1]} {lead.group(1).strip()}"
+            part = part[lead.end():].strip()
+        if part:
+            out.append(part)
+    return out
+
+
+def filter_sentences(text: str, step_count: int, refs: set[str]) -> tuple[str, int]:
+    """Keep only sentences that cite a step or a retrieved source, and nothing else.
+
+    Returns the kept text and how many sentences were dropped. A sentence with
+    no citation, or citing a step or source this run did not produce, is cut
+    rather than repaired: an unsupported sentence is worse than a shorter answer.
+    """
+    kept, dropped = [], 0
+    for sentence in _sentences(text):
+        cited = {c.strip() for c in _CITATION_RE.findall(sentence)}
+        tags = {int(m.group(1)) for c in cited if (m := _STEP_TAG_RE.match(c))}
+        others = {c for c in cited if not _STEP_TAG_RE.match(c)}
+        if cited and all(1 <= t <= step_count for t in tags) and others <= refs:
+            kept.append(sentence)
+        else:
+            dropped += 1
+    return " ".join(kept), dropped
+
+
+async def summarise(steps: list[Step], results: list[dict], run: Dispatch) -> tuple[str, str, int]:
     fallback = fallback_summary(steps, results, run.lang)
     if not _model_available(run.payload):
-        return fallback, "rules"
+        return fallback, "rules", 0
     language = "Simplified Chinese" if run.lang == "zh" else "English"
     facts = "\n".join(f"[S{i + 1}] {AGENTS[s.agent]['name']['en']} ({r['status']}): {r['summary']}"
                       for i, (s, r) in enumerate(zip(steps, results)))
@@ -695,8 +1020,9 @@ async def summarise(steps: list[Step], results: list[dict], run: Dispatch) -> tu
         text = (await generate(system, f"User message: {run.payload.message[:1500]}\n\nResults:\n{facts}",
                                route=run.payload.model_route, sensitivity=run.payload.data_classification)).strip()
     except LLMError:
-        return fallback, "rules"
-    return (text, "llm") if validate_summary(text, len(steps), refs) else (fallback, "rules")
+        return fallback, "rules", 0
+    kept, dropped = filter_sentences(text, len(steps), refs)
+    return (kept, "llm", dropped) if kept and validate_summary(kept, len(steps), refs) else (fallback, "rules", dropped)
 
 
 # --- session memory ---------------------------------------------------------------
@@ -730,12 +1056,13 @@ def build_context(db: Session, payload: DispatchRequest, session: AssistantSessi
     known = set(db.scalars(case_stmt)) if mentioned else set()
     current = current if current in known else None
     questions = {k: localize(v, "en") for k, v in open_questions(db, current).items()} if current else {}
+    countries = [c for c in (session.context or {}).get("countries") or [] if isinstance(c, str)][:4]
     return PlanContext(project_codes=project_codes, known_case_ids=known, case_id=current, open_questions=questions,
-                       project_id=payload.project_id or (session.context or {}).get("project_id"))
+                       countries=countries, project_id=payload.project_id or (session.context or {}).get("project_id"))
 
 
 def remember(db: Session, session_id: str, message: str, reply: str, steps: list[Step], results: list[dict],
-             project_id: int | None) -> None:
+             project_id: int | None, trace: dict | None = None) -> None:
     session = db.get(AssistantSession, session_id)
     if session is None:
         return
@@ -747,6 +1074,16 @@ def remember(db: Session, session_id: str, message: str, reply: str, steps: list
             context["project_id"] = step.project_id
     if project_id:
         context["project_id"] = project_id
+    # The country focus follows the latest turn that named or searched countries,
+    # so "and Saudi?" after a Malaysia question searches Saudi only, and a bare
+    # follow-up keeps searching the country already being discussed.
+    named = detect_countries(message)
+    searched = [c for r in results for c in ((r.get("data") or {}).get("countries") or []) if isinstance(c, str)]
+    focus = list(dict.fromkeys([*named, *searched]))
+    if focus:
+        context["countries"] = focus[:4]
+    if trace is not None:
+        context["last_trace"] = trace
     turns = [*(session.turns or []), {"role": "user", "content": message[:2000]}, {"role": "assistant", "content": reply[:2000]}]
     session.turns, session.context, session.updated_at = turns[-MAX_TURNS:], context, utc_now()
     db.commit()
@@ -757,8 +1094,8 @@ def remember(db: Session, session_id: str, message: str, reply: str, steps: list
 def _step_view(index: int, step: Step, lang: str) -> dict:
     return localize({
         "index": index, "agent": step.agent, "name": AGENTS[step.agent]["name"], "authority": AGENTS[step.agent]["authority"],
-        "query": step.query if step.agent in {"knowledge"} else "", "case_id": step.case_id,
-        "project_id": step.project_id, "question_id": step.question_id,
+        "query": step.query if step.agent in QUERY_AGENTS else "", "case_id": step.case_id,
+        "project_id": step.project_id, "question_id": step.question_id, "depends_on": step.depends_on,
     }, lang)
 
 
@@ -774,28 +1111,43 @@ async def dispatch(payload: DispatchRequest, lang: str, principal: Principal, em
         db.close()
     await emit({"type": "session", "session_id": session_id, "context_case_id": ctx.case_id})
 
+    reset_routing_trace()
+    started = perf_counter()
     steps, reply, method = await plan_dispatch(payload, lang, ctx, history)
     await emit({"type": "plan", "method": method, "steps": [_step_view(i, s, lang) for i, s in enumerate(steps)]})
 
     results: list[dict] = []
-    summary_method = None
+    summary_method, dropped = None, 0
+    run = Dispatch(payload, lang, principal, countries=list(ctx.countries))
     if steps:
-        run = Dispatch(payload, lang, principal)
+        run.finished = {i: asyncio.Event() for i in range(len(steps))}
         if not any(s.agent == "intake" for s in steps):
             run.case_ready.set()
         results = list(await asyncio.gather(*(run_step(i, s, run, emit) for i, s in enumerate(steps))))
+        for clarify in run.clarifications:
+            await emit({"type": "clarify", **clarify})
         if len(steps) > 1:
-            reply, summary_method = await summarise(steps, results, run)
-            await emit({"type": "summary", "text": reply, "method": summary_method})
+            reply, summary_method, dropped = await summarise(steps, results, run)
+            await emit({"type": "summary", "text": reply, "method": summary_method, "dropped_sentences": dropped})
         else:
             reply = results[0]["summary"]
     else:
         reply = reply or ""
         await emit({"type": "reply", "text": reply or None})
 
+    calls = routing_trace()
+    trace = {
+        "plan_method": method, "summary_method": summary_method, "dropped_sentences": dropped,
+        "duration_ms": round((perf_counter() - started) * 1000),
+        "steps": [run.timings[i] for i in sorted(run.timings)],
+        "refs": sorted({ref for r in results for ref in r.get("refs", [])}),
+        "model_calls": len(calls), "model_routes": calls[-12:],
+        "focus_countries": list(ctx.countries),
+    }
+    await emit({"type": "trace", **trace})
     db = SessionLocal()
     try:
-        remember(db, session_id, payload.message, reply or "", steps, results, payload.project_id)
+        remember(db, session_id, payload.message, reply or "", steps, results, payload.project_id, trace)
     finally:
         db.close()
     await emit({"type": "done"})
@@ -845,3 +1197,21 @@ def session_context(session_id: str, principal: Principal = Depends(get_principa
     if session is None or session.subject != principal.subject or session.organization_id != principal.organization_id:
         raise HTTPException(404, "Session not found")
     return {"session_id": session.id, "context": session.context, "turns": session.turns}
+
+
+@router.get("/sessions/{session_id}/trace")
+def session_trace(session_id: str, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
+    """The last dispatch's trace: plan method, per-step timing, citations and model calls."""
+    session = db.get(AssistantSession, session_id)
+    if session is None or session.subject != principal.subject or session.organization_id != principal.organization_id:
+        raise HTTPException(404, "Session not found")
+    return {"session_id": session.id, "trace": (session.context or {}).get("last_trace")}
+
+
+# The P1 sub-agents live in their own module; registered last because that
+# module imports this one's building blocks.
+from .dispatch_agents import EXTRA_RUNNERS  # noqa: E402
+from .dispatch_ops import OPS_RUNNERS  # noqa: E402
+
+RUNNERS.update(EXTRA_RUNNERS)
+RUNNERS.update(OPS_RUNNERS)
