@@ -501,6 +501,10 @@
     "trustStatement": "每个提取字段和生成构件都能追溯到原图页码与坐标。",
     "backToAssistant": "返回智能助手",
     "assistantReviewMode": "智能助手 · 专业审阅",
+    "reviewContext": "保留当前对话上下文，核对原图证据、工程参数与 Draft BIM 输出。",
+    "openFullPage": "新页面打开",
+    "closeReview": "关闭图纸证据审阅",
+    "loadingReview": "正在载入图纸证据…",
     "loadingDrawing": "正在恢复智能助手中的图纸任务…",
     "overlay": {
       "review": "待复核",

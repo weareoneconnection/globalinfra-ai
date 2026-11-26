@@ -311,11 +311,12 @@ function GatePanel({ gate }: { gate: ModelGate }) {
   </div>;
 }
 
-export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage = 1, initialElementId = '' }: {
+export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage = 1, initialElementId = '', reviewMode = false }: {
   projects: Project[];
   initialDrawingId?: string;
   initialPage?: number;
   initialElementId?: string;
+  reviewMode?: boolean;
 }) {
   const t = useTranslations('Drawings');
   const locale = useLocale();
@@ -516,7 +517,7 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
     if (source) setActivePage(pageOf(source));
   }
 
-  return <div className="drawing-console">
+  return <div className={`drawing-console ${reviewMode ? 'assistant-review' : ''}`}>
     <section className="drawing-trust-strip">
       <span>DRAWING → EVIDENCE → TWIN</span><b>{t('trustStatement')}</b><small>AI_GENERATED_DRAFT · NOT_FOR_CONSTRUCTION</small>
     </section>
@@ -526,7 +527,7 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
     </section>
 
     <div className="drawing-layout">
-      <section className="card drawing-source-panel">
+      {!reviewMode ? <section className="card drawing-source-panel">
         <header><div><span className="section-kicker">P0 · {t('sourceKicker')}</span><h3>{t('sourceTitle')}</h3></div><span className={`badge ${phase === 'error' ? 'high' : phase === 'ready' ? 'ok' : 'info'}`}>{t(`phase.${phase}`)}</span></header>
         <form onSubmit={upload}>
           <label><span>{t('project')}</span><select name="project_id" defaultValue={String(projects[0]?.id ?? '')} required>{projects.map(project => <option value={project.id} key={project.id}>{project.code} · {project.name}</option>)}</select></label>
@@ -536,7 +537,7 @@ export function DrawingWorkspace({ projects, initialDrawingId = '', initialPage 
         </form>
         <p className="drawing-boundary">{t('uploadBoundary')}</p>
         {detail ? <div className="drawing-document-receipt"><span>SHA-256</span><code>{text(detail.document.sha256 ?? detail.document.checksum ?? detail.document.storage_ref, '—')}</code><small>{text(detail.document.filename, t('uploadedDrawing'))} · {detail.status}</small></div> : null}
-      </section>
+      </section> : null}
 
       <section className="card drawing-canvas-panel">
         <header><div><span className="section-kicker">P0 · {t('evidenceKicker')}</span><h3>{t('evidenceTitle')}</h3></div>{detail && <div className="drawing-page-tabs">{detail.sheets.map((sheet, index) => { const page = sheet.page ?? sheet.page_number ?? index + 1; return <button type="button" className={activePage === page ? 'active' : ''} onClick={() => setActivePage(page)} key={String(sheet.id ?? page)}>{page}</button>; })}</div>}</header>

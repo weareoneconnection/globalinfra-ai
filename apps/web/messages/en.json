@@ -501,6 +501,10 @@
     "trustStatement": "Every extracted value and generated object remains linked to its source sheet and coordinates.",
     "backToAssistant": "Return to assistant",
     "assistantReviewMode": "Assistant · professional review",
+    "reviewContext": "Keep the current conversation while verifying source evidence, engineering parameters and Draft BIM outputs.",
+    "openFullPage": "Open in new page",
+    "closeReview": "Close drawing evidence review",
+    "loadingReview": "Loading drawing evidence…",
     "loadingDrawing": "Restoring the assistant drawing task…",
     "overlay": {
       "review": "Review",

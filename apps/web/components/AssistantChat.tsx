@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChangeEvent, FormEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { RiskBadge } from './RiskBadge';
+import { DrawingReviewDrawer, type DrawingReviewTarget } from './DrawingReviewDrawer';
 
 export type AssistantProject = {
   id: number; code: string; name: string; country_name: string; phase?: string; progress?: number;
@@ -254,9 +255,11 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
   const [restricted, setRestricted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [drawingReview, setDrawingReview] = useState<DrawingReviewTarget | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const textInput = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const closeDrawingReview = useCallback(() => setDrawingReview(null), []);
 
   useEffect(() => {
     try {
@@ -582,31 +585,34 @@ export function AssistantChat({ projects, pendingApprovals, planningAgent }: { p
     </div>;
   }
 
-  return <div className="assistant">
-    <div className="assistant-thread-head">
+  return <>
+    <div className="assistant">
+      <div className="assistant-thread-head">
       <span>{t('threadTitle')}</span>
       <button type="button" className="button secondary" onClick={() => {
         setMessages([]); setSessionId(null);
         try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
       }} disabled={busy}>＋ {t('newChat')}</button>
-    </div>
-    <div className="assistant-thread">
-      {messages.map(message => message.role === 'user'
-        ? <div key={message.id} className="assistant-msg user"><div className="assistant-bubble">{message.fileName && <div className="assistant-file">📎 {message.fileName}</div>}{message.text && message.text !== message.fileName && <div>{message.text}</div>}</div></div>
-        : <div key={message.id} className="assistant-msg bot">
-          <div className="brand-mark assistant-avatar"><span>GI</span></div>
-          <div className="assistant-reply">
-            <div className="assistant-intent">
-              {message.intent === 'dispatch' ? t('dispatch') : message.intent ? t(`intents.${message.intent}`) : t('understanding')}
-              {message.intent && message.method && <span className={`assistant-method ${message.method}`}>{t(`methods.${message.method}`)}</span>}
+      </div>
+      <div className="assistant-thread">
+        {messages.map(message => message.role === 'user'
+          ? <div key={message.id} className="assistant-msg user"><div className="assistant-bubble">{message.fileName && <div className="assistant-file">📎 {message.fileName}</div>}{message.text && message.text !== message.fileName && <div>{message.text}</div>}</div></div>
+          : <div key={message.id} className="assistant-msg bot">
+            <div className="brand-mark assistant-avatar"><span>GI</span></div>
+            <div className="assistant-reply">
+              <div className="assistant-intent">
+                {message.intent === 'dispatch' ? t('dispatch') : message.intent ? t(`intents.${message.intent}`) : t('understanding')}
+                {message.intent && message.method && <span className={`assistant-method ${message.method}`}>{t(`methods.${message.method}`)}</span>}
+              </div>
+              {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} onOpenDrawing={setDrawingReview} /> : <Thinking intent={message.intent ?? 'help'} />}
             </div>
-            {message.reply ? <ReplyView reply={message.reply} projects={projects} planningAgent={planningAgent} /> : <Thinking intent={message.intent ?? 'help'} />}
-          </div>
-        </div>)}
-      <div ref={endRef} />
+          </div>)}
+        <div ref={endRef} />
+      </div>
+      <div className="assistant-dock">{composer}{chips}</div>
     </div>
-    <div className="assistant-dock">{composer}{chips}</div>
-  </div>;
+    {drawingReview ? <DrawingReviewDrawer projects={projects} target={drawingReview} onClose={closeDrawingReview} /> : null}
+  </>;
 }
 
 function Thinking({ intent }: { intent: Intent }) {
@@ -619,7 +625,12 @@ function Thinking({ intent }: { intent: Intent }) {
   return <div className="assistant-thinking"><span className="assistant-dots"><i /><i /><i /></span>{intent === 'drawing' ? t('thinkingDrawing') : intent === 'incident' ? t('thinkingIncident') : t('thinking')}{seconds > 2 && <small>{seconds}s</small>}</div>;
 }
 
-function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects: AssistantProject[]; planningAgent: string }) {
+function ReplyView({ reply, projects, planningAgent, onOpenDrawing }: {
+  reply: Reply;
+  projects: AssistantProject[];
+  planningAgent: string;
+  onOpenDrawing: (target: DrawingReviewTarget) => void;
+}) {
   const t = useTranslations('Assistant');
   switch (reply.kind) {
     case 'case': return <CaseReply caseId={reply.data.caseId} summary={reply.data} projects={projects} planningAgent={planningAgent} />;
@@ -629,14 +640,14 @@ function ReplyView({ reply, projects, planningAgent }: { reply: Reply; projects:
     case 'knowledge': return <KnowledgeReply query={reply.query} hits={reply.hits} answer={reply.answer ?? null} />;
     case 'progress': return <ProgressReply projects={reply.projectId ? projects.filter(p => p.id === reply.projectId) : projects} />;
     case 'approvals': return <ApprovalsReply />;
-    case 'drawing': return <DrawingReplyCard reply={reply} />;
+    case 'drawing': return <DrawingReplyCard reply={reply} onOpenDrawing={onOpenDrawing} />;
     case 'help': return <div className="assistant-text">{t('help')}</div>;
     case 'error': return <div className="assistant-error" role="alert">{t('failed')} · {reply.message}</div>;
     case 'dispatch': return <DispatchReply reply={reply} projects={projects} planningAgent={planningAgent} />;
   }
 }
 
-function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
+function DrawingReplyCard({ reply, onOpenDrawing }: { reply: DrawingReply; onOpenDrawing: (target: DrawingReviewTarget) => void }) {
   const t = useTranslations('Assistant');
   const locale = useLocale();
   const [current, setCurrent] = useState(reply);
@@ -655,7 +666,11 @@ function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
   const categories = Object.entries(current.categories).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const partialModel = current.modelReady && current.geometryCount > current.confirmedGeometryCount;
   const firstCitation = current.citations?.[0];
-  const workbench = `/drawings?drawing_id=${encodeURIComponent(current.drawingId)}&page=${firstCitation?.page ?? 1}&element_id=${encodeURIComponent(firstCitation?.element_id ?? '')}&from=assistant`;
+  const reviewTarget = (citation?: DrawingCitation): DrawingReviewTarget => ({
+    drawingId: current.drawingId,
+    page: citation?.page ?? 1,
+    elementId: citation?.element_id ?? '',
+  });
   const facts = [
     [t('drawingFields.number'), current.fields.drawingNumber],
     [t('drawingFields.revision'), current.fields.revision],
@@ -682,11 +697,11 @@ function DrawingReplyCard({ reply }: { reply: DrawingReply }) {
     {current.answer ? <div className={`assistant-drawing-answer ${current.grounded ? 'grounded' : 'unsupported'}`}>
       <div><b>{current.grounded ? t('drawingGrounded') : t('drawingUnsupported')}</b>{current.question && <small>{current.question}</small>}</div>
       <p>{current.answer}</p>
-      {current.citations?.length ? <div className="assistant-drawing-citations">{current.citations.slice(0, 6).map((citation, index) => <Link href={`/drawings?drawing_id=${encodeURIComponent(current.drawingId)}&page=${citation.page ?? 1}&element_id=${encodeURIComponent(citation.element_id ?? '')}&from=assistant`} key={`${citation.element_id ?? index}`}><span>S{citation.page ?? 1}</span>{citation.source_text || `E${index + 1}`}</Link>)}</div> : null}
+      {current.citations?.length ? <div className="assistant-drawing-citations">{current.citations.slice(0, 6).map((citation, index) => <button type="button" onClick={() => onOpenDrawing(reviewTarget(citation))} key={`${citation.element_id ?? index}`}><span>S{citation.page ?? 1}</span>{citation.source_text || `E${index + 1}`}</button>)}</div> : null}
     </div> : null}
     {!current.modelReady && current.blockers.length ? <p className="assistant-boundary small">{t('drawingBlockers', { count: current.blockers.length })} · {current.blockers.slice(0, 4).join(' · ')}</p> : null}
     <div className="assistant-actions">
-      <Link className="button" href={workbench}>{t('drawingOpenWorkbench')}</Link>
+      <button className="button" type="button" onClick={() => onOpenDrawing(reviewTarget(firstCitation))}>{t('drawingOpenWorkbench')}</button>
       <button className="button secondary" type="button" onClick={refresh} disabled={refreshing}>{refreshing ? t('drawingRefreshing') : t('drawingRefresh')}</button>
     </div>
     <p className="assistant-boundary small">AI_GENERATED_DRAFT · NOT_FOR_CONSTRUCTION</p>
