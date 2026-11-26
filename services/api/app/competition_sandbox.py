@@ -381,6 +381,9 @@ def _state(db: Session, row: CompetitionSession) -> dict:
         next_steps = ["verify"]
     elif action.status == "VERIFIED":
         next_steps = ["close"]
+    # The governed Case in this sandbox represents the document-response action.
+    # A verified draft is not evidence of physical hazard remediation.
+    document_workflow_complete = governed_closure_is_intact(db, action)
     return {
         "session": {
             "id": row.id,
@@ -478,7 +481,23 @@ def _state(db: Session, row: CompetitionSession) -> dict:
             },
         },
         "next_steps": next_steps,
-        "complete": governed_closure_is_intact(db, action),
+        "complete": document_workflow_complete,
+        "closure_scope": {
+            "workflow_type": "DOCUMENT_RESPONSE_DRAFT",
+            "document_workflow_status": (
+                "DRAFT_VERIFIED_CLOSED" if document_workflow_complete
+                else "IN_PROGRESS"
+            ),
+            "physical_hazard_status": "REINSPECTION_NOT_PERFORMED",
+            "physical_remediation_verified": False,
+            "project_hazard_closed": False,
+            "external_delivery_performed": False,
+            "meaning": (
+                "Only the document-response draft and its signed receipt chain "
+                "are closed. No site correction or independent physical "
+                "reinspection is claimed."
+            ),
+        },
         "governance": {
             "policy_version": POLICY_VERSION,
             "separation_of_duties": True,
