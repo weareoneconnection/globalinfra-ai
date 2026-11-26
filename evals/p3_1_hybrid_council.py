@@ -104,6 +104,8 @@ def validate(config: dict, study: dict, packet: dict, blind_key: dict,
         raise ValueError("HSE_ENGINEERING_CONTRACT_EXPERTS_REQUIRED")
     if len({x.get("family") for x in experts}) != 3:
         raise ValueError("THREE_DISTINCT_MODEL_FAMILIES_REQUIRED")
+    if arbiter.get("family") in {x.get("family") for x in experts}:
+        raise ValueError("ARBITER_FAMILY_MUST_DIFFER_FROM_ALL_EXPERTS")
     members = experts + [arbiter]
     ids = [x.get("id") for x in members]
     models = [x.get("model") for x in members]
