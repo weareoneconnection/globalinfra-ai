@@ -100,6 +100,15 @@ type SandboxState = {
   };
   next_steps: string[];
   complete: boolean;
+  closure_scope: {
+    workflow_type: "DOCUMENT_RESPONSE_DRAFT";
+    document_workflow_status: string;
+    physical_hazard_status: string;
+    physical_remediation_verified: boolean;
+    project_hazard_closed: boolean;
+    external_delivery_performed: boolean;
+    meaning: string;
+  };
   governance: {
     policy_version: string;
     separation_of_duties: boolean;
@@ -185,11 +194,11 @@ const COPY = {
     tamperHint: '只修改内存副本；正式证据与数据库保持不变。',
     tamperRun: '验证篡改副本',
     tamperPassed: 'INVALID_SIGNATURE · 正式证据未改变',
-    finalCard: '闭环证据卡',
+    finalCard: '函件处理流程核验证据',
     finalSubtitle: '五主体 · 两审批 · 执行 / 核验 / 关闭签名',
     external: '外部发送',
     notSent: '未执行',
-    complete: '闭环完成',
+    complete: '函件草稿流程已核验',
     pending: '等待明确操作',
     running: '正在提交具名操作…',
     release: '发布证据',
@@ -220,11 +229,11 @@ const COPY = {
     tamperHint: 'Mutates an in-memory copy only; canonical evidence stays immutable.',
     tamperRun: 'VERIFY TAMPERED COPY',
     tamperPassed: 'INVALID_SIGNATURE · CANONICAL EVIDENCE UNCHANGED',
-    finalCard: 'CLOSURE EVIDENCE CARD',
+    finalCard: 'DOCUMENT WORKFLOW RECEIPTS',
     finalSubtitle: 'Five actors · two approvals · execution / verification / closure signatures',
     external: 'EXTERNAL DELIVERY',
     notSent: 'NOT PERFORMED',
-    complete: 'CLOSED + VERIFIED',
+    complete: 'DRAFT WORKFLOW VERIFIED',
     pending: 'EXPLICIT ACTION REQUIRED',
     running: 'SUBMITTING NAMED ACTION…',
     release: 'RELEASE EVIDENCE',
@@ -242,7 +251,7 @@ const FLOW_LABELS = {
     hse_manager_approve: 'HSE 会签',
     execute: '文控执行',
     verify: '独立核验',
-    close: '第五主体关闭',
+    close: '函件流程关闭',
   },
   en: {
     session: 'CREATE',
@@ -251,7 +260,7 @@ const FLOW_LABELS = {
     hse_manager_approve: 'HSE APPROVE',
     execute: 'EXECUTE',
     verify: 'VERIFY',
-    close: 'SEPARATE CLOSE',
+    close: 'DOCUMENT CLOSE',
   },
 } satisfies Record<'zh' | 'en', Record<FlowStep, string>>;
 
@@ -263,7 +272,7 @@ const ACTION_LABELS = {
     hse_manager_approve: '以 HSE 经理身份会签',
     execute: '以文控执行人身份生成草稿',
     verify: '以独立核验人身份核验',
-    close: '以第五主体身份关闭工单',
+    close: '以第五主体身份关闭函件处理流程',
   },
   en: {
     session: 'CREATE ISOLATED JURY SESSION',
@@ -272,7 +281,7 @@ const ACTION_LABELS = {
     hse_manager_approve: 'CO-SIGN AS HSE MANAGER',
     execute: 'GENERATE DRAFT AS DOCUMENT EXECUTOR',
     verify: 'VERIFY AS INDEPENDENT VERIFIER',
-    close: 'CLOSE AS THE FIFTH ACTOR',
+    close: 'CLOSE DOCUMENT WORKFLOW',
   },
 } satisfies Record<'zh' | 'en', Record<FlowStep, string>>;
 
@@ -467,6 +476,11 @@ function JuryClosureCard({
         </div>
         <strong>✓</strong>
       </header>
+      <p role="status" style={{padding: 12, border: "1px solid var(--line)", borderRadius: 8, color: "var(--amber)", marginTop: 10, marginBottom: 10}}>
+        {locale === "zh"
+          ? "范围说明：仅关闭已核验的函件草稿流程。现场高处作业隐患尚未复检，不能视为整改完成或项目安全事件关闭。"
+          : "Scope: Only the verified document-draft workflow is closed. No physical hazard reinspection, remediation or project safety-case closure is claimed."}
+      </p>
       <div className="jury-closure-grid">
         <article><span>SESSION</span><b>{state.session.id}</b><small>{state.case.id}</small></article>
         <article><span>PM + HSE</span><b>{state.approvals.filter(row => row.status === 'APPROVED').length} / 2 APPROVED</b><small>{state.approvals.map(row => row.decided_by).filter(Boolean).join(' · ')}</small></article>

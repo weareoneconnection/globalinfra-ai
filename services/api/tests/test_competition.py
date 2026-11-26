@@ -206,8 +206,14 @@ def test_submission_evidence_fails_closed_without_signed_ci_artifact(client, mon
     assert all(row["status"] == "UNVERIFIED" for row in body["evaluation_suites"])
     assert all(row["passed_cases"] == 0 for row in body["evaluation_suites"])
     assert len(body["capabilities"]) == 6
-    assert len(body["scorecard"]) == 10
+    assert body["scoring_standard"] == "C4AI_2026_FINAL_AI_OUTBOUND_11_ITEMS"
+    assert len(body["scorecard"]) == 11
+    assert [row["max_score"] for row in body["scorecard"]] == [10, 8, 7, 15, 10, 8, 7, 5, 8, 7, 15]
     assert sum(row["max_score"] for row in body["scorecard"]) == 100
+    assert {row["id"] for row in body["scorecard"]} >= {
+        "economic-impact", "overseas-promotion", "live-presentation"
+    }
+    assert all(row["evidence_ids"] for row in body["scorecard"])
 
 
 def test_submission_evidence_exposes_safe_lineage_and_unverified_reason(client, monkeypatch, tmp_path):
@@ -448,6 +454,12 @@ def test_role_ticketed_sandbox_runs_full_separated_golden_thread(client):
     final = closed.json()
     assert final["complete"] is True
     assert final["case"]["status"] == "CLOSED"
+    assert final["closure_scope"]["workflow_type"] == "DOCUMENT_RESPONSE_DRAFT"
+    assert final["closure_scope"]["document_workflow_status"] == "DRAFT_VERIFIED_CLOSED"
+    assert final["closure_scope"]["physical_hazard_status"] == "REINSPECTION_NOT_PERFORMED"
+    assert final["closure_scope"]["physical_remediation_verified"] is False
+    assert final["closure_scope"]["project_hazard_closed"] is False
+    assert final["closure_scope"]["external_delivery_performed"] is False
     actors = {
         *(row["decided_by"] for row in final["approvals"]),
         final["receipts"]["execution"]["executor"],
