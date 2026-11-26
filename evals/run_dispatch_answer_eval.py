@@ -2,7 +2,7 @@
 """Answer-level evaluation of the dispatching assistant (deterministic, offline).
 
 ``run_dispatch_eval.py`` checks only which sub-agents a message is routed
-to. This suite checks what comes back. Each of the 56 team-written messages
+to. This suite checks what comes back. Each of the 64 team-written messages
 (Chinese, English, Arabic, Malay, Indonesian) goes to ``/assistant/dispatch``
 with no model, so the rule planner and the retrieval path are measured:
 
@@ -22,6 +22,12 @@ with no model, so the rule planner and the retrieval path are measured:
   domains the library cannot answer; "can you answer Saudi quality
   questions?" is scoped to that domain and country; a building-code question
   states that the library has no technical provisions;
+- lifecycle agents: contract review flags pay-when-paid and an exclusion of
+  structural liability with the clause that voids them (synthetic contract
+  texts); the twin reports the named element; commissioning applies the
+  handover rule; precedents find the related work order and never return the
+  one just created; the briefing stays in the named project; progress sets
+  a requested extension against the schedule variance;
 - focus (P2): a follow-up in the same session ("and overtime?") searches the
   country the conversation is about, or the one the follow-up names.
 
@@ -47,7 +53,8 @@ from app.main import app  # noqa: E402
 
 DATASET = API / "evals" / "dispatch_answers.jsonl"
 GATE_THRESHOLDS = {"routing": 95.0, "evidence_hit": 90.0, "no_leakage": 100.0, "abstention": 100.0, "progress_scope": 100.0,
-                   "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0, "self_knowledge": 100.0}
+                   "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0, "self_knowledge": 100.0,
+                   "lifecycle_agents": 100.0}
 
 
 def _dispatch(client, message, session_id=None):
@@ -115,6 +122,34 @@ def main() -> int:
                 if "countries" in want:
                     checks.append(all(sorted(r["countries"]) == want["countries"] for r in data.get("coverage") or []))
                 result["self_knowledge"] = all(checks)
+            lifecycle = []
+            if "contract" in expect:
+                step = _step(agents, done, "contract_review") or {}
+                findings = (step.get("data") or {}).get("findings") or []
+                high = {f["category"] for f in findings if f["risk"] == "high"}
+                lifecycle.append(step.get("status") == "ok" and set(expect["contract"]["basis"]) <= set(step.get("refs") or [])
+                                 and set(expect["contract"]["high_categories"]) <= high)
+            if "twin_element" in expect:
+                matched = ((_step(agents, done, "twin") or {}).get("data") or {}).get("matched") or []
+                lifecycle.append(bool(matched) and all(m.endswith("-" + expect["twin_element"]) for m in matched))
+            if expect.get("commissioning"):
+                items = ((_step(agents, done, "commissioning") or {}).get("data") or {}).get("items") or []
+                lifecycle.append(bool(items) and all(i["ready"] == (i["readiness"] >= 95 and i["punch_open"] == 0) for i in items))
+            if "precedent" in expect:
+                rows_ = ((_step(agents, done, "precedents") or {}).get("data") or {}).get("precedents") or []
+                lifecycle.append(expect["precedent"] in [r["case_id"] for r in rows_])
+            if expect.get("precedent_excludes_new"):
+                new_case = (_step(agents, done, "intake") or {}).get("case_id")
+                rows_ = ((_step(agents, done, "precedents") or {}).get("data") or {}).get("precedents") or []
+                lifecycle.append(bool(new_case) and new_case not in [r["case_id"] for r in rows_])
+            if "briefing_projects" in expect:
+                lifecycle.append(((_step(agents, done, "briefing") or {}).get("data") or {}).get("project_ids") == expect["briefing_projects"])
+            if "eot_days" in expect:
+                data = (_step(agents, done, "progress") or {}).get("data") or {}
+                lifecycle.append(data.get("eot_requested_days") == expect["eot_days"] and all(
+                    p["variance_after_eot"] == p["schedule_variance"] + expect["eot_days"] for p in data.get("projects") or []))
+            if lifecycle:
+                result["lifecycle_agents"] = all(lifecycle)
             if expect.get("coverage_gap"):
                 gaps = ((knowledge or {}).get("data") or {}).get("coverage_gaps") or []
                 result["self_knowledge"] = bool(gaps) and not any(ch.isdigit() for ch in " ".join(gaps))

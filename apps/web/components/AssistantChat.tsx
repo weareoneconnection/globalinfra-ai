@@ -55,10 +55,21 @@ type StepData = Partial<IntakeData> & {
   drawings?: { id: string; drawing_number: string | null; title: string | null; status: string }[];
   drawing_id?: string; drawing_number?: string | null;
   coverage_gaps?: string[];
+  assets?: { id: string; name: string; status: string; stage: string; health: number; progress: number;
+    sensors: SensorView[]; maintenance: { id: string; type: string; status: string; priority: string; due_at: string; description: string }[] }[];
+  alerts?: SensorView[];
+  items?: { id?: string; system?: string; asset?: string; test_pack?: string; stage?: string; punch_open?: number; documents?: number;
+    readiness?: number; ready?: boolean; kind?: string; ref?: string; risk?: string; text?: string }[];
+  precedents?: { case_id: string; title: string; type: string; risk: string; status: string; resolved: boolean; similarity: number }[];
+  counts?: Record<string, number>;
+  findings?: { category: string; name: string; risk: 'high' | 'medium' | 'low'; finding: string; excerpt: string; basis: string[] }[];
+  related?: (KnowledgeHit & { category: string })[];
+  country?: string | null;
   agents?: { id: string; name: string; role: string; authority: string }[];
   coverage?: CoverageRow[]; focus_domains?: string[]; boundaries?: string[];
   stats?: { clauses: number; countries: number; instruments: number; glossary_terms: number };
 };
+type SensorView = { id: string; twin_id: string; type: string; unit: string; value: number; warning: number; critical: number; level: string };
 type CoverageLevel = 'covered' | 'thin' | 'none' | 'legal_only';
 type CoverageRow = { id: string; name: string; note: string; agents: string[]; project_data?: boolean; countries: Record<string, { clauses: number; level: CoverageLevel }> };
 type Clarify = { question: string; options: string[] };
@@ -840,7 +851,20 @@ function DispatchReply({ reply, projects, planningAgent }: { reply: Dispatch; pr
           <KnowledgeReply query={data.query ?? step.query} hits={data.hits ?? []} answer={data.answer ?? null} />
         </>;
       } else if (step.agent === 'progress') {
-        body = <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />;
+        body = <>
+          {step.summary && <p className="assistant-text">{step.summary}</p>}
+          <ProgressReply projects={projects.filter(p => (data.project_ids ?? []).includes(p.id))} />
+        </>;
+      } else if (step.agent === 'twin') {
+        body = <TwinReply summary={step.summary ?? ''} data={data} />;
+      } else if (step.agent === 'commissioning') {
+        body = <CommissioningReply summary={step.summary ?? ''} items={data.items ?? []} />;
+      } else if (step.agent === 'precedents') {
+        body = <PrecedentsReply summary={step.summary ?? ''} rows={data.precedents ?? []} />;
+      } else if (step.agent === 'briefing') {
+        body = <BriefingReply summary={step.summary ?? ''} items={data.items ?? []} />;
+      } else if (step.agent === 'contract_review') {
+        body = <ContractReviewReply summary={step.summary ?? ''} data={data} />;
       } else if (step.agent === 'approvals') {
         body = <ApprovalsReply />;
       } else if (step.agent === 'field') {
@@ -898,6 +922,81 @@ function SelfReply({ summary, data }: { summary: string; data: StepData }) {
       <ul className="small">{data.agents!.map(agent => <li key={agent.id}><b>{agent.name}</b> · {t(`authority.${agent.authority}`)} — {agent.role}</li>)}</ul>
     </details>}
     {(data.boundaries ?? []).length > 0 && <ul className="muted small">{data.boundaries!.map((line, index) => <li key={index}>{line}</li>)}</ul>}
+  </div>;
+}
+
+function TwinReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {(data.assets ?? []).length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('twinAsset')}</th><th>{t('twinStatus')}</th><th>{t('twinHealth')}</th><th>{t('twinMaintenance')}</th></tr></thead>
+      <tbody>{data.assets!.map(asset => <tr key={asset.id}>
+        <td><b>{asset.name}</b><div className="muted small">{asset.id}</div></td>
+        <td>{asset.status}<div className="muted small">{asset.stage} · {asset.progress.toFixed(0)}%</div></td>
+        <td className={asset.health < 70 ? 'coverage-legal_only' : asset.health < 85 ? 'coverage-thin' : 'coverage-covered'}>{asset.health.toFixed(0)}
+          {asset.sensors.filter(s => s.level !== 'NORMAL').map(s => <div key={s.id} className="small">⚠ {s.type} {s.value}{s.unit}</div>)}</td>
+        <td className="small">{asset.maintenance.map(m => <div key={m.id}>{m.id} · {m.priority} · {m.due_at}</div>)}</td>
+      </tr>)}</tbody>
+    </table>}
+    <Link className="assistant-link" href="/twin">{t('twinOpen')} →</Link>
+  </div>;
+}
+
+function CommissioningReply({ summary, items }: { summary: string; items: NonNullable<StepData['items']> }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {items.length > 0 && <table className="dispatch-table">
+      <thead><tr><th>{t('cxSystem')}</th><th>{t('cxStage')}</th><th>{t('cxPunch')}</th><th>{t('cxDocs')}</th><th>{t('cxReadiness')}</th></tr></thead>
+      <tbody>{items.map(item => <tr key={item.id}>
+        <td><b>{item.system}</b><div className="muted small">{item.test_pack}</div></td>
+        <td className="small">{item.stage}</td><td>{item.punch_open}</td><td>{item.documents?.toFixed(0)}%</td>
+        <td className={item.ready ? 'coverage-covered' : 'coverage-thin'}>{item.readiness?.toFixed(0)}% {item.ready ? '✓' : ''}</td>
+      </tr>)}</tbody>
+    </table>}
+  </div>;
+}
+
+function PrecedentsReply({ summary, rows }: { summary: string; rows: NonNullable<StepData['precedents']> }) {
+  const t = useTranslations('Assistant');
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    {rows.map(row => <div key={row.case_id} className="assistant-card compact">
+      <div className="assistant-card-head"><RiskBadge risk={row.risk} /><b>{row.title}</b></div>
+      <p className="muted small">{row.type} · {row.status} · {row.resolved ? t('precedentClosed') : t('precedentOpen')} · {t('precedentMatch', { pct: Math.round(row.similarity * 100) })} · <Link href={`/cases/${row.case_id}`}>{row.case_id}</Link></p>
+    </div>)}
+  </div>;
+}
+
+function BriefingReply({ summary, items }: { summary: string; items: NonNullable<StepData['items']> }) {
+  const t = useTranslations('Assistant');
+  const label: Record<string, string> = { case: t('briefCase'), sensor: t('briefSensor'), maintenance: t('briefMaintenance'), schedule: t('briefSchedule') };
+  return <div>
+    <p className="assistant-text">{summary}</p>
+    <ul className="dispatch-brief">{items.map((item, index) => <li key={index}>
+      <RiskBadge risk={(item.risk ?? 'MEDIUM').toUpperCase()} /> <span className="muted small">{label[item.kind ?? ''] ?? item.kind}</span> {item.text}
+      {item.kind === 'case' && item.ref && <> · <Link href={`/cases/${item.ref}`}>{item.ref}</Link></>}
+    </li>)}</ul>
+  </div>;
+}
+
+function ContractReviewReply({ summary, data }: { summary: string; data: StepData }) {
+  const t = useTranslations('Assistant');
+  const head = summary.split('\n')[0];
+  return <div>
+    <p className="assistant-text">{head}</p>
+    <table className="dispatch-table">
+      <thead><tr><th>{t('crRisk')}</th><th>{t('crTerm')}</th><th>{t('crFinding')}</th></tr></thead>
+      <tbody>{(data.findings ?? []).map((finding, index) => <tr key={index}>
+        <td className={`cr-${finding.risk}`}><b>{t(`crLevel.${finding.risk}`)}</b></td>
+        <td>{finding.name}</td>
+        <td>{finding.finding}{finding.basis.map(ref => <span key={ref} className="assistant-cite">{ref}</span>)}
+          {finding.excerpt && <div className="muted small">“{finding.excerpt}”</div>}</td>
+      </tr>)}</tbody>
+    </table>
+    {(data.related ?? []).length > 0 && <KnowledgeReply query={t('crRelated')} hits={data.related ?? []} answer={null} />}
+    <p className="muted small">{t('crBoundary')}</p>
   </div>;
 }
 

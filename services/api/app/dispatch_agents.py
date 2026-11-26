@@ -339,8 +339,8 @@ async def agent_self(step: Step, run: Dispatch, db: Session) -> dict:
                 ", ".join(f"{name(c)} {LEVEL_TEXT[v['level']]['en']} ({v['clauses']})" for c, v in row["countries"].items())
             lines.append(_t(lang, f"{row['name']}: {cells}. {row['note']}", f"{row['name']}：{cells}。{row['note']}"))
         if REVIEW_RE.search(text):
-            lines.append(_t(lang, "To have a contract looked at, paste the clauses or letter here, or attach the file.",
-                            "如需分析合同，请把相关条款或来函粘贴到这里，或上传文件。"))
+            lines.append(_t(lang, "Paste the contract clauses here with \"review\" and the contract review agent will check them.",
+                            "把合同条款粘贴到这里并注明“审查”，合同审查智能体会逐项初审。"))
         summary = "\n".join(lines)
     else:
         strong = lambda r: any(v["level"] == "covered" for v in r["countries"].values())  # noqa: E731

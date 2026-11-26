@@ -54,3 +54,11 @@
 {"id": "A54", "message": "沙特建筑规范对混凝土保护层厚度有什么要求？", "agents": ["knowledge"], "expect": {"coverage_gap": true, "countries": ["SA"]}}
 {"id": "A55", "message": "阿联酋工程缺陷责任期多长？", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL25-2025-ART-821", "AE-FDL25-2025-ART-822"], "countries": ["AE"]}}
 {"id": "A56", "message": "马来西亚铁路开通运营需要什么许可？", "agents": ["gates"], "expect": {"gates_fallback_refs": ["MY-ACT463-S23"]}}
+{"id": "A57", "message": "请审查以下分包合同条款的风险：第5条 付款：总包方在收到业主付款后30天内向分包方支付进度款。第8条 误期违约金：分包方每延误一天按合同价0.5%支付违约金。第12条 索赔：分包方应在事件发生后7天内提出索赔通知，否则视为放弃。本合同适用马来西亚法律。", "agents": ["contract_review"], "expect": {"contract": {"basis": ["MY-ACT746-S35"], "high_categories": ["payment", "delay_damages", "claims"]}}, "note": "synthetic subcontract"}
+{"id": "A58", "message": "Please review this contract for risk. Clause 4: The Employer shall pay within 45 days. Clause 9: The Contractor shall not be liable for any structural defect or collapse after taking-over. Clause 20: Disputes shall be settled by arbitration in Dubai. This Contract is governed by the laws of the United Arab Emirates.", "agents": ["contract_review"], "expect": {"contract": {"basis": ["AE-FDL25-2025-ART-823"], "high_categories": ["liability"]}}, "note": "synthetic contract"}
+{"id": "A59", "message": "P47 桥墩现在状态怎么样？", "agents": ["twin"], "expect": {"twin_element": "P47"}}
+{"id": "A60", "message": "哪些系统还不能移交？", "agents": ["commissioning"], "expect": {"commissioning": true}}
+{"id": "A61", "message": "以前有没有类似的便道纠纷案例？", "agents": ["precedents"], "expect": {"precedent": "CASE-2026-0182"}}
+{"id": "A62", "message": "今天 MY-RAIL-A 有什么要处理的？", "agents": ["briefing"], "expect": {"briefing_projects": [1]}}
+{"id": "A63", "message": "MY-RAIL-A 进度怎么样？如果顺延 20 天呢？", "agents": ["progress"], "expect": {"eot_days": 20}}
+{"id": "A64", "message": "P47 墩昨天发生坍塌事故，以前有没有类似的事故案例？", "agents": ["intake", "precedents"], "expect": {"precedent_excludes_new": true}}

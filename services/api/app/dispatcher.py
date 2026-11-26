@@ -50,6 +50,7 @@ from .assistant import (
     _grounded_answer, _hit_payload, _model_available, _project_in_text, plan_rules, search_countries,
     search_knowledge,
 )
+from .contract_review import looks_like_contract
 from .capabilities import ABOUT_SELF_RE, CAPABILITY_RE, REVIEW_RE, coverage_gaps, detect_domains
 from .intake import detect_countries
 from .database import SessionLocal, get_db
@@ -76,7 +77,8 @@ MAX_SPLIT_LENGTH = 200          # longer messages (letters, notices) are never s
 ANSWER_ROLES = {"engineer", "project_manager", "field_user"}
 
 AgentId = Literal["intake", "knowledge", "case", "answer", "progress", "approvals", "field",
-                  "compare", "draft", "glossary", "drawing", "gates", "self"]
+                  "compare", "draft", "glossary", "drawing", "gates", "self",
+                  "twin", "commissioning", "precedents", "briefing", "contract_review"]
 
 AGENTS: dict[str, dict] = {
     "intake": {
@@ -136,6 +138,32 @@ AGENTS: dict[str, dict] = {
         "name": bi("Permit gate agent", "许可关口智能体"), "authority": "read_only",
         "role": bi("Lists the permit gates of a country pack for a lifecycle stage.", "列出某国家包在某生命周期阶段的许可关口。"),
     },
+    "contract_review": {
+        "name": bi("Contract review agent", "合同审查智能体"), "authority": "read_only",
+        "role": bi("Reviews pasted contract clauses: payment, delay damages, claim notice, variations, liability, retention, "
+                   "termination, disputes; flags risks and checks them against local law. A first pass, not legal advice.",
+                   "审查粘贴的合同条款（付款、误期违约金、索赔通知、变更、责任、保留金、解除、争议解决），标出风险并对照当地法律；仅供初审。"),
+    },
+    "precedents": {
+        "name": bi("Precedent agent", "类案智能体"), "authority": "read_only",
+        "role": bi("Finds earlier work orders like this one, closed ones first.", "查找相似的历史工单，已办结的优先。"),
+    },
+    "twin": {
+        "name": bi("Digital twin agent", "孪生资产智能体"), "authority": "read_only",
+        "role": bi("Reports an asset's status, health, sensor alerts and maintenance from the digital twin.",
+                   "从数字孪生查询构件状态、健康度、传感器告警和维护工单。"),
+    },
+    "commissioning": {
+        "name": bi("Commissioning & handover agent", "调试移交智能体"), "authority": "read_only",
+        "role": bi("Reports test packs, open punch items, document completeness and handover readiness.",
+                   "查询调试测试包、未关闭的整改项、文件完整度和移交就绪度。"),
+    },
+    "briefing": {
+        "name": bi("Project briefing agent", "项目简报智能体"), "authority": "read_only",
+        "role": bi("Sums up what needs attention in a project: open work orders, approvals, sensor alerts, maintenance due, "
+                   "commissioning blockers and schedule slippage.",
+                   "汇总项目今天要关注的事：在办工单、待审批、传感器告警、到期维护、调试卡点和进度落后。"),
+    },
     "self": {
         "name": bi("Self-knowledge agent", "自我认知智能体"), "authority": "read_only",
         "role": bi("Says what the assistant can and cannot answer, per lifecycle domain and country, from the live "
@@ -146,7 +174,7 @@ AGENTS: dict[str, dict] = {
 AGENT_IDS: tuple[str, ...] = tuple(AGENTS)
 # Agents whose work is defined by their query text (two such steps with
 # different queries are different tasks).
-QUERY_AGENTS = {"knowledge", "compare", "glossary", "drawing", "gates"}
+QUERY_AGENTS = {"knowledge", "compare", "glossary", "drawing", "gates", "twin", "commissioning", "precedents", "briefing"}
 WRITERS = {"intake", "answer"}
 # Queues that should already include the work order this plan creates.
 AFTER_INTAKE = {"approvals", "field"}
@@ -217,6 +245,17 @@ _RULE_QUESTION_RE = re.compile(
     r"\bapa (?:peraturan|syarat)|berapa lama|ما (?:هو|هي) (?:حكم|مدة)", re.IGNORECASE)
 _EVENT_RE = re.compile(r"发生|出现|昨天|今天|刚才|现场.{0,4}(?:发现|有)|已经|occurred|happened|yesterday|today|this morning",
                        re.IGNORECASE)
+_EOT_DAYS_RE = re.compile(r"(?:顺延|延长工期|工期延长|延期)\s*(\d{1,3})\s*天|(\d{1,3})\s*天.{0,4}(?:顺延|延期|工期延长)|"
+                          r"extension of time(?: of)?\s*(\d{1,3})\s*days?|(\d{1,3})[- ]days? (?:extension|EOT)", re.IGNORECASE)
+_TWIN_RE = re.compile(r"孪生|构件|资产|传感器|告警|报警|健康度|维护|维保|保养|设备状态|\b(?:P\d{1,3}|AHU\d{2}|BRG\d{1,3}[A-Z]?)\b.{0,8}(?:状态|怎么样|情况|告警)|"
+                      r"digital twin|\btwin\b|sensor|alarm|health score|maintenance|asset status|aset|sensor|التوأم الرقمي|الصيانة",
+                      re.IGNORECASE)
+_COMMISSIONING_RE = re.compile(r"调试|移交|整改项|尾项|测试包|试运行|commissioning|handover|punch|test pack|pentauliahan|serah terima|التسليم|التشغيل التجريبي",
+                               re.IGNORECASE)
+_PRECEDENT_RE = re.compile(r"类似|相似|以前|之前|历史|先例|类案|有没有.{0,6}(?:案例|工单)|precedent|similar|in the past|before\b|serupa|sebelum|مماثل|سابقة",
+                           re.IGNORECASE)
+_BRIEFING_RE = re.compile(r"简报|今天.{0,8}(?:处理|关注|要做|待办)|有什么要(?:处理|关注)|待办|汇总|总览|日报|周报|"
+                          r"brief(?:ing)?|what needs (?:my )?attention|to-?do|what should i (?:do|look at)|ringkasan|ملخص", re.IGNORECASE)
 _WORKER_RE = re.compile(r"工人|员工|劳工|外籍|雇员|workers?|employees?|staff|pekerja|العمال|عامل", re.IGNORECASE)
 # An explicit request to look clauses up, as opposed to a letter that merely
 # mentions requirements or permits.
@@ -312,6 +351,9 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
     text = message.strip()
     if ctx.case_id:
         text = _THIS_CASE_RE.sub(f" {ctx.case_id} ", text)
+    # Pasted contract clauses to review, rather than a letter to act on.
+    if looks_like_contract(text):
+        return [Step("contract_review")]
     # A long message that is not a question is a pasted letter or notice.
     if len(text) > MAX_SPLIT_LENGTH and not re.search(r"[?？؟]\s*$", text):
         project_id = plan_rules(text, ctx.project_codes, set())["project_id"]
@@ -348,6 +390,21 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
         if _DRAWING_RE.search(clause):
             steps.append(Step("drawing", query=clause))
             continue
+        if _BRIEFING_RE.search(clause):
+            steps.append(Step("briefing", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
+        if _PRECEDENT_RE.search(clause) and re.search(r"案例|工单|案子|处理|纠纷|事故|case|work order|incident|dispute", clause, re.IGNORECASE):
+            if _INCIDENT_RE.search(clause) and _EVENT_RE.search(clause):
+                # "P47 collapsed yesterday; any similar cases before?" reports an event and asks for precedents.
+                steps.insert(0, Step("intake", query=message.strip(), project_id=_project_in_text(clause, ctx.project_codes)))
+            steps.append(Step("precedents", query=clause))
+            continue
+        if _COMMISSIONING_RE.search(clause) and not _KNOWLEDGE_RE.search(clause):
+            steps.append(Step("commissioning", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
+        if _TWIN_RE.search(clause) and not _RULE_QUESTION_RE.search(clause):
+            steps.append(Step("twin", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
+            continue
         if _GATES_RE.search(clause) and not _WORKER_RE.search(clause):
             steps.append(Step("gates", query=clause, project_id=_project_in_text(clause, ctx.project_codes)))
             continue
@@ -367,6 +424,10 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
     if len(intakes) > 1:
         steps = [intakes[0], *(s for s in steps if s.agent != "intake")]
     steps = _dedupe(steps)
+    if steps and steps[0].agent == "intake":
+        for step in steps:
+            if step.agent == "precedents":  # compare with the new work order, and never return it as its own precedent
+                step.depends_on = [0]
     if draft_wanted:
         steps = steps[:MAX_STEPS - 1] + [Step("draft", depends_on=list(range(min(len(steps), MAX_STEPS - 1))))]
     return steps
@@ -406,6 +467,17 @@ def _plan_prompt(lang: str, ctx: PlanContext) -> str:
         "- approvals: what waits for approval, and any request to approve, reject, execute or close (you cannot do "
         "those; the list lets the user press the buttons).\n"
         "- field: the user's own recent field reports.\n"
+        "- contract_review: the user pastes contract clauses (or a subcontract) and wants them reviewed or checked for "
+        "risk. ONE step; leave query empty (the agent reads the whole message). A letter from the owner that only "
+        "cites a clause is intake, not contract_review.\n"
+        "- precedents: earlier or similar work orders, how a similar problem was handled before. Put the topic in "
+        "`query`; if the plan also creates a work order, put precedents AFTER intake with depends_on [that index].\n"
+        "- twin: the status, health, sensor alerts or maintenance of an asset or element (e.g. P47, AHU01) from the "
+        "digital twin. Put the element and project words in `query`.\n"
+        "- commissioning: commissioning, test packs, punch items, handover readiness.\n"
+        "- briefing: what needs attention today / a project summary across work orders, approvals, alerts, "
+        "maintenance and schedule. Set `project_code` when one project is meant.\n"
+        "- progress also answers cost forecast vs budget and the effect of an extension of time on the schedule.\n"
         "- self: greetings and questions about the assistant itself: what it can do, which countries and topics it "
         "covers, whether it can answer a kind of question (contract, local law, building codes, safety, quality, "
         "schedule ...). ONE step whose query is the user's question. Never describe your abilities in `reply`.\n"
@@ -449,7 +521,7 @@ def parse_dispatch(raw: str, ctx: PlanContext, message: str) -> tuple[list[Step]
             if code not in ctx.project_codes:
                 return None
             step.project_id = ctx.project_codes[code]
-        if step.agent in {"knowledge", "intake", "compare", "glossary", "drawing", "gates"} and not step.query:
+        if step.agent in QUERY_AGENTS | {"intake"} and not step.query:
             step.query = message.strip()
         raw_deps = item.get("depends_on") or []
         if not isinstance(raw_deps, list) or any(not isinstance(d, int) or not 0 <= d < len(steps) for d in raw_deps):
@@ -459,7 +531,7 @@ def parse_dispatch(raw: str, ctx: PlanContext, message: str) -> tuple[list[Step]
             step.depends_on = list(range(len(steps)))
         if step.agent == "draft" and not steps:
             return None
-        if step.agent in {"progress", "intake"} and step.project_id is None:
+        if step.agent in {"progress", "intake", "twin", "commissioning", "briefing"} and step.project_id is None:
             step.project_id = _project_in_text(f"{step.query} {message}", ctx.project_codes)
         if step.agent == "intake" and any(s.agent == "intake" for s in steps):
             return None
@@ -763,18 +835,40 @@ async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
         ):
             continue
         info = PROJECT_INTELLIGENCE.get(project.id, {})
+        budget, forecast = info.get("budget"), info.get("forecast")
         rows.append(localize({
-            "id": project.id, "code": project.code, "progress": info.get("progress"),
+            "id": project.id, "code": project.code, "progress": info.get("progress"), "phase": info.get("phase"),
             "schedule_variance": info.get("schedule_variance"), "next_gate": info.get("next_gate"),
             "gate_date": info.get("gate_date"), "risk_level": project.risk_level,
+            "budget_m": budget, "committed_m": info.get("committed"), "forecast_m": forecast,
+            "headroom_m": round(budget - forecast, 1) if budget is not None and forecast is not None else None,
         }, run.lang))
-    lines = [
-        _t(run.lang, f"{r['code']} {r['progress']}% (variance {r['schedule_variance']} d, next gate {r['next_gate']} {r['gate_date']})",
-           f"{r['code']} 进度 {r['progress']}%（偏差 {r['schedule_variance']} 天，下一关口 {r['next_gate']} {r['gate_date']}）")
-        for r in rows if r["progress"] is not None
-    ]
+    # "Can we absorb a 20-day extension?": set the requested days against the current variance.
+    eot = next((int(g) for m in [_EOT_DAYS_RE.search(f"{step.query} {run.payload.message}")] if m for g in m.groups() if g), None)
+    lines = []
+    for r in rows:
+        if r["progress"] is None:
+            continue
+        variance = r["schedule_variance"] or 0
+        state = _t(run.lang, f"{abs(variance)} d behind" if variance < 0 else f"{variance} d ahead",
+                   f"落后 {abs(variance)} 天" if variance < 0 else f"超前 {variance} 天")
+        cost = ""
+        if r["headroom_m"] is not None:
+            cost = _t(run.lang, f", forecast {r['forecast_m']}M vs budget {r['budget_m']}M ({r['headroom_m']:+}M)",
+                      f"，预测成本 {r['forecast_m']}M / 预算 {r['budget_m']}M（余量 {r['headroom_m']:+}M）")
+        lines.append(_t(run.lang, f"{r['code']} {r['progress']}% ({state}, next gate {r['next_gate']} {r['gate_date']}{cost})",
+                        f"{r['code']} 进度 {r['progress']}%（{state}，下一关口 {r['next_gate']} {r['gate_date']}{cost}）"))
+        if eot is not None:
+            r["eot_requested_days"] = eot
+            r["variance_after_eot"] = variance + eot
+    if eot is not None and rows:
+        lines.append(_t(run.lang, f"An extension of {eot} days would move the variance to "
+                        + ", ".join(f"{r['code']} {r['variance_after_eot']:+} d" for r in rows if "variance_after_eot" in r)
+                        + "; the contract decides whether it is granted.",
+                        f"若顺延 {eot} 天，偏差变为 " + "、".join(f"{r['code']} {r['variance_after_eot']:+} 天" for r in rows if "variance_after_eot" in r)
+                        + "；是否批准以合同约定为准。"))
     return {"summary": "; ".join(lines) or _t(run.lang, "No project in scope.", "没有可查看的项目。"),
-            "data": {"project_ids": [r["id"] for r in rows], "projects": rows, "countries": countries}}
+            "data": {"project_ids": [r["id"] for r in rows], "projects": rows, "countries": countries, "eot_requested_days": eot}}
 
 
 async def agent_approvals(step: Step, run: Dispatch, db: Session) -> dict:
@@ -1117,5 +1211,7 @@ def session_trace(session_id: str, principal: Principal = Depends(get_principal)
 # The P1 sub-agents live in their own module; registered last because that
 # module imports this one's building blocks.
 from .dispatch_agents import EXTRA_RUNNERS  # noqa: E402
+from .dispatch_ops import OPS_RUNNERS  # noqa: E402
 
 RUNNERS.update(EXTRA_RUNNERS)
+RUNNERS.update(OPS_RUNNERS)

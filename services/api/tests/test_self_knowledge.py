@@ -74,7 +74,7 @@ def test_country_question_is_scoped_to_that_country(client):
 
 def test_contract_review_request_explains_how(client):
     summary = _step(_dispatch(client, "帮我分析这份合同的主要风险"), "self")["summary"]
-    assert "不能逐条审查整份合同" in summary and "粘贴" in summary
+    assert "合同审查智能体" in summary and "粘贴" in summary
 
 
 def test_building_code_question_states_the_gap_and_no_number(client):

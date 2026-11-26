@@ -32,7 +32,7 @@ COVERED_MIN = 5
 DOMAINS: list[dict] = [
     {
         "id": "contract", "name": bi("Contract, payment & claims", "合同、付款与索赔"),
-        "agents": ["knowledge", "compare", "intake", "draft"],
+        "agents": ["contract_review", "knowledge", "compare", "intake", "draft", "precedents"],
         "topics": {"construction contract", "contract", "contract terms", "variation", "subcontract", "payment",
                    "progress payment", "payment claim", "payment response", "payment terms", "interim payment",
                    "adjudication", "adjudication decision", "claims", "claim", "liquidated damages", "force majeure",
@@ -42,11 +42,13 @@ DOMAINS: list[dict] = [
                    "default", "remedy", "contract sum", "joint liability", "limitation", "scope"},
         "keywords": r"合同|契约|付款|工程款|进度款|索赔|违约|变更|仲裁|争议|保函|质保金|不可抗力|"
                     r"contract|payment|claim|variation|arbitration|dispute|force majeure|liquidated damages|kontrak|عقد",
-        "note": bi("Clauses of the civil, contract-payment and adjudication laws. A whole contract is not reviewed clause "
-                   "by clause: paste or upload the clauses or letter, and the intake agent opens a work order that the "
-                   "contract specialist analyses with these laws.",
-                   "覆盖各国民法、工程款支付和裁决法中的相关条款。目前不能逐条审查整份合同：请粘贴或上传相关条款或来函，"
-                   "建案智能体会建工单，由合同专家结合这些法律分析。"),
+        "note": bi("Clauses of the civil, contract-payment and adjudication laws. Paste contract clauses and the contract "
+                   "review agent gives a first-pass review (payment, delay damages, claim notice, variations, liability, "
+                   "retention, termination, disputes) checked against these laws; an uploaded contract file still goes "
+                   "through intake. A first pass for the contracts team, not legal advice.",
+                   "覆盖各国民法、工程款支付和裁决法中的相关条款。粘贴合同条款后，合同审查智能体逐项初审（付款、误期违约金、"
+                   "索赔通知、变更、责任、保留金、解除、争议解决），并对照这些法律；上传的合同文件目前仍走建案流程。"
+                   "仅供合同团队初审，不构成法律意见。"),
     },
     {
         "id": "labour", "name": bi("Labour & workforce law", "劳工与用工法"),
@@ -103,25 +105,25 @@ DOMAINS: list[dict] = [
     },
     {
         "id": "quality", "name": bi("Quality, defects & acceptance", "质量、缺陷与验收"),
-        "agents": ["knowledge", "intake"],
+        "agents": ["knowledge", "commissioning", "intake", "precedents"],
         "topics": {"quality", "defects", "inspection", "testing", "materials", "construction materials", "acceptance",
                    "handover", "as-built", "certificate of fitness", "plant inspection", "inspection report",
                    "decennial liability", "building failure", "warranty"},
         "keywords": r"质量|缺陷|验收|检验|检测|试验|材料|返工|移交|保修|quality|defect|inspection|testing|acceptance|"
                     r"handover|material|kualiti|kualitas|جودة|عيوب",
-        "note": bi("Defect liability and acceptance clauses of the civil laws; few inspection-and-test rules. No project "
-                   "quality records (ITPs, NCRs) are connected yet.",
-                   "主要是民法中的缺陷责任和验收条款，检验试验类规定较少。项目质量记录（检验计划、不合格报告）尚未接入。"),
+        "note": bi("Defect liability and acceptance clauses of the civil laws; commissioning punch items and handover "
+                   "readiness from the commissioning register. Inspection-and-test plans and NCRs are not connected yet.",
+                   "民法中的缺陷责任和验收条款；调试登记中的整改项和移交就绪度。检验试验计划和不合格报告尚未接入。"),
     },
     {
         "id": "schedule", "name": bi("Schedule & delay", "进度与工期"),
-        "agents": ["progress", "knowledge", "intake"], "project_data": True,
+        "agents": ["progress", "briefing", "knowledge", "intake"], "project_data": True,
         "topics": {"delay", "extension of time", "programme", "liquidated damages", "suspension", "deadline"},
         "keywords": r"进度|工期|延误|延期|拖期|赶工|里程碑|节点|计划|schedule|delay|programme|milestone|"
                     r"extension of time|jadual|jadwal|تأخير|الجدول",
-        "note": bi("Project progress, schedule variance and next gate come from the project records; delay and "
-                   "extension-of-time rules come from the clause library.",
-                   "项目进度、工期偏差和下一个关口来自项目数据；延误和工期顺延规则来自条款库。"),
+        "note": bi("Progress, schedule variance, next gate, cost forecast against budget and the effect of a requested "
+                   "extension come from the project records; delay and extension-of-time rules from the clause library.",
+                   "进度、工期偏差、下一个关口、预测成本与预算、顺延申请对工期的影响来自项目数据；延误和工期顺延规则来自条款库。"),
     },
     {
         "id": "environment", "name": bi("Environment", "环境保护"),
@@ -145,12 +147,13 @@ DOMAINS: list[dict] = [
     },
     {
         "id": "railway", "name": bi("Railway interface & operations", "铁路接口与运营"),
-        "agents": ["knowledge", "gates"],
+        "agents": ["knowledge", "gates", "twin", "commissioning"],
         "topics": {"railway", "railway safety", "operating licence", "railway opening", "railway corridor",
                    "works near railway", "level crossing", "grade separation", "railway scheme", "railway permit",
                    "operations", "maintenance", "trespass", "obstruction", "accident investigation"},
         "keywords": r"铁路|轨道|地铁|平交道口|开通|运营|运维|railway|rail|metro|level crossing|operation|keretapi|kereta api|سكك",
-        "note": bi("Railway acts of Malaysia and Indonesia.", "马来西亚和印尼的铁路法。"),
+        "note": bi("Railway acts of Malaysia and Indonesia; asset status, sensors and maintenance from the digital twin.",
+                   "马来西亚和印尼的铁路法；资产状态、传感器和维护来自数字孪生。"),
     },
 ]
 DOMAIN_IDS = [d["id"] for d in DOMAINS]
