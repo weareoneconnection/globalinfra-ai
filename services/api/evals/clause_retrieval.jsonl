@@ -1,0 +1,42 @@
+{"id": "CR-01", "lang": "en", "query": "principal must allocate sufficient time budget and resources to subcontractors", "expected": "MY-ACT514-S18A"}
+{"id": "CR-02", "lang": "zh", "query": "委托方对分包商的安全义务 预算 资源", "expected": "MY-ACT514-S18A"}
+{"id": "CR-03", "lang": "en", "query": "duty to conduct risk assessment and implement risk control", "expected": "MY-ACT514-S18B"}
+{"id": "CR-04", "lang": "zh", "query": "开展风险评估并落实风险控制措施", "expected": "MY-ACT514-S18B"}
+{"id": "CR-05", "lang": "en", "query": "employee right to remove himself from imminent danger", "expected": "MY-ACT514-S26A"}
+{"id": "CR-06", "lang": "zh", "query": "迫在眉睫的危险 雇员撤离 停止工作", "expected": "MY-ACT514-S26A"}
+{"id": "CR-07", "lang": "en", "query": "crane certificate of fitness before operating plant", "expected": "MY-ACT514-S27D"}
+{"id": "CR-08", "lang": "zh", "query": "设备合格证书 起重机 运行前检验", "expected": "MY-ACT514-S27D"}
+{"id": "CR-09", "lang": "en", "query": "notify nearest OSH office of accident or dangerous occurrence", "expected": "MY-ACT514-S32"}
+{"id": "CR-10", "lang": "zh", "query": "事故 危险事件 职业病 通报 办事处", "expected": "MY-ACT514-S32"}
+{"id": "CR-11", "lang": "en", "query": "safety and health committee forty persons employed", "expected": "MY-ACT514-S30"}
+{"id": "CR-12", "lang": "en", "query": "improvement notice prohibition notice immediate danger", "expected": "MY-ACT514-S48"}
+{"id": "CR-13", "lang": "en", "query": "director liability body corporate offence due diligence", "expected": "MY-ACT514-S52"}
+{"id": "CR-14", "lang": "en", "query": "client notify Director General project more than thirty working days five hundred person-days", "expected": "MY-CDM2024-REG8"}
+{"id": "CR-15", "lang": "zh", "query": "超过30个工作日 500人日 开工通报 总监", "expected": "MY-CDM2024-REG8"}
+{"id": "CR-16", "lang": "en", "query": "appoint principal designer and principal contractor in writing more than one contractor", "expected": "MY-CDM2024-REG7"}
+{"id": "CR-17", "lang": "en", "query": "construction phase plan high-risk work fourth schedule principal contractor", "expected": "MY-CDM2024-REG13"}
+{"id": "CR-18", "lang": "zh", "query": "楼面开口 高处坠落 防护 安全通道", "expected": "MY-CDM2024-REG19"}
+{"id": "CR-19", "lang": "en", "query": "excavation collapse shoring inspection start of each shift", "expected": "MY-CDM2024-REG24"}
+{"id": "CR-20", "lang": "zh", "query": "开挖 坍塌 支护 每班检查", "expected": "MY-CDM2024-REG24"}
+{"id": "CR-21", "lang": "en", "query": "cofferdam caisson water ingress escape", "expected": "MY-CDM2024-REG25"}
+{"id": "CR-22", "lang": "en", "query": "temporary works structure collapse during construction stability", "expected": "MY-CDM2024-REG21"}
+{"id": "CR-23", "lang": "zh", "query": "总承包商任命现场安全监督员", "expected": "MY-CDM2024-REG39"}
+{"id": "CR-24", "lang": "en", "query": "designer eliminate reduce foreseeable risk general principles of prevention", "expected": "MY-CDM2024-REG11"}
+{"id": "CR-25", "lang": "en", "query": "contractor must be registered with CIDB certificate of registration", "expected": "MY-ACT520-S25"}
+{"id": "CR-26", "lang": "zh", "query": "未注册施工 罚款 1万 10万令吉", "expected": "MY-ACT520-S29"}
+{"id": "CR-27", "lang": "en", "query": "uncertified construction materials dealing prohibited", "expected": "MY-ACT520-S33D"}
+{"id": "CR-28", "lang": "en", "query": "contractor breach of duty causing death penalty", "expected": "MY-ACT520-S34D"}
+{"id": "CR-29", "lang": "zh", "query": "管理或控制施工现场者 进出通道 安全", "expected": "MY-ACT520-S34E"}
+{"id": "CR-30", "lang": "en", "query": "payment response within ten working days disputed amount", "expected": "MY-ACT746-S6"}
+{"id": "CR-31", "lang": "zh", "query": "付款申索 金额 到期日 合同依据", "expected": "MY-ACT746-S5"}
+{"id": "CR-32", "lang": "en", "query": "pay when paid conditional payment void", "expected": "MY-ACT746-S35"}
+{"id": "CR-33", "lang": "zh", "query": "审裁员 45个工作日 作出决定", "expected": "MY-ACT746-S12"}
+{"id": "CR-34", "lang": "en", "query": "suspend or reduce rate of progress adjudicated amount not paid", "expected": "MY-ACT746-S29"}
+{"id": "CR-35", "lang": "en", "query": "direct payment from principal adjudication decision", "expected": "MY-ACT746-S30"}
+{"id": "CR-36", "lang": "en", "query": "set aside adjudication decision fraud natural justice", "expected": "MY-ACT746-S15"}
+{"id": "CR-37", "lang": "en", "query": "personal data breach notify Commissioner significant harm", "expected": "MY-ACT709-S12B"}
+{"id": "CR-38", "lang": "zh", "query": "个人数据泄露 通知专员", "expected": "MY-ACT709-S12B"}
+{"id": "CR-39", "lang": "en", "query": "transfer personal data outside Malaysia adequate protection cloud model", "expected": "MY-ACT709-S129"}
+{"id": "CR-40", "lang": "zh", "query": "向境外传输个人数据 充分保护", "expected": "MY-ACT709-S129"}
+{"id": "CR-41", "lang": "en", "query": "appoint data protection officer", "expected": "MY-ACT709-S12A"}
+{"id": "CR-42", "lang": "en", "query": "Factories and Machinery Act 1967 repealed BOWEC", "expected": "MY-ACT835-S3"}

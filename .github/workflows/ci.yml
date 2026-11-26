@@ -24,6 +24,7 @@ jobs:
       - run: python evals/run_competition_eval.py
       - run: python evals/run_agent_org_eval.py
       - run: python evals/run_dispatch_eval.py
+      - run: python evals/run_clause_retrieval_eval.py
       - run: python evals/run_country_adaptation.py --country-a MY --country-b AE --stage construction --output /tmp/globalinfra-country-adaptation.json
       - name: P3.1 blind-study CLI and safe NOT_RUN smoke
         run: |
