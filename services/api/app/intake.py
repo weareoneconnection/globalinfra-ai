@@ -185,6 +185,16 @@ def _detect_country(lowered: str) -> tuple[str | None, dict | None]:
     return None, None
 
 
+def detect_countries(text: str) -> list[str]:
+    """Every country the text names, in the order of ``COUNTRY_SIGNALS``.
+
+    ``_detect_country`` returns the first match for routing a work order;
+    retrieval needs all of them, e.g. for "compare Malaysia and Saudi".
+    """
+    lowered = normalize(text)
+    return [code for code, _, keywords in COUNTRY_SIGNALS if any(contains(lowered, k) for k in keywords)]
+
+
 def _detect_lifecycle(lowered: str) -> str:
     for stage_id, keywords in LIFECYCLE_SIGNALS:
         if any(contains(lowered, k) for k in keywords):

@@ -46,8 +46,10 @@ from sqlalchemy.orm import Session
 
 from .assistant import (
     _CASE_ID_RE, _CITATION_RE, _INCIDENT_RE, _JSON_RE, _KNOWLEDGE_RE, MAX_DIRECT_REPLY, ChatTurn,
-    _grounded_answer, _hit_payload, _model_available, _project_in_text, _search, plan_rules,
+    _grounded_answer, _hit_payload, _model_available, _project_in_text, plan_rules, search_countries,
+    search_knowledge,
 )
+from .intake import detect_countries
 from .database import SessionLocal, get_db
 from .domain import PROJECT_INTELLIGENCE
 from .i18n import bi, get_lang, localize
@@ -231,7 +233,7 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
     if ctx.case_id:
         text = _THIS_CASE_RE.sub(f" {ctx.case_id} ", text)
     # A long message that is not a question is a pasted letter or notice.
-    if len(text) > MAX_SPLIT_LENGTH and not re.search(r"[?？]\s*$", text):
+    if len(text) > MAX_SPLIT_LENGTH and not re.search(r"[?？؟]\s*$", text):
         return [Step("intake", query=message.strip(), project_id=plan_rules(text, ctx.project_codes, set())["project_id"])]
     steps: list[Step] = []
     for position, clause in enumerate(_clauses(text)):
@@ -268,13 +270,15 @@ def _plan_prompt(lang: str, ctx: PlanContext) -> str:
         "- intake: the user reports a NEW site issue, incident, hazard, damage, delay or claim, or pastes an owner "
         "notice or letter. Put the full issue text in `query`. Use it at most once.\n"
         "- knowledge: questions on regulations, laws, standards, permits or contract clauses. Put a concise search "
-        "query in `query`, keeping country and topic words.\n"
+        "query in `query`, keeping country and topic words and the user's own key terms. A comparison of several "
+        "countries is ONE knowledge step whose query names every country.\n"
         "- case: status, plan, evidence or questions of an existing work order. Set `case_id` to an id from the "
         "message, the conversation or the current case, exactly as written, or to NEW for the work order created "
         "by an intake step earlier in this plan.\n"
         "- answer: ONLY when the user is answering one of the current case's open questions listed below. Set "
         "`question_id` to its id and copy the user's answer into `answer`.\n"
-        "- progress: project progress or schedule. Set `project_code` when one project is meant.\n"
+        "- progress: project progress or schedule. Set `project_code` when one project is meant; otherwise put "
+        "the country words of this task in `query`.\n"
         "- approvals: what waits for approval, and any request to approve, reject, execute or close (you cannot do "
         "those; the list lets the user press the buttons).\n"
         "- field: the user's own recent field reports.\n"
@@ -444,10 +448,13 @@ async def agent_intake(step: Step, run: Dispatch, db: Session) -> dict:
 
 
 async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
-    hits = _search(
+    project_id = step.project_id or run.payload.project_id
+    # The step's query names the countries of this task; the whole message is
+    # a fallback (it may also name the countries of other steps).
+    countries = search_countries(db, [step.query], project_id) or search_countries(db, [run.payload.message], None)
+    hits, countries = search_knowledge(
         db, step.query, run.payload.message,
-        principal=run.principal,
-        project_id=step.project_id or run.payload.project_id,
+        principal=run.principal, project_id=project_id, countries=countries,
     )
     answer = None
     if hits and run.knowledge_answers < MAX_KNOWLEDGE_ANSWERS:
@@ -462,7 +469,8 @@ async def agent_knowledge(step: Step, run: Dispatch, db: Session) -> dict:
         summary = _t(run.lang, f"Found {len(hits)} sources: {', '.join(refs)}.", f"找到 {len(hits)} 条依据：{'、'.join(refs)}。")
     return {
         "summary": summary, "refs": refs,
-        "data": {"query": step.query, "hits": [_hit_payload(score, doc, run.lang) for score, doc in hits],
+        "data": {"query": step.query, "countries": countries,
+                 "hits": [_hit_payload(score, doc, run.lang) for score, doc in hits],
                  "answer": answer, "answer_method": "llm" if answer else "sources"},
     }
 
@@ -549,10 +557,16 @@ async def agent_answer(step: Step, run: Dispatch, db: Session) -> dict:
 
 async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
     project_id = step.project_id or run.payload.project_id
+    # "Malaysia project progress" means the Malaysian projects only. The
+    # step's own words decide; the whole message is used only when the step
+    # carries none (a model plan may leave the query empty).
+    countries = [] if project_id else (detect_countries(step.query) or (
+        detect_countries(run.payload.message) if not step.query else []))
     rows = []
     for project in db.scalars(select(Project).order_by(Project.id)):
         if (
             (project_id and project.id != project_id)
+            or (countries and (project.country_code or "").upper() not in countries)
             or not run.principal.can_access_project(project.id)
             or (
                 "platform_admin" not in run.principal.roles
@@ -572,7 +586,7 @@ async def agent_progress(step: Step, run: Dispatch, db: Session) -> dict:
         for r in rows if r["progress"] is not None
     ]
     return {"summary": "; ".join(lines) or _t(run.lang, "No project in scope.", "没有可查看的项目。"),
-            "data": {"project_ids": [r["id"] for r in rows], "projects": rows}}
+            "data": {"project_ids": [r["id"] for r in rows], "projects": rows, "countries": countries}}
 
 
 async def agent_approvals(step: Step, run: Dispatch, db: Session) -> dict:

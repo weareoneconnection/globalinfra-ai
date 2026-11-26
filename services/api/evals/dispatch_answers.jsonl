@@ -1,0 +1,40 @@
+{"id": "A01", "message": "阿联酋分包商对业主有什么权利？", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL25-2025-ART-833", "AE-FDL25-2025-ART-832"], "countries": ["AE"]}}
+{"id": "A02", "message": "UAE end of service gratuity requirement", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL33-2021-ART-51"], "countries": ["AE"]}}
+{"id": "A03", "message": "沙特工人斋月期间每天最多工作几小时？", "agents": ["knowledge"], "expect": {"refs": ["SA-LABOR-ART-98"], "countries": ["SA"]}}
+{"id": "A04", "message": "马来西亚 OSHA 对危险事件通报的规定", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT514-S32"], "countries": ["MY"]}}
+{"id": "A05", "message": "印尼建筑合同必须包含哪些内容？", "agents": ["knowledge"], "expect": {"refs": ["ID-UU2-2017-PASAL-47"], "countries": ["ID"]}}
+{"id": "A06", "message": "Indonesia personal data breach notification regulation", "agents": ["knowledge"], "expect": {"refs": ["ID-UU27-2022-PASAL-46"], "countries": ["ID"]}}
+{"id": "A07", "message": "沙特环境法对排放监测有什么规定？", "agents": ["knowledge"], "expect": {"refs": ["SA-ENV-ART-8"], "countries": ["SA"]}}
+{"id": "A08", "message": "阿联酋十年责任的规定是什么？", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL25-2025-ART-821"], "countries": ["AE"]}}
+{"id": "A09", "message": "Malaysia CIPAA adjudication regulation for payment", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT746-S5", "MY-ACT746-S7", "MY-ACT746-S8", "MY-ACT746-S12"], "countries": ["MY"]}}
+{"id": "A10", "message": "沙特雇主必须提供哪些急救设施？", "agents": ["knowledge"], "expect": {"refs": ["SA-LABOR-ART-142"], "countries": ["SA"]}}
+{"id": "A11", "message": "UAE probation period law", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL33-2021-ART-9"], "countries": ["AE"]}}
+{"id": "A12", "message": "马来西亚的开挖作业规定", "agents": ["knowledge"], "expect": {"refs": ["MY-CDM2024-REG24"], "countries": ["MY"]}}
+{"id": "A13", "message": "ما هي مكافأة نهاية الخدمة في الإمارات؟", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL33-2021-ART-51"], "countries": ["AE"]}}
+{"id": "A14", "message": "كم ساعات العمل في رمضان في السعودية؟", "agents": ["knowledge"], "expect": {"refs": ["SA-LABOR-ART-98"], "countries": ["SA"]}}
+{"id": "A15", "message": "ما هو الضمان العشري للمقاول في الإمارات؟", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL25-2025-ART-821"], "countries": ["AE"]}}
+{"id": "A16", "message": "Apakah tugas am majikan di bawah akta keselamatan Malaysia?", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT514-S15"], "countries": ["MY"]}}
+{"id": "A17", "message": "Apa saja isi kontrak kerja konstruksi menurut undang-undang Indonesia?", "agents": ["knowledge"], "expect": {"refs": ["ID-UU2-2017-PASAL-47"], "countries": ["ID"]}}
+{"id": "A18", "message": "Bagaimana peraturan tenaga kerja konstruksi asing di Indonesia?", "agents": ["knowledge"], "expect": {"refs": ["ID-UU2-2017-PASAL-74"], "countries": ["ID"]}}
+{"id": "A19", "message": "Apakah syarat pegawai keselamatan dan kesihatan di Malaysia?", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT514-S29"], "countries": ["MY"]}}
+{"id": "A20", "message": "ما هي شروط رخصة العمل لغير السعوديين في السعودية؟", "agents": ["knowledge"], "expect": {"refs": ["SA-LABOR-ART-33"], "countries": ["SA"]}}
+{"id": "A21", "message": "比较马来西亚和沙特对工伤的规定", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "SA"], "countries": ["MY", "SA"]}}
+{"id": "A22", "message": "Compare Malaysia and Indonesia regulation on safety committees", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "ID"], "countries": ["MY", "ID"]}}
+{"id": "A23", "message": "阿联酋和沙特的加班规定有什么不同？", "agents": ["knowledge"], "expect": {"refs_from_countries": ["AE", "SA"], "countries": ["AE", "SA"]}}
+{"id": "A24", "message": "印尼和马来西亚个人数据保护法的规定", "agents": ["knowledge"], "expect": {"refs_from_countries": ["MY", "ID"], "countries": ["MY", "ID"]}}
+{"id": "A25", "message": "马来西亚项目进度", "agents": ["progress"], "expect": {"projects": ["MY-RAIL-A"]}}
+{"id": "A26", "message": "Saudi project progress", "agents": ["progress"], "expect": {"projects": ["SA-METRO-C"]}}
+{"id": "A27", "message": "项目进度", "agents": ["progress"], "expect": {"projects": ["MY-RAIL-A", "ID-HWY-B", "SA-METRO-C"]}}
+{"id": "A28", "message": "kemajuan projek Malaysia", "agents": ["progress"], "expect": {"projects": ["MY-RAIL-A"]}}
+{"id": "A29", "message": "阿联酋分包商有什么法律规定？另外查一下马来西亚项目进度", "agents": ["knowledge", "progress"], "expect": {"refs": ["AE-FDL25-2025-ART-832", "AE-FDL25-2025-ART-833"], "countries": ["AE"], "projects": ["MY-RAIL-A"]}}
+{"id": "A30", "message": "how to cook rice?", "agents": ["knowledge"], "expect": {"abstain": true}}
+{"id": "A31", "message": "明天天气怎么样？", "agents": ["knowledge"], "expect": {"abstain": true}}
+{"id": "A32", "message": "ما هي وصفة الكبسة؟", "agents": ["knowledge"], "expect": {"abstain": true}}
+{"id": "A33", "message": "إشعار من صاحب العمل في دبي: عامل يعمل على ارتفاع دون معدات الوقاية. يجب إيقاف العمل فوراً.", "agents": ["intake"], "expect": {}}
+{"id": "A34", "message": "Notis pemilik projek: jalan masuk sementara rosak, perlu dibaiki dalam tempoh 2 hari.", "agents": ["intake"], "expect": {}}
+{"id": "A35", "message": "Pemberitahuan pemilik proyek: ditemukan retak pada beton, harus diperbaiki dalam waktu 3 hari.", "agents": ["intake"], "expect": {}}
+{"id": "A36", "message": "Saudi wastewater discharge permit regulation", "agents": ["knowledge"], "expect": {"refs": ["SA-ENV-ART-11"], "countries": ["SA"]}}
+{"id": "A37", "message": "UAE worker accommodation requirements", "agents": ["knowledge"], "expect": {"refs": ["AE-FDL33-2021-ART-13-4"], "countries": ["AE"]}}
+{"id": "A38", "message": "马来西亚雇员的年假规定", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT265-S60E"], "countries": ["MY"]}}
+{"id": "A39", "message": "Indonesia level crossing railway regulation", "agents": ["knowledge"], "expect": {"refs": ["ID-UU23-2007-PASAL-91"], "countries": ["ID"]}}
+{"id": "A40", "message": "沙特民法对约定赔偿金的规定", "agents": ["knowledge"], "expect": {"refs": ["SA-CTL-ART-178-179"], "countries": ["SA"]}}
