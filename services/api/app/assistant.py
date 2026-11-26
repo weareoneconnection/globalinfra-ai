@@ -39,7 +39,10 @@ from .database import get_db
 from .i18n import get_lang, localize
 from .llm import LLMError, generate, is_llm_configured, reset_routing_trace, routing_trace
 from .models import Case, KnowledgeDocument, Project
-from .retrieval import KnowledgeIndex
+from .country_knowledge import _expansion_glossary
+from .intake import COUNTRY_SIGNALS, detect_countries
+from .multilingual import expand_query, normalize
+from .retrieval import KnowledgeIndex, document_tier
 from .security import Principal, get_principal, require_project
 from .workflow import CONFIDENT_RELEVANCE
 
@@ -52,6 +55,13 @@ TOOLS: tuple[str, ...] = (
 MAX_HISTORY = 8
 MAX_DIRECT_REPLY = 1500
 KNOWLEDGE_TOP_K = 5
+PER_COUNTRY_TOP_K = 3
+# Clause summaries score on a different scale from operational sources.
+# Calibrated on the 127-query clause retrieval eval (2026-11-26): the correct
+# clause scored >= 0.12 in 95% of queries (median 0.31), while unrelated
+# questions ("how to cook rice") stayed below it.
+CLAUSE_CONFIDENT_RELEVANCE = 0.12
+RELATIVE_FLOOR = 0.5
 
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 _CASE_ID_RE = re.compile(r"\bCASE-[A-Z0-9][A-Z0-9-]*\b", re.IGNORECASE)
@@ -63,12 +73,18 @@ _HELP_RE = re.compile(
     r"^帮助$|^help$|what can you do|who are you|how do i use", re.IGNORECASE)
 _INCIDENT_RE = re.compile(
     r"通知|整改|事故|隐患|损坏|破损|延误|索赔|违规|泄漏|坍塌|受伤|缺陷|"
-    r"notice|incident|damage|delay|claim|injur|defect|rectif|hazard|unsafe|leak", re.IGNORECASE)
+    r"notice|incident|damage|delay|claim|injur|defect|rectif|hazard|unsafe|leak|"
+    # Malay / Indonesian / Arabic
+    r"\bnotis\b|kemalangan|kecederaan|kelewatan|tuntutan|kecacatan|kerosakan|pemberitahuan|kecelakaan|"
+    r"keterlambatan|\bklaim\b|kerusakan|إشعار|اشعار|إخطار|حادث|إصابة|اصابة|تأخير|مطالبة|تشقق|تعدي", re.IGNORECASE)
 _APPROVAL_RE = re.compile(r"审批|待我|批准|approval|approve|sign[- ]?off", re.IGNORECASE)
-_PROGRESS_RE = re.compile(r"进度|进展|状态|概况|progress|status|schedule|overview", re.IGNORECASE)
+_PROGRESS_RE = re.compile(
+    r"进度|进展|状态|概况|progress|status|schedule|overview|kemajuan|perkembangan|\bjadual\b|\bprogres\b|"
+    r"\bjadwal\b|تقدم|الجدول الزمني|سير العمل", re.IGNORECASE)
 _KNOWLEDGE_RE = re.compile(
-    r"法规|法律|规定|规范|标准|条款|条例|要求|依据|哪一条|regulation|law|clause|requirement|standard|permit",
-    re.IGNORECASE)
+    r"法规|法律|规定|规范|标准|条款|条例|要求|依据|哪一条|regulation|law|clause|requirement|standard|permit|"
+    r"\bakta\b|peraturan|seksyen|\bsyarat\b|keperluan|undang-undang|\bpasal\b|ketentuan|persyaratan|"
+    r"\bapa\b|bagaimana|berapa|قانون|نظام|لائحة|المادة|شروط|متطلبات|ما هي|ماهي|كم|هل", re.IGNORECASE)
 
 PLAN_FORMAT: dict = {
     "type": "json_schema",
@@ -122,7 +138,7 @@ def plan_rules(message: str, project_codes: dict[str, int], known_case_ids: set[
         plan["tool"] = "pending_approvals"
     elif not incident and _PROGRESS_RE.search(text) and len(text) <= 60:
         plan["tool"] = "project_progress"
-    elif not incident and (_KNOWLEDGE_RE.search(text) or re.search(r"[?？]\s*$", text)):
+    elif not incident and (_KNOWLEDGE_RE.search(text) or re.search(r"[?？؟]\s*$", text)):
         plan.update(tool="search_knowledge", query=text)
     elif len(text) < 8:
         plan["tool"] = "answer_directly"
@@ -235,17 +251,61 @@ async def _plan(payload: AssistantChatRequest, lang: str, project_codes: dict[st
     return plan, "llm"
 
 
-def _search(
+def search_countries(db: Session, texts: list[str], project_id: int | None) -> list[str]:
+    """Countries a knowledge question is about: named in the text, else the project's."""
+    countries = detect_countries(" ".join(t for t in texts if t))
+    if not countries and project_id is not None:
+        code = db.scalar(select(Project.country_code).where(Project.id == project_id))
+        if code:
+            countries = [code.upper()]
+    return countries
+
+
+# Words that say "this is a question about rules" but carry no topic. The
+# country is already applied as a filter, so its name is dropped too.
+_FILLER_RE = re.compile(
+    r"\b(?:what|which|how|are|is|the|a|an|of|on|for|in|to|and|or|does|do|rules?|regulations?|laws?|legal|"
+    r"requirements?|compare|comparison|between|under|according|apa|apakah|saja|bagaimana|berapa|menurut|"
+    r"undang-undang|peraturan|di|bawah|yang|dan)\b"
+    r"|规定|法规|法律|要求|什么|哪些|是否|有没有|比较|对比|一下|请问|的|是|和|与|对|有|吗|呢|"
+    r"ما هي|ماهي|ما هو|ما|هي|هو|في|من|على|قانون|نظام|كم|هل",
+    re.IGNORECASE,
+)
+
+
+def core_query(text: str) -> str:
+    """The topic words of a question: country names and filler removed."""
+    lowered = normalize(text)
+    for _code, _label, keywords in COUNTRY_SIGNALS:
+        for keyword in sorted(keywords, key=len, reverse=True):
+            lowered = lowered.replace(normalize(keyword), " ")
+    return re.sub(r"[\s?？؟!！,，.。:：;；]+", " ", _FILLER_RE.sub(" ", lowered)).strip()
+
+
+def _tier_threshold(doc: KnowledgeDocument) -> float:
+    return CLAUSE_CONFIDENT_RELEVANCE if document_tier(doc) == "clause" else CONFIDENT_RELEVANCE
+
+
+def search_knowledge(
     db: Session,
     *queries: str,
     principal: Principal,
     project_id: int | None = None,
-) -> list[tuple[float, KnowledgeDocument]]:
-    """Search with every query and keep each document's best score.
+    countries: list[str] | None = None,
+) -> tuple[list[tuple[float, KnowledgeDocument]], list[str]]:
+    """Country-aware search used by the chat assistant and the dispatcher.
 
-    The user's own words are always one of the queries, so a model-rewritten
-    query (e.g. translated, or phrased differently from the corpus) can add
-    hits but never lose the ones the original wording finds.
+    - The countries come from the question (or the project). Documents of
+      other countries are left out; documents with no country stay in.
+    - With two or more countries each one is searched on its own and keeps
+      up to ``PER_COUNTRY_TOP_K`` hits, so a comparison never loses a side.
+    - Every query is also run with its Malay, Indonesian or Arabic glossary
+      terms expanded to English, and each document keeps its best score.
+    - Clause summaries and operational sources have separate thresholds
+      (their scores are on different scales), and within a tier a hit below
+      ``RELATIVE_FLOOR`` of that tier's best hit is dropped as noise.
+
+    Returns the hits and the countries used.
     """
     project_scope = select(Project.id)
     if "platform_admin" not in principal.roles:
@@ -261,19 +321,60 @@ def _search(
     docs = list(db.scalars(select(KnowledgeDocument).where(
         KnowledgeDocument.status == "CURRENT", visible
     )))
-    index = KnowledgeIndex(docs)
-    best: dict[int, tuple[float, KnowledgeDocument]] = {}
-    for query in dict.fromkeys(q for q in queries if q and q.strip()):
-        for score, doc in index.search(query, top_k=KNOWLEDGE_TOP_K):
-            if score >= CONFIDENT_RELEVANCE and score > best.get(doc.id, (0.0, None))[0]:
-                best[doc.id] = (score, doc)
-    return sorted(best.values(), key=lambda item: item[0], reverse=True)[:KNOWLEDGE_TOP_K]
+    if countries is None:
+        countries = search_countries(db, list(queries), project_id)
+    base = list(dict.fromkeys(q.strip() for q in queries if q and q.strip()))
+    groups: list[list[str] | None] = [[code] for code in countries] if len(countries) > 1 else [countries or None]
+    limit = PER_COUNTRY_TOP_K if len(groups) > 1 else KNOWLEDGE_TOP_K
+    merged: dict[int, tuple[float, KnowledgeDocument]] = {}
+    for group in groups:
+        pool = docs if group is None else [d for d in docs if d.country_code is None or d.country_code in group]
+        glossary = _expansion_glossary(group[0] if group else None)
+        variants: list[str] = []
+        for q in base:
+            core = core_query(q)
+            expanded, matches = expand_query(q, glossary)
+            variants += [q, expanded, core, expand_query(core, glossary)[0],
+                         " ".join(m["en"] for m in matches)]
+        variants = list(dict.fromkeys(v for v in variants if v and v.strip()))
+        index = KnowledgeIndex(pool)
+        best: dict[int, tuple[float, KnowledgeDocument]] = {}
+        for query in variants:
+            for score, doc in index.search(query, top_k=KNOWLEDGE_TOP_K):
+                if score >= _tier_threshold(doc) and score > best.get(doc.id, (0.0, None))[0]:
+                    best[doc.id] = (score, doc)
+        top_by_tier: dict[str, float] = {}
+        for score, doc in best.values():
+            tier = document_tier(doc)
+            top_by_tier[tier] = max(top_by_tier.get(tier, 0.0), score)
+        kept = [(s, d) for s, d in best.values() if s >= RELATIVE_FLOOR * top_by_tier[document_tier(d)]]
+        for score, doc in sorted(kept, key=lambda item: item[0], reverse=True)[:limit]:
+            if score > merged.get(doc.id, (0.0, None))[0]:
+                merged[doc.id] = (score, doc)
+    hits = sorted(merged.values(), key=lambda item: item[0], reverse=True)
+    return hits[: limit * len(groups)], countries
+
+
+def _search(
+    db: Session,
+    *queries: str,
+    principal: Principal,
+    project_id: int | None = None,
+) -> list[tuple[float, KnowledgeDocument]]:
+    """Search with every query and keep each document's best score.
+
+    The user's own words are always one of the queries, so a model-rewritten
+    query (e.g. translated, or phrased differently from the corpus) can add
+    hits but never lose the ones the original wording finds.
+    """
+    return search_knowledge(db, *queries, principal=principal, project_id=project_id)[0]
 
 
 def _hit_payload(score: float, doc: KnowledgeDocument, lang: str) -> dict:
     return localize({
         "id": doc.id, "title": doc.title, "source_ref": doc.source_ref, "jurisdiction": doc.jurisdiction,
         "version": doc.version, "summary": doc.summary, "relevance": round(score, 4),
+        "country_code": doc.country_code, "document_type": doc.document_type,
     }, lang)
 
 

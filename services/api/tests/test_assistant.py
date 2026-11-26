@@ -86,7 +86,10 @@ def test_chat_offline_uses_rules(client):
 def test_chat_offline_knowledge_returns_only_confident_sources(client):
     body = client.post("/assistant/chat?lang=zh", json={"message": "马来西亚高处作业有什么要求？"}).json()
     assert body["tool"] == "search_knowledge" and body["answer_method"] == "sources"
-    assert body["hits"] and all(hit["relevance"] >= 0.22 for hit in body["hits"])
+    # Operational sources keep the 0.22 threshold; clause summaries use 0.12.
+    assert body["hits"] and all(
+        hit["relevance"] >= (0.12 if hit["document_type"] == "CLAUSE_SUMMARY" else 0.22) for hit in body["hits"])
+    assert {hit["country_code"] for hit in body["hits"]} <= {"MY", None}
     assert body["hits"][0]["source_ref"] == "MY-HSE-WAH-01"
 
 

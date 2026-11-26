@@ -61,6 +61,13 @@ def tokenize_bigrams(text: str) -> list[str]:
         return []
     lowered = text.lower()
     tokens = _LATIN_WORD_RE.findall(lowered)
+    # A hyphenated word also counts as its parts, so "end-of-service" in a
+    # clause matches a query that writes "end of service".
+    tokens.extend(part for token in tokens if "-" in token for part in token.split("-") if part)
+    # A plain English plural also counts as its singular ("crossings" ->
+    # "crossing", "committees" -> "committee"); no stemmer dependency.
+    tokens.extend(token[:-1] for token in list(tokens) if len(token) > 4 and token.endswith("s")
+                  and not token.endswith(("ss", "us", "is")) and token.isalpha())
     for run in _CJK_RUN_RE.findall(lowered):
         tokens.extend([run] if len(run) == 1 else [run[i:i + 2] for i in range(len(run) - 1)])
     return tokens
