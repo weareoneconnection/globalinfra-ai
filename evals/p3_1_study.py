@@ -266,15 +266,10 @@ def wilson(successes: int, n: int) -> list[float] | None:
 
 def paired_effect(rows: list[dict], a: dict, b: dict, sha: str) -> dict:
     """Paired risk-accuracy difference with deterministic percentile bootstrap."""
-    keys = [row["id"] for row in rows]
-    pairs = [(int(a[k]["risk"] == row["expected_risk"]),
-              int(b[k]["risk"] == row["expected_risk"])) for k, row in
-             (({r["id"]: r for r in rows})[k] for k in keys)]
-    # Explicit case-level pairing, never compare unrelated aggregate totals.
-    scores = [(int(a[k]["risk"] == expected["expected_risk"]),
-               int(b[k]["risk"] == expected["expected_risk"])) for k, expected
-              in ((k, next(row for row in rows if row["id"] == k)) for k in keys)]
-    del pairs
+    # Align by case ID, never by model response order.
+    scores = [(int(a[row["id"]]["risk"] == row["expected_risk"]),
+               int(b[row["id"]]["risk"] == row["expected_risk"]))
+              for row in rows]
     delta = sum(x-y for x, y in scores)/len(scores)
     wins = sum(x==1 and y==0 for x,y in scores)
     losses = sum(x==0 and y==1 for x,y in scores)
@@ -344,7 +339,8 @@ def adjudicate(frozen: dict, dataset: Path, comparison: Path,
         raise ValueError("BLIND_RAW_EVIDENCE_MISMATCH")
     ids = {r["id"] for r in rows}
     aliases = key.get("aliases", {})
-    if set(aliases) != ids or len(packet.get("cases", [])) != len(rows):
+    if (set(aliases) != ids or len(packet.get("cases", [])) != len(rows)
+            or len({c.get("case_id") for c in packet["cases"]}) != len(rows)):
         raise ValueError("BLIND_CASE_IDS_MISMATCH")
     by_arm = {arm: {x["id"]: x for x in values} for arm, values in raw.items()}
     for row in rows:
@@ -356,7 +352,8 @@ def adjudicate(frozen: dict, dataset: Path, comparison: Path,
             raise ValueError("BLIND_CASE_CONTENT_MISMATCH")
         if case.get("evidence_context") != row.get("evidence_context", []):
             raise ValueError("BLIND_REFERENCE_CONTENT_MISMATCH")
-        if len(case.get("candidates", [])) != len(GROUPS):
+        if (len(case.get("candidates", [])) != len(GROUPS)
+                or {candidate.get("alias") for candidate in case["candidates"]} != set("ABCD")):
             raise ValueError("BLIND_PREDICTION_COUNT_INVALID")
         for item in case["candidates"]:
             arm = mapping.get(item.get("alias"))
@@ -379,7 +376,7 @@ def adjudicate(frozen: dict, dataset: Path, comparison: Path,
             group_key = ("gold", case_id)
         elif kind == "prediction":
             alias = item.get("alias")
-            if alias not in "ABCD" or not isinstance(alias, str):
+            if not isinstance(alias, str) or alias not in ("A", "B", "C", "D"):
                 raise ValueError("PREDICTION_REVIEW_ALIAS_INVALID")
             if any(type(item.get(field)) is not bool for field in PREDICTION_FIELDS):
                 raise ValueError("PREDICTION_REVIEW_SCHEMA_INVALID")
