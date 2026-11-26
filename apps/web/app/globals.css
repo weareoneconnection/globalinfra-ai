@@ -410,6 +410,13 @@ a.assistant-card:hover{border-color:var(--line2)}
 .dispatch-elapsed{font-size:11px;color:#6f8893}
 .dispatch-summary .assistant-prose{white-space:pre-line}
 .dispatch-section{scroll-margin-top:80px}
+.dispatch-table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.dispatch-table th,.dispatch-table td{border-bottom:1px solid rgba(255,255,255,.08);padding:6px 8px;text-align:left;vertical-align:top}
+.dispatch-table th{font-weight:600;opacity:.7}
+.dispatch-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dispatch-draft ol{margin:6px 0 6px 18px}
+.dispatch-trace{margin-top:10px;font-size:12px;opacity:.85}
+.dispatch-trace summary{cursor:pointer}
 @keyframes dispatch-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.dispatch-step.running .dispatch-dot{animation:none}}
 .theme-switch{font-size:13px;line-height:1;padding:5px 9px;min-width:32px}
