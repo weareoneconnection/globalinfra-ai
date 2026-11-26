@@ -14,10 +14,13 @@ import json
 import math
 import random
 import secrets
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
+# Support `python evals/p3_1_study.py` as well as pytest module imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evals.run_model_comparison import GROUPS, ALLOWED_RISKS, digest, validate_dataset
 
 STUDY_SCHEMA = "globalinfra.p3-1.study.v1"
