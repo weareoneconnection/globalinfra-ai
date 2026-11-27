@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 from .config import settings
+from .database import release_idle_connection
 from .translations import DEMO_TRANSLATIONS
 
 LANGUAGE_NAMES = {"en": "English", "zh": "Simplified Chinese"}
@@ -226,6 +227,7 @@ async def generate(
     providers = _route_order(route, sensitivity)
     if not providers:
         return "Deterministic demo mode active. No external model call was required."
+    release_idle_connection()
     errors = []
     for provider in providers:
         try:

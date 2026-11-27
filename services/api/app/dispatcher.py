@@ -34,6 +34,7 @@ import asyncio
 import json
 import logging
 import re
+import threading
 import uuid
 from time import perf_counter
 from dataclasses import dataclass, field
@@ -53,7 +54,8 @@ from .assistant import (
 from .contract_review import looks_like_contract
 from .capabilities import ABOUT_SELF_RE, CAPABILITY_RE, REVIEW_RE, coverage_gaps, detect_domains
 from .intake import detect_countries
-from .database import SessionLocal, get_db
+from .database import SessionLocal, get_db, releasing_connection
+from .config import settings
 from .domain import PROJECT_INTELLIGENCE
 from .i18n import bi, get_lang, localize
 from .llm import LLMError, generate, reset_routing_trace, routing_trace
@@ -933,13 +935,15 @@ async def run_step(index: int, step: Step, run: Dispatch, emit) -> dict:
         await run.finished[dependency].wait()
     started = perf_counter()
     await emit({"type": "step_start", "index": index})
-    db = SessionLocal()
+    # Loaded rows stay readable after a model call hands the connection back.
+    db = SessionLocal(expire_on_commit=False)
     try:
         async def work():
-            if step.agent in WRITERS:
-                async with run.write_lock:
-                    return await RUNNERS[step.agent](step, run, db)
-            return await RUNNERS[step.agent](step, run, db)
+            with releasing_connection(db):
+                if step.agent in WRITERS:
+                    async with run.write_lock:
+                        return await RUNNERS[step.agent](step, run, db)
+                return await RUNNERS[step.agent](step, run, db)
         result = {"status": "ok", **await asyncio.wait_for(work(), STEP_TIMEOUT_S)}
     except StepFailed as exc:
         result = {"status": "error", "summary": str(exc)}
@@ -1164,6 +1168,27 @@ async def dispatch(payload: DispatchRequest, lang: str, principal: Principal, em
     await emit({"type": "done"})
 
 
+# Dispatches running now. A counter, not an asyncio.Semaphore: it is checked
+# without waiting, and test clients run the app on more than one event loop.
+_running = 0
+_running_lock = threading.Lock()
+
+
+def _enter_dispatch() -> bool:
+    global _running
+    with _running_lock:
+        if _running >= max(1, settings.dispatch_max_concurrent):
+            return False
+        _running += 1
+        return True
+
+
+def _leave_dispatch() -> None:
+    global _running
+    with _running_lock:
+        _running -= 1
+
+
 @router.post("/dispatch")
 async def dispatch_endpoint(
     payload: DispatchRequest, lang: str = Depends(get_lang), principal: Principal = Depends(get_principal),
@@ -1171,18 +1196,28 @@ async def dispatch_endpoint(
 ):
     if payload.project_id is not None:
         require_project(principal, payload.project_id, db)
+    db.close()  # the stream below opens its own sessions; don't hold this one for its length
     queue: asyncio.Queue = asyncio.Queue()
 
     async def emit(event: dict) -> None:
         await queue.put(event)
 
     async def run() -> None:
+        admitted = _enter_dispatch()  # taken here so a stream never started never holds a slot
         try:
+            if not admitted:
+                log.warning("dispatch refused: %s already running", settings.dispatch_max_concurrent)
+                await queue.put({"type": "error", "code": "busy", "message": _t(
+                    lang, "The assistant is busy with other requests. Please try again in a moment.",
+                    "智能助手正在处理其他请求，请稍后再试。")})
+                return
             await dispatch(payload, lang, principal, emit)
         except Exception as exc:  # the stream must always end with an event the client understands
             log.exception("dispatch failed")
             await queue.put({"type": "error", "message": str(exc) or type(exc).__name__})
         finally:
+            if admitted:
+                _leave_dispatch()
             await queue.put(None)
 
     async def stream():
