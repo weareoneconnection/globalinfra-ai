@@ -2,7 +2,7 @@
 """Answer-level evaluation of the dispatching assistant (deterministic, offline).
 
 ``run_dispatch_eval.py`` checks only which sub-agents a message is routed
-to. This suite checks what comes back. Each of the 64 team-written messages
+to. This suite checks what comes back. Each of the 68 team-written messages
 (Chinese, English, Arabic, Malay, Indonesian) goes to ``/assistant/dispatch``
 with no model, so the rule planner and the retrieval path are measured:
 
@@ -33,7 +33,15 @@ with no model, so the rule planner and the retrieval path are measured:
 
 Clause ids were chosen by the team from the shipped clause library. With a
 model configured the planner and the wording of the answer change; that run
-is reported separately and is not part of this gate.
+is reported separately and is not part of this gate:
+
+- ``--dry-run`` counts the model calls and prompt sizes a live run would
+  make, without any network call (every call fails over to the rules), so
+  the cost can be estimated before spending anything;
+- ``--live`` uses the model configured in the environment (``LLM_MODE``,
+  ``OPENAI_COMPAT_*``) and reports the same metrics plus the token usage the
+  endpoint returned. Its exit code is always 0: it is a measurement, not a
+  CI gate.
 """
 import json
 import os
@@ -44,14 +52,60 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 API = ROOT / "services" / "api"
 sys.path.insert(0, str(API))
+MODE = "live" if "--live" in sys.argv else "dry-run" if "--dry-run" in sys.argv else "offline"
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.mkdtemp()}/dispatch_answer_eval.db")
-os.environ["LLM_MODE"] = "mock"
+if MODE == "offline":
+    os.environ["LLM_MODE"] = "mock"
+elif MODE == "dry-run":
+    # A model route must exist for the calls to be attempted; none leaves the process.
+    os.environ["LLM_MODE"] = "openai"
+    os.environ.setdefault("OPENAI_COMPAT_API_KEY", "dry-run-no-network")
+elif os.environ.get("LLM_MODE", "mock").lower() == "mock" or not os.environ.get("OPENAI_COMPAT_API_KEY"):
+    sys.exit("--live needs LLM_MODE and OPENAI_COMPAT_API_KEY in the environment")
 os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100000")
 
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
+from app import llm  # noqa: E402
+
 DATASET = API / "evals" / "dispatch_answers.jsonl"
+USAGE = {"calls": 0, "failed": 0, "prompt_chars": 0, "completion_chars": 0, "prompt_tokens": 0, "completion_tokens": 0}
+_provider_call = llm._generate_messages_with_provider
+
+
+async def _counted_call(provider, messages, response_format=None):
+    USAGE["calls"] += 1
+    USAGE["prompt_chars"] += sum(len(m.get("content") or "") for m in messages if isinstance(m.get("content"), str))
+    if MODE == "dry-run":
+        USAGE["failed"] += 1
+        raise llm.LLMError("dry run: no network call")
+    try:
+        text = await _provider_call(provider, messages, response_format)
+    except llm.LLMError:
+        USAGE["failed"] += 1
+        raise
+    USAGE["completion_chars"] += len(text or "")
+    return text
+
+
+if MODE != "offline":
+    llm._generate_messages_with_provider = _counted_call
+    if MODE == "live":
+        # Exact token counts come from the endpoint's ``usage`` field.
+        _post = llm.httpx.AsyncClient.post
+
+        async def _post_with_usage(self, url, *args, **kwargs):
+            response = await _post(self, url, *args, **kwargs)
+            try:
+                usage = response.json().get("usage") or {}
+            except ValueError:
+                usage = {}
+            USAGE["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            USAGE["completion_tokens"] += usage.get("completion_tokens", 0)
+            return response
+
+        llm.httpx.AsyncClient.post = _post_with_usage
 GATE_THRESHOLDS = {"routing": 95.0, "evidence_hit": 90.0, "no_leakage": 100.0, "abstention": 100.0, "progress_scope": 100.0,
                    "sub_agents": 100.0, "draft_grounded": 100.0, "focus": 100.0, "self_knowledge": 100.0,
                    "lifecycle_agents": 100.0}
@@ -82,6 +136,9 @@ def main() -> int:
             done = {e["index"]: e for e in events if e["type"] == "step_done"}
             expect = row["expect"]
             result = {"id": row["id"], "agents": agents, "routing": agents == row["agents"]}
+            if MODE != "offline":
+                trace = next((e for e in events if e["type"] == "trace"), {})
+                result.update(plan_method=plan.get("method"), model_calls=trace.get("model_calls"))
             knowledge = _step(agents, done, "knowledge") or _step(agents, done, "compare")
             if knowledge is not None:
                 data = knowledge.get("data") or {}
@@ -197,10 +254,15 @@ def main() -> int:
         metrics[f"evidence_hit_{lang}"] = _rate([r["evidence_hit"] for r in results if r["id"] in ids and "evidence_hit" in r])
     gates = {key: metrics[key] is not None and metrics[key] >= threshold for key, threshold in GATE_THRESHOLDS.items()}
     passed = all(gates.values())
-    print(json.dumps({"suite": "DISPATCH_ANSWERS", "total_cases": len(results), "status": "PASSED" if passed else "FAILED",
-                      "metrics": metrics, "thresholds": GATE_THRESHOLDS, "gates": gates, "cases": results},
-                     ensure_ascii=False, indent=2))
-    return 0 if passed else 1
+    report = {"suite": "DISPATCH_ANSWERS" if MODE == "offline" else f"DISPATCH_ANSWERS_{MODE.upper().replace('-', '_')}",
+              "total_cases": len(results), "status": "PASSED" if passed else "FAILED",
+              "metrics": metrics, "thresholds": GATE_THRESHOLDS, "gates": gates}
+    if MODE != "offline":
+        report["model"] = {"mode": os.environ.get("LLM_MODE"), "name": llm.settings.openai_compat_model, **USAGE}
+        report["plan_methods"] = {m: sum(r.get("plan_method") == m for r in results) for m in {r.get("plan_method") for r in results}}
+    report["cases"] = results
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if passed or MODE == "live" else 1
 
 
 if __name__ == "__main__":
