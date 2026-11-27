@@ -83,6 +83,17 @@ def is_production_environment(
 
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./globalinfra.db"
+    # Connection pool for server databases (ignored for SQLite). One API
+    # worker serves the web app, so the pool must cover every request that
+    # runs at once; a request waiting longer than ``db_pool_timeout`` fails.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_timeout: float = 10.0
+    # Assistant dispatches running at once. Each one can keep a database
+    # connection while a model answers, so more than this are refused at
+    # once with a "busy" reply instead of queueing and starving every other
+    # request of connections.
+    dispatch_max_concurrent: int = 12
     redis_url: str = "redis://localhost:6379/0"
     llm_mode: str = "mock"
     openai_compat_base_url: str = "https://api.openai.com/v1"
