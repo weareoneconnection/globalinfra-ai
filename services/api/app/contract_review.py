@@ -89,6 +89,9 @@ _PAY_WHEN_PAID_RE = _re(r"背靠背|收到(?:业主|发包人|甲方)?.{0,8}(?:�
                         r"upon receipt of (?:payment|funds) from the (?:Employer|Owner|Client)|"
                         r"subject to (?:the )?(?:Contractor|Main Contractor) receiving payment")
 _CAP_RE = _re(r"上限|封顶|不超过|最高不超过|最多|cap(?:ped)?\b|maximum|not exceed|limited to|had maksimum|الحد الأقصى")
+# Says outright there is no cap; "无上限" contains 上限 and must not read as capped.
+_NO_CAP_RE = _re(r"无上限|不设上限|没有上限|不封顶|上不封顶|无封顶|uncapped|no (?:cap|maximum|limit)\b|without (?:any )?(?:cap|limit)|"
+                 r"tanpa had|بدون حد|دون حد أقصى")
 _EXCLUDE_RE = _re(r"免除|排除|不承担|概不负责|不负责|exclud|shall not be liable|no liability|waive|tidak bertanggungjawab|لا يتحمل|إعفاء")
 _STRUCTURAL_RE = _re(r"结构|倒塌|坍塌|十年|structur|collapse|decennial|struktur|انهيار|عشري")
 _NO_ADJUST_RE = _re(r"不(?:予)?调整|不得(?:因此)?(?:索赔|要求增加)|不另行(?:计价|付款)|no (?:adjustment|additional (?:cost|payment))|"
@@ -151,7 +154,8 @@ def review(text: str, country: str | None, lang: str) -> dict:
             add(by_id["payment"], "medium", f"Payment period of {max(long_terms)} days strains cash flow.",
                 f"付款期限 {max(long_terms)} 天，现金流压力大。", sentence)
     for sentence in by_id["delay_damages"].found:
-        if not _CAP_RE.search(" ".join(by_id["delay_damages"].found)):
+        found = " ".join(by_id["delay_damages"].found)
+        if _NO_CAP_RE.search(found) or not _CAP_RE.search(found):
             add(by_id["delay_damages"], "high", "Delay damages have no cap.", "误期违约金没有上限。", sentence)
             break
     for sentence in by_id["claims"].found:

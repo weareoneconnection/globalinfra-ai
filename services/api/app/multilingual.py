@@ -143,3 +143,30 @@ def expand_query(query: str, glossary_rows: list[dict]) -> tuple[str, list[dict]
     if not matches:
         return query, []
     return query + " " + " ".join(m["en"] for m in matches), matches
+
+
+def expand_chinese(query: str, glossary_rows: list[dict]) -> tuple[str, list[dict]]:
+    """Append the English term for each Chinese glossary term in ``query``.
+
+    The clause library is written in English (plus a Chinese paraphrase), so
+    a Chinese question that uses another wording than the paraphrase, such
+    as 外籍工人 for 外籍雇员, still reaches the clause through the English
+    term. Longer terms are tried first and a matched span is not reused.
+    """
+    if not query or not _CJK_RE.search(query):
+        return query, []
+    text = query
+    matches: list[dict] = []
+    seen: set[str] = set()
+    for row in sorted((r for r in glossary_rows if len(r.get("zh") or "") >= 2), key=lambda r: len(r["zh"]), reverse=True):
+        zh = row["zh"]
+        if zh not in text:
+            continue
+        text = text.replace(zh, " " * len(zh))
+        en = re.sub(r"\s*\(.*?\)", "", row["en"]).strip()
+        if en not in seen:
+            seen.add(en)
+            matches.append({"local": zh, "en": en, "term_id": row["id"], "local_basis": row.get("local_basis", "")})
+    if not matches:
+        return query, []
+    return query + " " + " ".join(m["en"] for m in matches), matches

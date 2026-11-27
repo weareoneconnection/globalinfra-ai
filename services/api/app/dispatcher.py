@@ -245,6 +245,14 @@ _RULE_QUESTION_RE = re.compile(
     r"\bapa (?:peraturan|syarat)|berapa lama|ما (?:هو|هي) (?:حكم|مدة)", re.IGNORECASE)
 _EVENT_RE = re.compile(r"发生|出现|昨天|今天|刚才|现场.{0,4}(?:发现|有)|已经|occurred|happened|yesterday|today|this morning",
                        re.IGNORECASE)
+# Legal concepts. Named together with a country and no event, they are a
+# lookup ("Saudi liquidated damages for delay"), not a report, even though
+# "damages" and "delay" are incident words.
+_LEGAL_TERM_RE = re.compile(
+    r"误期违约金|违约金|约定赔偿|十年责任|不可抗力|服务终止金|离职补偿|先付后付|背靠背付款|"
+    r"liquidated damages|delay damages|decennial|force majeure|end[- ]of[- ]service|gratuity|pay[- ]when[- ]paid|"
+    r"ganti rugi tertentu|ganti rugi jumlah tertentu|التعويض الاتفاقي|الضمان العشري|القوة القاهرة|مكافأة نهاية الخدمة",
+    re.IGNORECASE)
 _EOT_DAYS_RE = re.compile(r"(?:顺延|延长工期|工期延长|延期)\s*(\d{1,3})\s*天|(\d{1,3})\s*天.{0,4}(?:顺延|延期|工期延长)|"
                           r"extension of time(?: of)?\s*(\d{1,3})\s*days?|(\d{1,3})[- ]days? (?:extension|EOT)", re.IGNORECASE)
 _TWIN_RE = re.compile(r"孪生|构件|资产|传感器|告警|报警|健康度|维护|维保|保养|设备状态|\b(?:P\d{1,3}|AHU\d{2}|BRG\d{1,3}[A-Z]?)\b.{0,8}(?:状态|怎么样|情况|告警)|"
@@ -410,6 +418,9 @@ def dispatch_rules(message: str, ctx: PlanContext) -> list[Step]:
             continue
         plan = plan_rules(clause, ctx.project_codes, ctx.known_case_ids)
         if plan["tool"] == "report_incident" and _RULE_QUESTION_RE.search(clause) and not _EVENT_RE.search(clause):
+            plan.update(tool="search_knowledge", query=clause)
+        if (plan["tool"] == "report_incident" and _LEGAL_TERM_RE.search(clause) and detect_countries(clause)
+                and not _EVENT_RE.search(clause) and not _project_in_text(clause, ctx.project_codes)):
             plan.update(tool="search_knowledge", query=clause)
         # A follow-on clause asking for rules ("then check the accident
         # reporting regulation") is a lookup even if it names an incident.

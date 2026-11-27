@@ -62,3 +62,7 @@
 {"id": "A62", "message": "今天 MY-RAIL-A 有什么要处理的？", "agents": ["briefing"], "expect": {"briefing_projects": [1]}}
 {"id": "A63", "message": "MY-RAIL-A 进度怎么样？如果顺延 20 天呢？", "agents": ["progress"], "expect": {"eot_days": 20}}
 {"id": "A64", "message": "P47 墩昨天发生坍塌事故，以前有没有类似的事故案例？", "agents": ["intake", "precedents"], "expect": {"precedent_excludes_new": true}}
+{"id": "A65", "message": "马来西亚外籍工人工作准证怎么申请？", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT265-S60K"], "countries": ["MY"]}}
+{"id": "A66", "message": "Malaysia foreign worker permit requirements", "agents": ["knowledge"], "expect": {"refs": ["MY-ACT265-S60K"], "countries": ["MY"]}}
+{"id": "A67", "message": "沙特工程合同的误期违约金有什么规定？", "agents": ["knowledge"], "expect": {"refs": ["SA-CTL-ART-178-179"], "countries": ["SA"]}}
+{"id": "A68", "message": "Saudi Arabia liquidated damages for delay in construction contracts", "agents": ["knowledge"], "expect": {"refs": ["SA-CTL-ART-178-179"], "countries": ["SA"]}}

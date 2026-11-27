@@ -81,10 +81,19 @@ def _bilingual_text(value) -> str:
     return str(value) if value else ""
 
 
+_STATUS_TAG_RE = re.compile(r"[A-Z0-9_]+")
+
+
 def document_text(doc) -> str:
-    """Flatten the searchable bilingual fields of a KnowledgeDocument."""
+    """Flatten the searchable bilingual fields of a KnowledgeDocument.
+
+    Curated topic tags ("foreign worker", "liquidated damages") are indexed
+    too: a clause summary often paraphrases the very term people search
+    for. Status tags such as ``EXPERT_REVIEW_REQUIRED`` are left out.
+    """
     fields = (doc.title, doc.category, doc.jurisdiction, doc.content, doc.summary, doc.source_ref)
-    return " ".join(_bilingual_text(f) for f in fields if f)
+    topics = [t for t in (getattr(doc, "tags", None) or []) if isinstance(t, str) and not _STATUS_TAG_RE.fullmatch(t)]
+    return " ".join([*(_bilingual_text(f) for f in fields if f), *topics])
 
 
 def case_query_text(case) -> str:

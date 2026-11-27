@@ -41,7 +41,7 @@ from .llm import LLMError, generate, is_llm_configured, reset_routing_trace, rou
 from .models import Case, KnowledgeDocument, Project
 from .country_knowledge import _expansion_glossary
 from .intake import COUNTRY_SIGNALS, detect_countries
-from .multilingual import expand_query, normalize
+from .multilingual import expand_chinese, expand_query, normalize
 from .retrieval import KnowledgeIndex, document_tier
 from .security import Principal, get_principal, require_project
 from .workflow import CONFIDENT_RELEVANCE
@@ -264,9 +264,10 @@ def search_countries(db: Session, texts: list[str], project_id: int | None) -> l
 # Words that say "this is a question about rules" but carry no topic. The
 # country is already applied as a filter, so its name is dropped too.
 _FILLER_RE = re.compile(
-    r"\b(?:what|which|how|are|is|the|a|an|of|on|for|in|to|and|or|does|do|rules?|regulations?|laws?|legal|"
+    # Not inside a hyphenated term: "end-of-service" keeps its "of".
+    r"(?<![\w-])(?:what|which|how|are|is|the|a|an|of|on|for|in|to|and|or|does|do|rules?|regulations?|laws?|legal|"
     r"requirements?|compare|comparison|between|under|according|apa|apakah|saja|bagaimana|berapa|menurut|"
-    r"undang-undang|peraturan|di|bawah|yang|dan)\b"
+    r"undang-undang|peraturan|di|bawah|yang|dan)(?![\w-])"
     r"|规定|法规|法律|要求|什么|哪些|是否|有没有|比较|对比|一下|请问|的|是|和|与|对|有|吗|呢|"
     r"ما هي|ماهي|ما هو|ما|هي|هو|في|من|على|قانون|نظام|كم|هل",
     re.IGNORECASE,
@@ -284,6 +285,20 @@ def core_query(text: str) -> str:
 
 def _tier_threshold(doc: KnowledgeDocument) -> float:
     return CLAUSE_CONFIDENT_RELEVANCE if document_tier(doc) == "clause" else CONFIDENT_RELEVANCE
+
+
+def _take_with_clause_slots(kept: list[tuple[float, KnowledgeDocument]], limit: int) -> list[tuple[float, KnowledgeDocument]]:
+    """Top ``limit`` hits, keeping about half the slots for clause summaries.
+
+    Clause and source scores come from separate tiers on different scales,
+    so a plain merge by score can push the clause that states the rule out
+    of the answer in favour of project documents that only mention it.
+    """
+    ranked = sorted(kept, key=lambda item: item[0], reverse=True)
+    clauses = [hit for hit in ranked if document_tier(hit[1]) == "clause"]
+    reserved = clauses[: (limit + 1) // 2]
+    rest = [hit for hit in ranked if hit not in reserved][: limit - len(reserved)]
+    return sorted(reserved + rest, key=lambda item: item[0], reverse=True)
 
 
 def search_knowledge(
@@ -327,6 +342,8 @@ def search_knowledge(
     groups: list[list[str] | None] = [[code] for code in countries] if len(countries) > 1 else [countries or None]
     limit = PER_COUNTRY_TOP_K if len(groups) > 1 else KNOWLEDGE_TOP_K
     merged: dict[int, tuple[float, KnowledgeDocument]] = {}
+    # Chinese-to-English terms do not depend on the country: use every glossary.
+    chinese_glossary = _expansion_glossary(None)
     for group in groups:
         pool = docs if group is None else [d for d in docs if d.country_code is None or d.country_code in group]
         glossary = _expansion_glossary(group[0] if group else None)
@@ -335,7 +352,7 @@ def search_knowledge(
             core = core_query(q)
             expanded, matches = expand_query(q, glossary)
             variants += [q, expanded, core, expand_query(core, glossary)[0],
-                         " ".join(m["en"] for m in matches)]
+                         " ".join(m["en"] for m in matches), expand_chinese(core, chinese_glossary)[0]]
         variants = list(dict.fromkeys(v for v in variants if v and v.strip()))
         index = KnowledgeIndex(pool)
         best: dict[int, tuple[float, KnowledgeDocument]] = {}
@@ -348,7 +365,7 @@ def search_knowledge(
             tier = document_tier(doc)
             top_by_tier[tier] = max(top_by_tier.get(tier, 0.0), score)
         kept = [(s, d) for s, d in best.values() if s >= RELATIVE_FLOOR * top_by_tier[document_tier(d)]]
-        for score, doc in sorted(kept, key=lambda item: item[0], reverse=True)[:limit]:
+        for score, doc in _take_with_clause_slots(kept, limit):
             if score > merged.get(doc.id, (0.0, None))[0]:
                 merged[doc.id] = (score, doc)
     hits = sorted(merged.values(), key=lambda item: item[0], reverse=True)
