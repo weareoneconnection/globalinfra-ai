@@ -126,3 +126,22 @@ def test_golden_thread_locates_the_element_named_in_the_work_order(client):
     body = client.get("/competition/golden-thread").json()
     assert body["twin"]["twin_id"] == "TWIN-MYRAIL-V12-P47"
     assert "work_order_events" in body["twin"]
+
+
+def test_station_s12_from_the_original_golden_notice_is_located_in_the_twin(client):
+    from app.database import SessionLocal
+    from app.i18n import bi
+    from app.models import Case
+    from app.twin_sync import case_twin_ids
+
+    notice = ("Malaysia MY-RAIL-A owner notice: at Station S12, a worker was observed near an "
+              "unprotected edge during working at height.")
+    with SessionLocal() as db:
+        case = Case(id="CASE-TEST-S12", organization_id="globalinfra-demo", project_id=1,
+                    title=bi("Malaysia station S12 working-at-height owner notice"), description=bi(notice),
+                    type=bi("HSE"), risk="CRITICAL", deadline=bi("Immediate"), source_language=bi("English"))
+        assert case_twin_ids(db, case) == ["TWIN-MYRAIL-S12"]
+    detail = client.get("/twin/objects/TWIN-MYRAIL-S12").json()
+    assert detail["parent_id"] == "TWIN-MYRAIL"
+    control = next(row for row in client.get("/twin/controls?project_id=1").json() if row["twin_id"] == "TWIN-MYRAIL-S12")
+    assert control["schedule_variance_days"] == -3
