@@ -82,6 +82,10 @@ def ensure_demo_twin_coverage(db: Session) -> None:
     """
     now = utc_now()
     rows = [
+        # Station S12 is named by the original golden owner notice
+        # (CASE-GOLDEN-MY-001). Its signed record cannot be edited, so the twin
+        # carries the station instead and work-order locating resolves to it.
+        TwinObject(id="TWIN-MYRAIL-S12", project_id=1, parent_id="TWIN-MYRAIL", object_type="FACILITY", name=bi("Station S12", "S12 车站"), lifecycle_stage="construction", status="IN_PROGRESS", health_score=81, progress=58, geometry_ref="gltf://my-rail-a/model.gltf#S12", ifc_guid="S12MYRAIL2026GI", location={"zone": "S12", "level": "Platform / roof edge"}, properties={"contractPackage": "PKG-ST-12", "discipline": "Architecture / MEP"}),
         TwinObject(id="TWIN-IDHWY-B", project_id=2, object_type="PROJECT", name=bi("Trans-Nusantara Highway B", "跨努桑塔拉高速公路 B"), lifecycle_stage="construction", status="ACTIVE", health_score=89, progress=57, geometry_ref="tiles://id-highway-b/tileset.json", location={"lat": -6.2088, "lng": 106.8456}, properties={"crs": "EPSG:4326", "modelVersion": "2026.10-B"}),
         TwinObject(id="TWIN-IDHWY-B-COR88", project_id=2, parent_id="TWIN-IDHWY-B", object_type="FACILITY", name=bi("Highway Corridor KM 88", "高速公路 KM 88 走廊"), lifecycle_stage="construction", status="IN_PROGRESS", health_score=84, progress=61, geometry_ref="gltf://id-highway-b/model.gltf#COR88", location={"chainage": "KM 87+800–89+200"}, properties={"package": "PKG-HWY-04"}),
         TwinObject(id="TWIN-IDHWY-B-BRG88", project_id=2, parent_id="TWIN-IDHWY-B-COR88", object_type="ASSET", name=bi("Bridge BR-88", "BR-88 桥梁"), lifecycle_stage="construction", status="DECK_WORK", health_score=86, progress=66, geometry_ref="ifc://IDHWY#BR88", ifc_guid="BR88IDHWY2026GI", location={"chainage": "KM 88+110"}, properties={"wbs": "4.2.88"}),
@@ -105,6 +109,8 @@ def ensure_demo_twin_coverage(db: Session) -> None:
         db.add(TwinSensor(id="SNS-WATER-DRAIN21", twin_id="TWIN-IDHWY-B-DRAIN21", sensor_type="WATER_LEVEL", unit="mm", threshold_warning=420, threshold_critical=650, latest_value=286, sampled_at=now))
     if db.get(TwinSensor, "SNS-CONV-TUN05") is None:
         db.add(TwinSensor(id="SNS-CONV-TUN05", twin_id="TWIN-SAMETRO-C-TUN05", sensor_type="CONVERGENCE", unit="mm", threshold_warning=12, threshold_critical=18, latest_value=8.4, sampled_at=now))
+    if db.scalar(select(TwinScheduleLink.id).where(TwinScheduleLink.twin_id == "TWIN-MYRAIL-S12")) is None:
+        db.add(TwinScheduleLink(twin_id="TWIN-MYRAIL-S12", wbs_code="5.12", activity_id="ARC-ST12-ROOF", planned_progress=64, actual_progress=58, schedule_variance_days=-3, cost_code="ST-ARC", budget=6.4, forecast=6.55))
     if db.scalar(select(TwinScheduleLink.id).where(TwinScheduleLink.twin_id == "TWIN-IDHWY-B-DRAIN21")) is None:
         db.add(TwinScheduleLink(twin_id="TWIN-IDHWY-B-DRAIN21", wbs_code="4.5.21", activity_id="HWY-DRAIN-21", planned_progress=80, actual_progress=73, schedule_variance_days=-4, cost_code="DRAIN", budget=1.2, forecast=1.28))
     if db.scalar(select(TwinScheduleLink.id).where(TwinScheduleLink.twin_id == "TWIN-SAMETRO-C-TUN05")) is None:
