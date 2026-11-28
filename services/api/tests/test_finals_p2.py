@@ -60,7 +60,18 @@ def test_finals_public_projection_excludes_tenant_roi_details(client):
         rendered = json.dumps(body)
         assert secret not in rendered
         assert "ROI-P2-PUBLIC-PROJECTION-TEST" not in rendered
-        assert "9001" not in rendered
+        # Check the tenant baseline as a number: a substring check on "9001"
+        # flakes whenever a timestamp happens to contain those digits.
+        def numbers(value):
+            if isinstance(value, dict):
+                for item in value.values():
+                    yield from numbers(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from numbers(item)
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                yield value
+        assert 9001 not in set(numbers(body))
         assert body["business_impact"]["paired_roi"]["baseline_minutes"] is None
         assert body["business_impact"]["paired_roi"]["assisted_minutes"] is None
     finally:
