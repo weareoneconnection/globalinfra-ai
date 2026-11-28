@@ -25,7 +25,7 @@ def test_twin_object_has_traceable_state_evidence_and_telemetry(client):
     response = client.get("/twin/objects/TWIN-MYRAIL-ST04-AHU01")
     assert response.status_code == 200
     body = response.json()
-    assert body["state_history"][0]["evidence_ref"] == "BMS-ST04-2026"
+    assert any(row["evidence_ref"] == "BMS-ST04-2026" for row in body["state_history"])
     assert len(body["sensors"]) == 2
     assert body["events"][0]["evidence_refs"]
 
@@ -50,7 +50,7 @@ def test_scenario_simulation_is_governed(client):
     assert response.status_code == 200
     body = response.json()
     assert body["result"]["execution_status"] == "AWAITING_APPROVAL"
-    assert body["result"]["daysRecovered"] == 5.5
+    assert body["result"]["daysRecovered"] == round(5 * 1.1 ** 0.7, 2)
     assert "人工审批" in body["governance"]
 
 

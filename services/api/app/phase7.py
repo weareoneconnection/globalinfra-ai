@@ -32,6 +32,7 @@ from .models import (
 )
 from .security import Principal, get_principal, require_project, require_roles
 from .ingestion import receipt_payload, record_ingestion_receipt
+from .twin_sync import sync_case_to_twin
 from .roi_evidence import (
     PairedStudy, evidence_sha256, validate_record_against_study,
 )
@@ -168,6 +169,7 @@ def _create_field_observation(payload: FieldObservationIn, db: Session, principa
     db.add_all([case, row])
     text, result = classify_report(payload.event_type, payload.description, payload.twin_id)
     prepare_case(db, case, row, text, result)
+    sync_case_to_twin(db, case, "OPEN", observation_id)
     receipt = record_ingestion_receipt(
         db, organization_id=principal.organization_id, project_id=payload.project_id,
         channel="event_work_order", source_type="mobile_field",

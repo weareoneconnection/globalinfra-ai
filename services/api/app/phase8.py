@@ -5,12 +5,13 @@ import asyncio
 import hashlib
 import json
 import math
+import re
 from datetime import datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,7 @@ from .models import (Project, TwinConversionJob, TwinCopilotRun, TwinEvent,
 from .twin_demo import seed_synthetic_twin_sources
 from .security import Principal, get_principal, require_project, require_roles
 from .ingestion import receipt_payload, record_ingestion_receipt
+from .twin_sync import raise_threshold_alert, sensor_level
 
 router = APIRouter(prefix="/twin", tags=["phase-8-operational-twin"])
 
@@ -40,13 +42,29 @@ def _version(row: TwinModelVersion) -> dict:
             "change_summary": row.change_summary, "created_at": row.created_at.isoformat()}
 
 
+# Model sources must point at project storage, never at a network address.
+# Earlier builds accepted any string, so security probes (cloud metadata,
+# localhost, public echo services) were recorded as model versions; those rows
+# are kept in the database for audit but excluded from lineage and diffs.
+MODEL_SOURCE_RE = re.compile(r"^(s3|minio|ifc|gltf|tiles|media|drawing|upload)://[A-Za-z0-9][A-Za-z0-9._/#=-]*$")
+
+
+def is_trusted_model_source(ref: str | None) -> bool:
+    return ref is None or (bool(MODEL_SOURCE_RE.match(ref)) and ".." not in ref)
+
+
+def _trusted_version(row: TwinModelVersion) -> bool:
+    return is_trusted_model_source((row.change_summary or {}).get("source"))
+
+
 @router.get("/model-versions")
 def model_versions(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     require_project(principal, project_id, db)
     _project(db, project_id)
     rows = db.scalars(select(TwinModelVersion).where(TwinModelVersion.project_id == project_id).order_by(TwinModelVersion.created_at.desc())).all()
-    jobs = db.scalars(select(TwinConversionJob).where(TwinConversionJob.project_id == project_id).order_by(TwinConversionJob.started_at.desc()).limit(10)).all()
-    return {"versions": [_version(row) for row in rows], "jobs": [{"id": row.id, "status": row.status, "progress": row.progress, "adapter": row.adapter, "input_format": row.input_format, "output_formats": row.output_formats, "result": row.result} for row in jobs], "external_adapters": {"ifc_converter": "NOT_CONFIGURED", "object_storage": "INTERNAL_DEMO"}}
+    trusted = [row for row in rows if _trusted_version(row)]
+    jobs = [row for row in db.scalars(select(TwinConversionJob).where(TwinConversionJob.project_id == project_id).order_by(TwinConversionJob.started_at.desc()).limit(50)).all() if is_trusted_model_source(row.input_ref)][:10]
+    return {"versions": [_version(row) for row in trusted], "quarantined_versions": len(rows) - len(trusted), "jobs": [{"id": row.id, "status": row.status, "progress": row.progress, "adapter": row.adapter, "input_format": row.input_format, "output_formats": row.output_formats, "result": row.result} for row in jobs], "external_adapters": {"ifc_converter": "NOT_CONFIGURED", "object_storage": "INTERNAL_DEMO"}}
 
 
 class ConversionIn(BaseModel):
@@ -54,6 +72,13 @@ class ConversionIn(BaseModel):
     input_ref: str = Field(min_length=3, max_length=500)
     input_format: str = Field(default="IFC", max_length=24)
     output_formats: list[str] = Field(default_factory=lambda: ["GLTF", "3D_TILES"])
+
+    @field_validator("input_ref")
+    @classmethod
+    def _storage_ref_only(cls, value: str) -> str:
+        if not is_trusted_model_source(value):
+            raise ValueError("input_ref must be a project storage reference such as s3://bucket/model.ifc")
+        return value
 
 
 @router.post("/conversions", status_code=201)
@@ -89,7 +114,7 @@ def convert_model(payload: ConversionIn, principal: Principal = Depends(require_
 @router.get("/model-diff")
 def model_diff(project_id: int, principal: Principal = Depends(get_principal), db: Session = Depends(get_db)):
     require_project(principal, project_id, db)
-    rows = db.scalars(select(TwinModelVersion).where(TwinModelVersion.project_id == project_id).order_by(TwinModelVersion.created_at.desc()).limit(2)).all()
+    rows = [row for row in db.scalars(select(TwinModelVersion).where(TwinModelVersion.project_id == project_id).order_by(TwinModelVersion.created_at.desc())).all() if _trusted_version(row)][:2]
     if not rows:
         raise HTTPException(404, "No model versions")
     current, previous = rows[0], rows[1] if len(rows) > 1 else None
@@ -177,9 +202,11 @@ def ingest_telemetry(payload: TelemetryIn, principal: Principal = Depends(requir
         lineage={"sensor_id": sensor.id, "twin_id": sensor.twin_id,
                  "sampled_at": sensor.sampled_at.isoformat()},
     )
+    alert = raise_threshold_alert(db, sensor, payload.value, f"READING-{row.id}")
     db.commit(); db.refresh(row); db.refresh(receipt)
     return {"reading_id": row.id, "status": "ACCEPTED", "sensor_id": sensor.id,
-            "twin_id": sensor.twin_id, "ingestion_receipt": receipt_payload(receipt)}
+            "twin_id": sensor.twin_id, "level": sensor_level(sensor, payload.value),
+            "alert": alert, "ingestion_receipt": receipt_payload(receipt)}
 
 
 @router.get("/telemetry/history")
@@ -196,11 +223,29 @@ async def live_telemetry(project_id: int, events: int = Query(default=60, ge=1, 
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids)))) if ids else []
     if not sensors:
         raise HTTPException(404, "No sensors")
+    # Replay stored readings (oldest → newest, ending on the latest value)
+    # instead of inventing values. Everything is loaded before streaming
+    # because the DB session closes once the response starts.
+    series: dict[str, list[dict]] = {}
+    for s in sensors:
+        history = list(db.scalars(select(TwinTelemetryReading).where(TwinTelemetryReading.sensor_id == s.id).order_by(TwinTelemetryReading.sampled_at.desc()).limit(24)))
+        points = [{"value": r.value, "sampled_at": r.sampled_at.isoformat()} for r in reversed(history)]
+        if not points or points[-1]["value"] != s.latest_value:
+            points.append({"value": s.latest_value, "sampled_at": s.sampled_at.isoformat()})
+        series[s.id] = points
+    meta = [{"sensor_id": s.id, "twin_id": s.twin_id, "type": s.sensor_type, "unit": s.unit,
+             "warning": s.threshold_warning, "critical": s.threshold_critical} for s in sensors]
     async def stream():
         for index in range(events):
-            now = utc_now()
-            readings = [{"sensor_id": s.id, "twin_id": s.twin_id, "type": s.sensor_type, "value": round(s.latest_value + math.sin(index / 3) * max(abs(s.latest_value) * .008, .08), 2), "unit": s.unit, "status": s.status, "sampled_at": now.isoformat()} for s in sensors]
-            yield f"event: telemetry\ndata: {json.dumps({'project_id': project_id, 'sequence': index + 1, 'readings': readings})}\n\n"
+            readings = []
+            for m in meta:
+                points = series[m["sensor_id"]]
+                point = points[index % len(points)]
+                level = "CRITICAL" if point["value"] >= m["critical"] else "WARNING" if point["value"] >= m["warning"] else "NORMAL"
+                readings.append({"sensor_id": m["sensor_id"], "twin_id": m["twin_id"], "type": m["type"],
+                                 "value": point["value"], "unit": m["unit"], "status": level,
+                                 "sampled_at": point["sampled_at"]})
+            yield f"event: telemetry\ndata: {json.dumps({'project_id': project_id, 'sequence': index + 1, 'provenance': 'REPLAY_OF_STORED_READINGS', 'readings': readings})}\n\n"
             await asyncio.sleep(.8)
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control":"no-cache", "X-Accel-Buffering":"no"})
 

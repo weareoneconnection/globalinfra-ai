@@ -5,6 +5,10 @@ commissioning, telemetry and Governed Scenario Analysis behind one
 project-scoped contract. Seed data is explicitly synthetic fixture data;
 adapters can replace it without changing the UI or Twin ID model.
 """
+import hashlib
+import json
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -17,6 +21,9 @@ from .models import (
     Project, TwinScenario, TwinScheduleLink, TwinSensor, TwinStateHistory, utc_now,
 )
 from .security import Principal, get_principal, require_project
+from .twin_sync import sensor_level
+
+LIVE_WINDOW = timedelta(minutes=15)
 
 router = APIRouter(prefix="/twin", tags=["digital-twin"])
 
@@ -59,8 +66,13 @@ def summary(
     sensors = list(db.scalars(select(TwinSensor).where(TwinSensor.twin_id.in_(ids)))) if ids else []
     schedule = list(db.scalars(select(TwinScheduleLink).where(TwinScheduleLink.twin_id.in_(ids)))) if ids else []
     commissioning = list(db.scalars(select(CommissioningItem).where(CommissioningItem.twin_id.in_(ids)))) if ids else []
+    last_reading = max((s.sampled_at for s in sensors if s.sampled_at), default=None)
+    # LIVE only when a reading arrived recently; otherwise the twin is a stored snapshot.
+    sync_status = "LIVE" if last_reading and utc_now() - last_reading <= LIVE_WINDOW else "SNAPSHOT"
     payload = {
-        "maturity": "PHASE_6", "sync_status": "SYNCHRONIZED", "model_version": "IFC-REV-C / GIS-2026.10",
+        "maturity": "PHASE_6", "sync_status": sync_status,
+        "last_reading_at": last_reading.isoformat() if last_reading else None,
+        "model_version": "IFC-REV-C / GIS-2026.10",
         "data_provenance": "SYNTHETIC_FIXTURE_DATA",
         "is_synthetic_fixture": True,
         "objects": len(objects), "mapped_objects": len([o for o in objects if o.geometry_ref]),
@@ -158,7 +170,7 @@ def operations(project_id: int = Query(default=1), principal: Principal = Depend
     work = list(db.scalars(select(MaintenanceRecord).where(MaintenanceRecord.twin_id.in_(ids)).order_by(MaintenanceRecord.due_at))) if ids else []
     payload = {
         "sensors": [{"id": s.id, "twin_id": s.twin_id, "asset": assets[s.twin_id].name, "type": s.sensor_type,
-                     "unit": s.unit, "value": s.latest_value, "status": "WARNING" if s.latest_value >= s.threshold_warning else "NORMAL",
+                     "unit": s.unit, "value": s.latest_value, "status": sensor_level(s, s.latest_value),
                      "warning": s.threshold_warning, "critical": s.threshold_critical, "sampled_at": s.sampled_at.isoformat()} for s in sensors],
         "maintenance": [{"id": m.id, "twin_id": m.twin_id, "asset": assets[m.twin_id].name, "work_type": m.work_type,
                          "status": m.status, "priority": m.priority, "description": m.description, "due_at": m.due_at.isoformat()} for m in work],
@@ -179,25 +191,62 @@ class ScenarioRunRequest(BaseModel):
     adjustment_percent: float = Field(default=0, ge=-25, le=25)
 
 
+# Benefit metrics grow with diminishing returns; cost metrics grow linearly.
+SCENARIO_ELASTICITY = 0.7
+SCENARIO_CAPS = {"failureRiskReduction": 95}
+COST_METRICS = {"costDeltaM"}
+SCENARIO_METHOD = "elasticity-v1"
+
+
+def evaluate_scenario(baseline: dict, adjustment_percent: float) -> dict:
+    """Deterministic what-if from the stored baseline; never mutates the baseline.
+
+    ``adjustment_percent`` scales the scenario's lever (crew, outage window,
+    setpoint). Benefits follow ``(1+a)^0.7``, costs follow ``1+a`` and
+    confidence falls by half the size of the change, so a bigger departure from
+    the reviewed baseline is reported as less certain.
+    """
+    factor = 1 + adjustment_percent / 100
+    benefit = factor ** SCENARIO_ELASTICITY
+    result: dict = {}
+    for key, value in baseline.items():
+        if key == "confidence" or isinstance(value, bool) or not isinstance(value, (int, float)):
+            result[key] = value
+            continue
+        scaled = value * (factor if key in COST_METRICS else benefit)
+        if key in SCENARIO_CAPS:
+            scaled = min(scaled, SCENARIO_CAPS[key])
+        result[key] = round(scaled, 2)
+    base_conf = float(baseline.get("confidence", .8))
+    result["confidence"] = round(max(.3, base_conf * (1 - abs(adjustment_percent) / 200)), 2)
+    return result
+
+
 @router.post("/scenarios/{scenario_id}/run")
 def run_scenario(scenario_id: str, payload: ScenarioRunRequest, principal: Principal = Depends(get_principal), db: Session = Depends(get_db), lang: str = Depends(get_lang)):
     scenario = db.get(TwinScenario, scenario_id)
     if not scenario:
         raise HTTPException(404, "Twin scenario not found")
     require_project(principal, scenario.project_id, db)
-    factor = 1 + payload.adjustment_percent / 100
-    result = dict(scenario.result)
-    for key, value in list(result.items()):
-        if isinstance(value, (int, float)) and key != "confidence":
-            result[key] = round(value * factor, 2)
-    result["confidence"] = scenario.result.get("confidence", .8)
+    baseline = {key: value for key, value in (scenario.result or {}).items()
+                if key not in {"execution_status", "evidence"}}
+    result = evaluate_scenario(baseline, payload.adjustment_percent)
     result["execution_status"] = "AWAITING_APPROVAL" if scenario.requires_approval else "ADVISORY_ONLY"
     result["evidence"] = ["Twin object state", "4D/5D baseline", "Latest telemetry", "Scenario assumptions"]
-    scenario.result = result
+    run_id = "SR-" + hashlib.sha256(json.dumps(
+        {"scenario": scenario.id, "baseline": baseline, "assumptions": scenario.assumptions,
+         "adjustment_percent": payload.adjustment_percent, "method": SCENARIO_METHOD},
+        sort_keys=True, default=str).encode()).hexdigest()[:16].upper()
+    # The stored baseline stays untouched so repeated runs cannot drift.
     scenario.status = "ANALYZED"
     scenario.updated_at = utc_now()
     db.commit()
-    return localize({"scenario_id": scenario.id, "result": result,
+    return localize({"scenario_id": scenario.id, "run_id": run_id, "result": result,
+                     "baseline": baseline, "adjustment_percent": payload.adjustment_percent,
+                     "method": {"id": SCENARIO_METHOD,
+                                "benefit": f"baseline × (1 + a)^{SCENARIO_ELASTICITY}",
+                                "cost": "baseline × (1 + a)",
+                                "confidence": "baseline × (1 − |a| / 2)"},
                      "analysis_type": "Governed Scenario Analysis",
                      "data_provenance": "SYNTHETIC_FIXTURE_DATA",
                      "governance": bi("No operational state changed; human approval is required.", "未改变任何运营状态；执行前必须人工审批。")}, lang)

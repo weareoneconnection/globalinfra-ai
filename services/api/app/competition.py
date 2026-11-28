@@ -41,6 +41,7 @@ from .models import (
     ExecutionReceipt,
     KnowledgeDocument,
     Project,
+    TwinEvent,
     TwinObject,
     TwinScheduleLink,
     TwinSource,
@@ -48,6 +49,7 @@ from .models import (
     utc_now,
 )
 from .retrieval import KnowledgeIndex
+from .twin_sync import case_twin_ids
 
 router = APIRouter(prefix="/competition", tags=["competition-evidence"])
 
@@ -289,7 +291,9 @@ def _golden_snapshot(db: Session) -> dict:
     execution = db.scalar(select(ExecutionReceipt).where(ExecutionReceipt.action_id == action.id)) if action else None
     verification = db.scalar(select(VerificationReceipt).where(VerificationReceipt.action_id == action.id)) if action else None
     artifact = db.scalar(select(Artifact).where(Artifact.action_id == action.id)) if action else None
-    twin = db.scalar(select(TwinObject).where(TwinObject.project_id == case.project_id).order_by(TwinObject.health_score))
+    # Locate the element the work order names (e.g. Pier P47); fall back to the weakest asset.
+    linked = case_twin_ids(db, case)
+    twin = db.get(TwinObject, linked[0]) if linked else db.scalar(select(TwinObject).where(TwinObject.project_id == case.project_id).order_by(TwinObject.health_score))
     control = db.scalar(select(TwinScheduleLink).where(TwinScheduleLink.twin_id == twin.id)) if twin else None
     sources = list(db.scalars(select(TwinSource).where(TwinSource.project_id == case.project_id).order_by(TwinSource.source_type)))
     intake = build_intake_result(GOLDEN_INPUT)
@@ -327,7 +331,12 @@ def _golden_snapshot(db: Session) -> dict:
             "twin_id": twin.id, "name": twin.name, "health_score": twin.health_score,
             "schedule_variance_days": control.schedule_variance_days if control else 0,
             "cost_variance_m": round(control.forecast - control.budget, 2) if control else 0,
-            "interfaces": [{"type": source.source_type, "status": source.status, "uri": source.uri} for source in sources],
+            "located_from_case": bool(linked),
+            "work_order_events": [
+                {"id": e.id, "status": e.status, "evidence_refs": e.evidence_refs}
+                for e in db.scalars(select(TwinEvent).where(TwinEvent.twin_id == twin.id, TwinEvent.event_type == "WORK_ORDER").order_by(TwinEvent.occurred_at.desc()))
+            ],
+            "interfaces":[{"type": source.source_type, "status": source.status, "uri": source.uri} for source in sources],
         },
         "receipts": {
             "execution": None if not execution else {"id": execution.id, "status": execution.status, "input_digest": execution.input_digest, "output_digest": execution.output_digest, "artifact_ref": execution.artifact_ref},
