@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import settings
+from .twin_sync import sync_case_to_twin
 from .models import (
     Action, Approval, Artifact, Case, Evidence, ExecutionReceipt,
     VerificationReceipt, utc_now,
@@ -796,6 +797,7 @@ def verify_action(
     else:
         action.status = "VERIFICATION_FAILED"
         case.status = "VERIFICATION_FAILED"
+    twin_ids = sync_case_to_twin(db, case, verification.status, verification.id)
     db.commit()
     return {
         "status": verification.status,
@@ -817,6 +819,7 @@ def verify_action(
             "key_id": verification.key_id,
             "verified_at": verification.verified_at.isoformat(),
         },
+        "twin_sync": twin_ids,
     }
 
 
@@ -993,8 +996,10 @@ def close_action(
         action.closure_digest
     )
     case.status = "CLOSED"
+    twin_ids = sync_case_to_twin(db, case, "CLOSED", f"CLOSURE-{action.id}")
     db.commit()
     return {
+        "twin_sync": twin_ids,
         "status": "CLOSED",
         "action_id": action.id,
         "case_id": case.id,
